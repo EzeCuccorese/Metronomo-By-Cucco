@@ -60,24 +60,18 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
 
     const handleSubdivisionChange = (newSub: number) => {
         const oldSub = pattern.subdivision;
-
-        // Map steps to new grid
-        let newSteps = [...pattern.steps];
-
-        // Specific fix for maintaining Quarter Note pulse when expanding (e.g. 4/4 -> 12 Triplets)
-        // If we expand by integer ratio, we multiply positions.
         const ratio = newSub / oldSub;
+        let newSteps: import('../rhythms/RhythmPatterns').RhythmStep[] = [];
 
+        // Strategy 1: Perfect Expansion (Integer Multiplier)
         if (Number.isInteger(ratio) && ratio > 1) {
-            // 4 -> 12, ratio 3.
-            // Step 1 -> 1. Step 2 -> 4. Step 3 -> 7. Step 4 -> 10.
             newSteps = pattern.steps.map(s => ({
                 ...s,
                 step: Math.round((s.step - 1) * ratio + 1)
             }));
-        } else if (Number.isInteger(1 / ratio) && ratio < 1) {
-            // 12 -> 4, InvRatio 3
-            // Exact inverse.
+        }
+        // Strategy 2: Perfect Reduction (Integer Divisor)
+        else if (Number.isInteger(1 / ratio) && ratio < 1) {
             const invRatio = 1 / ratio;
             newSteps = [];
             pattern.steps.forEach(s => {
@@ -88,31 +82,49 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                     });
                 }
             });
-        } else {
-            // Complex change (e.g. 16ths to Triplets 12)
-            // 16 -> 12. Ratio 0.75.
-            // We can't map cleanly. 
-            // Best effort: Keep downbeats (Beats).
-            // Beats in A: every `subA / beats`
-            // Beats in B: every `subB / beats`
+        }
+        // Strategy 3: Complex / Irregular Mapping (Per-Beat Preserving)
+        else {
+            const beats = pattern.timeSignature ? pattern.timeSignature[0] : 4;
+            const oldStepsPerBeat = oldSub / beats;
+            const newStepsPerBeat = newSub / beats;
 
-            // If Time Signature is SAME (e.g. 4/4), Beats are easy index 0, 1, 2, 3...
-            const oldStepsPerBeat = oldSub / pattern.timeSignature[0];
-            const newStepsPerBeat = newSub / pattern.timeSignature[0];
+            // Explicit Shuffle Mapping for 8ths <-> Triplets
+            const isBinaryToTernary = (oldStepsPerBeat === 2 && newStepsPerBeat === 3);
+            const isTernaryToBinary = (oldStepsPerBeat === 3 && newStepsPerBeat === 2);
 
-            newSteps = [];
+            newSteps = []; // Clear for full rebuild
 
-            // Iterate existing steps
             pattern.steps.forEach(s => {
-                // Check if it's on a beat
-                const beatIndex = (s.step - 1) / oldStepsPerBeat;
-                if (Number.isInteger(beatIndex)) {
-                    // It is on a beat! Map to new beat position.
-                    const newStepPos = Math.round((beatIndex * newStepsPerBeat) + 1);
-                    newSteps.push({ ...s, step: newStepPos });
+                const idx = s.step - 1;
+                const beatIdx = Math.floor(idx / oldStepsPerBeat);
+                const localIdx = idx % oldStepsPerBeat;
+
+                let newLocalIndex = 0;
+
+                if (isBinaryToTernary) {
+                    // 8ths -> Triplets: 0->0, 1->2 (Shuffle)
+                    newLocalIndex = (localIdx === 0) ? 0 : 2;
+                } else if (isTernaryToBinary) {
+                    // Triplets -> 8ths: 0->0, 2->1 (Shuffle), 1->1 (Clash/Center)
+                    if (localIdx === 0) newLocalIndex = 0;
+                    else newLocalIndex = 1;
+                } else {
+                    // General Case: Proportional Mapping
+                    const beatOffset = localIdx / oldStepsPerBeat;
+                    newLocalIndex = Math.round(beatOffset * newStepsPerBeat);
                 }
-                // If not on a beat, we sadly lose it or approximate. 
-                // For now, let's prioritize BEATS which prevents "se fue a la mierda".
+
+                // Clamp
+                newLocalIndex = Math.min(newLocalIndex, newStepsPerBeat - 1);
+
+                // Final Calc
+                const newBeatStart = Math.floor(beatIdx * newStepsPerBeat);
+                const newStep = newBeatStart + newLocalIndex + 1;
+
+                if (newStep <= newSub && !newSteps.some(ns => ns.step === newStep && ns.instrument === s.instrument)) {
+                    newSteps.push({ ...s, step: newStep });
+                }
             });
         }
 
