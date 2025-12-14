@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -38,26 +39,58 @@ const TIME_SIGNATURES = [
 
 export default function PatternEditor({ pattern, onPatternUpdate, currentStepIndex = -1 }: PatternEditorProps) {
 
+    // UI State: What grid size are we looking at?
+    // Initialize with pattern's subdivision, but allow it to diverge for "Zoom Out" (Reduction).
+    const [viewSubdivision, setViewSubdivision] = useState(pattern.subdivision);
+
+    // Sync view if pattern updates externally (e.g. preset load), but ONLY if the families match or strictly required.
+    // Actually, just syncing on mount or major change is safer.
+    useEffect(() => {
+        // If the pattern's subdivision changes to something incompatible with current view, snap view to it.
+        // e.g. View is 4, Pattern changes to 12. View 4 is compatible (12/3=4).
+        // e.g. View is 16, Pattern changes to 12. Incompatible.
+        if (pattern.subdivision % viewSubdivision !== 0 && viewSubdivision % pattern.subdivision !== 0) {
+            setViewSubdivision(pattern.subdivision);
+        }
+        // Also if pattern resolution expands beyond view? 
+        // Let's just trust the user's view unless it's impossible.
+    }, [pattern.subdivision]);
+
     const handleTimeSignatureChange = (val: string) => {
         const ts = TIME_SIGNATURES.find(t => t.label === val);
         if (!ts) return;
 
         let newSub = pattern.subdivision;
-        // Basic smart default if switching "families"
-        if (ts.accum === 8 && pattern.timeSignature[1] === 4) newSub = 6; // 4/4 -> 6/8 default to eighths (6)
-        if (ts.accum === 4 && pattern.timeSignature[1] === 8) newSub = 16; // 6/8 -> 4/4 default to sixteenths
+        if (ts.accum === 8 && pattern.timeSignature[1] === 4) newSub = 6;
+        if (ts.accum === 4 && pattern.timeSignature[1] === 8) newSub = 16;
 
         onPatternUpdate({
             ...pattern,
             timeSignature: [ts.beats, ts.accum] as [number, number],
             subdivision: newSub,
-            // Keep steps that fit in new subdivision. 
             steps: pattern.steps.filter(s => s.step <= newSub)
         });
+        setViewSubdivision(newSub); // Reset view on TS change
     };
 
     const handleSubdivisionChange = (newSub: number) => {
-        const oldSub = pattern.subdivision;
+        const currentDataSub = pattern.subdivision;
+
+        // Case 1: Pure View Reduction (Zoom Out)
+        // e.g. Data is 16, User wants 4. 16 is divisible by 4.
+        // We DO NOT change data. We just change View.
+        if (currentDataSub > newSub && currentDataSub % newSub === 0) {
+            setViewSubdivision(newSub);
+            return;
+        }
+
+        // Case 2: Expansion or Complex Change (Data Transformation Required)
+        // e.g. Data 4 -> 16 (Expansion)
+        // e.g. Data 16 -> 12 (Complex)
+        // e.g. Data 4 -> 12 (Expansion + Change)
+
+        // We perform the transformation logic primarily on the DATA.
+        const oldSub = currentDataSub;
         const ratio = newSub / oldSub;
         let newSteps: import('../rhythms/RhythmPatterns').RhythmStep[] = [];
 
@@ -68,30 +101,22 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                 step: Math.round((s.step - 1) * ratio + 1)
             }));
         }
-        // Strategy 2: Perfect Reduction (Integer Divisor)
-        else if (Number.isInteger(1 / ratio) && ratio < 1) {
-            const invRatio = 1 / ratio;
-            newSteps = [];
-            pattern.steps.forEach(s => {
-                if ((s.step - 1) % invRatio === 0) {
-                    newSteps.push({
-                        ...s,
-                        step: ((s.step - 1) / invRatio) + 1
-                    });
-                }
-            });
-        }
-        // Strategy 3: Complex / Irregular Mapping (Per-Beat Preserving)
+        // Strategy 2: Strategy 2 (Reduction) is skipped here because we handled it in Case 1!
+        // Wait, what if User WANTS to destructively reduce? 
+        // For now, we assume "Subdivision" dropdown is View-Priority based on user feedback.
+        // If they select 16 -> 12, that is Case 3.
+
+        // Strategy 3: Complex / Irregular Mapping
         else {
             const beats = pattern.timeSignature ? pattern.timeSignature[0] : 4;
             const oldStepsPerBeat = oldSub / beats;
             const newStepsPerBeat = newSub / beats;
 
-            // Explicit Shuffle Mapping for 8ths <-> Triplets
-            const isBinaryToTernary = (oldStepsPerBeat === 2 && newStepsPerBeat === 3);
-            const isTernaryToBinary = (oldStepsPerBeat === 3 && newStepsPerBeat === 2);
+            const isBinaryToTernary = (oldStepsPerBeat === 2 && newStepsPerBeat === 3); // 8ths -> Trips
+            const isTernaryToBinary = (oldStepsPerBeat === 3 && newStepsPerBeat === 2); // Trips -> 8ths
+            const isTripletsToSemis = (oldStepsPerBeat === 3 && newStepsPerBeat === 4); // Trips -> 16ths
 
-            newSteps = []; // Clear for full rebuild
+            newSteps = [];
 
             pattern.steps.forEach(s => {
                 const idx = s.step - 1;
@@ -101,22 +126,24 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                 let newLocalIndex = 0;
 
                 if (isBinaryToTernary) {
-                    // 8ths -> Triplets: 0->0, 1->2 (Shuffle)
-                    newLocalIndex = (localIdx === 0) ? 0 : 2;
+                    newLocalIndex = (localIdx === 0) ? 0 : 2; // Shuffle
                 } else if (isTernaryToBinary) {
-                    // Triplets -> 8ths: 0->0, 2->1 (Shuffle), 1->1 (Clash/Center)
                     if (localIdx === 0) newLocalIndex = 0;
                     else newLocalIndex = 1;
+                } else if (isTripletsToSemis) {
+                    // Triplets (0,1,2) -> Semis (0,1,2,3)
+                    // Map 3rd triplet (index 2) to 3rd semi (index 2, the '+')
+                    // instead of rounding to index 3 (the 'a').
+                    if (localIdx === 0) newLocalIndex = 0;      // 1 -> 1
+                    else if (localIdx === 1) newLocalIndex = 1; // 2 -> e
+                    else if (localIdx === 2) newLocalIndex = 2; // 3 -> + (Fix)
                 } else {
-                    // General Case: Proportional Mapping
                     const beatOffset = localIdx / oldStepsPerBeat;
                     newLocalIndex = Math.round(beatOffset * newStepsPerBeat);
                 }
 
-                // Clamp
                 newLocalIndex = Math.min(newLocalIndex, newStepsPerBeat - 1);
 
-                // Final Calc
                 const newBeatStart = Math.floor(beatIdx * newStepsPerBeat);
                 const newStep = newBeatStart + newLocalIndex + 1;
 
@@ -131,31 +158,38 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
             subdivision: newSub,
             steps: newSteps
         });
+        setViewSubdivision(newSub);
     };
 
-    const gridCols = pattern.subdivision;
-    let SubIcon = QuarterNoteIcon;
-    if (pattern.subdivision === 4) { SubIcon = QuarterNoteIcon; }
-    else if (pattern.subdivision === 8) { SubIcon = EighthNoteIcon; }
-    else if (pattern.subdivision === 16) { SubIcon = SixteenthNoteIcon; }
-    else if (pattern.subdivision === 6) { SubIcon = EighthNoteIcon; }
-    else if (pattern.subdivision === 12) {
-        if (pattern.timeSignature[0] === 3) { SubIcon = SixteenthNoteIcon; }
-        else { SubIcon = TripletIcon; }
-    }
+    // Rendering Logic
+    const gridCols = viewSubdivision;
+    const stepsPerViewStep = pattern.subdivision / viewSubdivision;
 
-    const cycleStep = (stepIndex: number, instrument: InstrumentType) => {
-        const stepNum = stepIndex + 1;
+    // Map ViewCol -> DataStep
+    // If Data=16, View=4. Ratio=4.
+    // View Col 0 -> Step 1 (0*4 + 1)
+    // View Col 1 -> Step 5 (1*4 + 1)
+    const getStepAtViewCol = (colIdx: number, instrument: InstrumentType) => {
+        const stepNum = Math.round(colIdx * stepsPerViewStep) + 1;
+        return pattern.steps.find(s => s.step === stepNum && s.instrument === instrument);
+    };
+
+    const cycleStep = (viewColIndex: number, instrument: InstrumentType) => {
+        const stepNum = Math.round(viewColIndex * stepsPerViewStep) + 1;
+
         const currentStep = pattern.steps.find(s => s.step === stepNum && s.instrument === instrument);
         const currentRefVelocity = currentStep ? currentStep.velocity : 0;
+
         let newVelocity = 0;
-        if (currentRefVelocity === 0) newVelocity = 0.7;        // Normal
-        else if (currentRefVelocity > 0.6 && currentRefVelocity < 0.9) newVelocity = 1.0; // Accent
-        else if (currentRefVelocity >= 0.9) newVelocity = 0.3; // Ghost
-        else newVelocity = 0; // Off
+        if (currentRefVelocity === 0) newVelocity = 0.7;
+        else if (currentRefVelocity > 0.6 && currentRefVelocity < 0.9) newVelocity = 1.0;
+        else if (currentRefVelocity >= 0.9) newVelocity = 0.3;
+        else newVelocity = 0;
+
         let newSteps = [...pattern.steps];
         newSteps = newSteps.filter(s => !(s.step === stepNum && s.instrument === instrument));
         if (newVelocity > 0) newSteps.push({ step: stepNum, instrument, velocity: newVelocity });
+
         onPatternUpdate({ ...pattern, steps: newSteps });
     };
 
@@ -165,7 +199,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
     };
 
     const getCountingLabel = (index: number) => {
-        const stepsPerBeat = pattern.subdivision / pattern.timeSignature[0];
+        const stepsPerBeat = viewSubdivision / pattern.timeSignature[0];
         const beatNum = Math.floor(index / stepsPerBeat) + 1;
         const subIndex = index % stepsPerBeat;
 
@@ -175,17 +209,17 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
         // 4/4 Subdivisions
         if (pattern.timeSignature[0] === 4 && pattern.timeSignature[1] === 4) {
             // 16ths: 1 e + a
-            if (pattern.subdivision === 16) {
+            if (viewSubdivision === 16) {
                 if (subIndex === 1) return 'e';
                 if (subIndex === 2) return '+';
                 if (subIndex === 3) return 'a';
             }
             // 8ths: 1 +
-            if (pattern.subdivision === 8) {
+            if (viewSubdivision === 8) {
                 return '+';
             }
             // Triplets: Use dots
-            if (pattern.subdivision === 12) {
+            if (viewSubdivision === 12) {
                 return '•';
             }
         }
@@ -202,6 +236,19 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
         if (vel <= 0.4) return 'rgba(144, 202, 249, 0.4)';
         return 'primary.main';
     };
+
+    // Choose Icon based on View
+    const getIconForView = () => {
+        if (viewSubdivision % pattern.timeSignature[0] !== 0) return QuarterNoteIcon;
+        const subPerBeat = viewSubdivision / pattern.timeSignature[0];
+
+        if (subPerBeat === 1) return QuarterNoteIcon;
+        if (subPerBeat === 2) return EighthNoteIcon;
+        if (subPerBeat === 4) return SixteenthNoteIcon;
+        if (subPerBeat === 3) return TripletIcon;
+        return EighthNoteIcon;
+    }
+    const SubIcon = getIconForView();
 
     return (
         <Box sx={{ width: '100%', mt: 4, textAlign: 'left' }}>
@@ -226,7 +273,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                     <InputLabel id="sub-label">Subdivisión</InputLabel>
                     <Select
                         labelId="sub-label"
-                        value={pattern.subdivision}
+                        value={viewSubdivision}
                         label="Subdivisión"
                         onChange={(e) => handleSubdivisionChange(Number(e.target.value))}
                     >
@@ -266,10 +313,17 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                     <Stack direction="row" spacing={1} sx={{ pl: 18, mb: 1 }}>
                         {Array.from({ length: gridCols }).map((_, idx) => {
                             let active = false;
-                            const stepsPerBeat = pattern.subdivision / pattern.timeSignature[0];
+                            const stepsPerBeat = viewSubdivision / pattern.timeSignature[0];
                             if (idx % stepsPerBeat === 0) active = true;
 
-                            const isCurrent = currentStepIndex === idx;
+                            // Calculate IsCurrent based on Data Position mapping
+                            // CurrentStep is 0..DataSub.
+                            // We need to match it to ViewCol.
+                            // ViewCol * Ratio = DataStep.
+                            // So DataStep / Ratio = ViewCol.
+                            const stepsPerViewStep = pattern.subdivision / viewSubdivision;
+                            const currentViewIndex = Math.floor(currentStepIndex / stepsPerViewStep);
+                            const isCurrent = currentViewIndex === idx;
 
                             return (
                                 <Box key={idx} sx={{ width: 32, textAlign: 'center', opacity: active ? 1 : 0.5 }}>
@@ -305,13 +359,15 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
 
                             {/* Steps Grid */}
                             {Array.from({ length: gridCols }).map((_, idx) => {
-                                const stepNum = idx + 1;
-                                const currentStep = pattern.steps.find(s => s.step === stepNum && s.instrument === inst.type);
+                                const currentStep = getStepAtViewCol(idx, inst.type);
                                 const vel = currentStep ? currentStep.velocity : 0;
 
-                                const stepsPerBeat = pattern.subdivision / pattern.timeSignature[0];
+                                const stepsPerBeat = viewSubdivision / pattern.timeSignature[0];
                                 const isBeat = idx % stepsPerBeat === 0;
-                                const isCurrent = currentStepIndex === idx;
+
+                                const stepsPerViewStep = pattern.subdivision / viewSubdivision;
+                                const currentViewIndex = Math.floor(currentStepIndex / stepsPerViewStep);
+                                const isCurrent = currentViewIndex === idx;
 
                                 return (
                                     <Box key={idx} onClick={() => cycleStep(idx, inst.type)} sx={{
