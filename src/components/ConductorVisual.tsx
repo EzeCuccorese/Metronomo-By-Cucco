@@ -1,58 +1,136 @@
 import { Box, Stack, Typography } from '@mui/material';
 import CircleIcon from '@mui/icons-material/Circle';
+import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 
 interface ConductorVisualProps {
-    subdivision: number;
-    timeSignature: [number, number];
+    pattern: RhythmPattern;
     currentStepIndex: number;
     trainerActive: boolean;
     currentBarProgress: number;
     totalBarsInterval: number;
 }
 
+const getCountingText = (stepIndex: number, subdivision: number, mode: RhythmPattern['countingMode'], timeSignature: [number, number]): string => {
+    // Basic calculation of beat and sub-beat
+    // e.g. 16 steps, 4/4. 4 steps per beat.
+    const beats = timeSignature[0];
+    const stepsPerBeat = subdivision / beats;
+
+    const beatNum = Math.floor(stepIndex / stepsPerBeat) + 1; // 1-based Beat
+    const subIndex = stepIndex % stepsPerBeat; // 0-based sub index within beat
+
+    if (mode === 'numbers') {
+        // Just counts 1, 2, 3, 4 on the beat. Subdivisions empty? Or "and"? 
+        // Let's return Beat number on beat, "and" on half? 
+        // User asked for "numbers". Simple matching.
+        return subIndex === 0 ? `${beatNum}` : '';
+    }
+
+    if (mode === '1&2&') {
+        if (subIndex === 0) return `${beatNum}`;
+        // Assuming 8th notes (2 steps per beat)
+        if (subIndex === 0.5 * stepsPerBeat) return '&';
+        return '';
+    }
+
+    if (mode === '1e&a') {
+        // 16th notes (4 steps per beat)
+        // 0 -> 1
+        // 1 -> e
+        // 2 -> &
+        // 3 -> a
+        // We need to map 'subIndex' relative to stepsPerBeat (which should be 4)
+        // If sub=16, stepsPerBeat=4.
+        if (subIndex === 0) return `${beatNum}`;
+        if (subIndex === 1) return 'e';
+        if (subIndex === 2) return '&';
+        if (subIndex === 3) return 'a';
+    }
+
+    if (mode === 'triplet_1la2la') {
+        // Triplets: 1 la le (or 1 trip let)
+        // stepsPerBeat should be 3.
+        if (subIndex === 0) return `${beatNum}`;
+        if (subIndex === 1) return 'la'; // or 'trip'
+        if (subIndex === 2) return 'le'; // or 'let'
+    }
+
+    if (mode === 'mnemonics_chacarera') {
+        // MA de RA PAR che PAR
+        // 6/8. Steps 0-5.
+        // But Chacarera is 3/4 visually? [3,4]
+        // stepsPerBeat = 6 / 3 = 2.
+        // Wait, Chacarera subdivision is 6. TimeSig [3,4]. Beats=3.
+        // Steps per beat = 2.
+        // 0 (Beat 1) -> MA
+        // 1          -> de
+        // 2 (Beat 2) -> RA
+        // 3          -> PAR
+        // 4 (Beat 3) -> che
+        // 5          -> PAR
+
+        // Map global step index (0-5) directly?
+        const mapping = ['MA', 'de', 'RA', 'PAR', 'che', 'PAR'];
+        return mapping[stepIndex % 6] || '';
+    }
+
+    return '';
+};
+
 export default function ConductorVisual({
-    subdivision,
-    timeSignature,
+    pattern,
     currentStepIndex,
     trainerActive,
     currentBarProgress,
     totalBarsInterval
 }: ConductorVisualProps) {
 
+    const { subdivision, timeSignature, countingMode } = pattern;
+
     // Calculate current beat (1-based)
     const beats = timeSignature[0];
     const stepsPerBeat = subdivision / beats;
     const currentBeatIndex = Math.floor(currentStepIndex / stepsPerBeat); // 0-based beat index
 
+    // Check for Accent (High Velocity on ANY instrument at current step)
+    const currentStepData = pattern.steps.filter(s => s.step === (currentStepIndex + 1));
+    const maxVelocity = currentStepData.reduce((acc, s) => Math.max(acc, s.velocity), 0);
+    const isAccent = maxVelocity > 0.8;
+
+    // Current Counting Text
+    const countText = getCountingText(currentStepIndex, subdivision, countingMode, timeSignature);
+
     // Beat Dots Generation
     // Using fixed width container to prevent jitter
     const beatDots = Array.from({ length: beats }).map((_, idx) => {
-        const isActive = idx === currentBeatIndex;
+        const isActiveBeat = idx === currentBeatIndex;
+
         return (
             <Box key={idx} sx={{
                 position: 'relative',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                width: 48, // Fixed width
-                height: 60, // Fixed height
+                width: 60, // Wider for text
+                height: 80,
                 justifyContent: 'center'
             }}>
                 <CircleIcon sx={{
                     fontSize: 24,
-                    color: isActive ? 'secondary.main' : 'text.disabled',
-                    transform: isActive ? 'scale(1.4)' : 'scale(1)',
+                    color: isActiveBeat ? 'secondary.main' : 'text.disabled',
+                    transform: isActiveBeat ? (isAccent ? 'scale(1.8)' : 'scale(1.4)') : 'scale(1)',
                     transition: 'transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                    filter: isActive ? 'drop-shadow(0 0 10px #f48fb1)' : 'none'
+                    filter: isActiveBeat ? (isAccent ? 'drop-shadow(0 0 15px #f50057)' : 'drop-shadow(0 0 10px #f48fb1)') : 'none'
                 }} />
-                <Typography variant="caption" sx={{
-                    color: isActive ? 'white' : 'text.disabled',
+
+                <Typography variant="h6" sx={{
+                    color: isActiveBeat ? 'white' : 'transparent',
                     fontWeight: 'bold',
                     mt: 1,
-                    position: 'absolute',
-                    bottom: 0
+                    fontSize: '1.2rem',
+                    textShadow: '0 0 5px rgba(0,0,0,0.5)'
                 }}>
-                    {idx + 1}
+                    {isActiveBeat ? countText : (idx + 1)}
                 </Typography>
             </Box>
         );
@@ -104,7 +182,7 @@ export default function ConductorVisual({
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            minHeight: 140,
+            minHeight: 160,
             width: '100%'
         }}>
             {/* Beat Counter */}

@@ -30,20 +30,29 @@ class DrumSynthesizer {
         this.noiseBuffer = buffer;
     }
 
-    public play(instrument: string, time: number, velocity: number) {
+    public play(instrument: string, time: number, velocity: number, modifier?: string) {
         switch (instrument) {
-            case 'bombo_parche': this.playBomboLegueroParche(time, velocity); break;
-            case 'bombo_aro': this.playBomboLegueroAro(time, velocity); break;
+            case 'bombo_leguero':
+                if (modifier === 'aro') this.playBomboLegueroAro(time, velocity);
+                else this.playBomboLegueroParche(time, velocity);
+                break;
             case 'kick': this.playRockKick(time, velocity); break;
-            case 'snare': this.playRockSnare(time, velocity); break;
-            case 'hihat_closed': this.playHiHat(time, velocity, false); break;
-            case 'hihat_open': this.playHiHat(time, velocity, true); break;
+            case 'snare':
+                // Default snares ON unless specified OFF
+                this.playRockSnare(time, velocity, modifier !== 'snares_off');
+                break;
+            case 'hihat':
+                this.playHiHat(time, velocity, modifier === 'open');
+                break;
             case 'tom_high': this.playTom(time, velocity, 200); break;
             case 'tom_low': this.playTom(time, velocity, 150); break;
             case 'tom_floor': this.playTom(time, velocity, 100); break;
             case 'crash': this.playCrash(time, velocity); break;
             case 'ride': this.playRide(time, velocity); break;
             case 'click': this.playClick(time, velocity); break;
+            case 'shaker': this.playShaker(time, velocity); break;
+            case 'surdo': this.playSurdo(time, velocity); break;
+            case 'rim': this.playBomboLegueroAro(time, velocity); break; // Reuse
         }
     }
 
@@ -72,7 +81,6 @@ class DrumSynthesizer {
 
     /**
     * Plays a Tom (High, Low, Floor).
-    * (ES) Reproduce un Tom (Alto, Bajo, Chancha).
     */
     public playTom(time: number, velocity: number, pitch: number) {
         const osc = this.context.createOscillator();
@@ -87,15 +95,63 @@ class DrumSynthesizer {
 
         // Volume Envelope - Very short sustain
         gain.gain.setValueAtTime(velocity, time);
-        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.2); // Very Short
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.15); // Reduced boominess
 
         osc.start(time);
         osc.stop(time + 0.25);
     }
 
     /**
+    * Plays a Surdo (Deep samba drum).
+    */
+    public playSurdo(time: number, velocity: number) {
+        const osc = this.context.createOscillator();
+        const gain = this.context.createGain();
+
+        osc.connect(gain);
+        gain.connect(this.context.destination);
+
+        // Deep/Muffled
+        osc.frequency.setValueAtTime(45, time);
+        osc.frequency.exponentialRampToValueAtTime(35, time + 0.3);
+
+        gain.gain.setValueAtTime(velocity, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
+
+        osc.start(time);
+        osc.stop(time + 0.45);
+    }
+
+    /**
+   * Plays a Shaker.
+   * Filtered noise with short envelope.
+   */
+    public playShaker(time: number, velocity: number) {
+        if (!this.noiseBuffer) return;
+
+        const source = this.context.createBufferSource();
+        source.buffer = this.noiseBuffer;
+
+        const filter = this.context.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 6000;
+        filter.Q.value = 1;
+
+        const gain = this.context.createGain();
+
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.context.destination);
+
+        gain.gain.setValueAtTime(velocity * 0.3, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
+
+        source.start(time);
+        source.stop(time + 0.1);
+    }
+
+    /**
      * Plays a Crash Cymbal.
-     * (ES) Reproduce un Platillo Crash.
      */
     public playCrash(time: number, velocity: number) {
         if (!this.noiseBuffer) return;
@@ -122,93 +178,111 @@ class DrumSynthesizer {
 
     /**
     * Plays a Ride Cymbal.
-    * (ES) Reproduce un Platillo Ride.
-    * Uses Resonant Filtering on Noise (Subtractive Synthesis) for a natural cymbal sound.
+    * NEW IMPLEMENTATION: Pure FM Bell + Metallic Sustain.
     */
     public playRide(time: number, velocity: number) {
+        // A. The "Ping" - FM Bell
+        const carrier = this.context.createOscillator();
+        const modulator = this.context.createOscillator();
+        const modGain = this.context.createGain();
+        const mainGain = this.context.createGain();
+
+        const fundamental = 350; // Base freq
+
+        carrier.type = 'sine';
+        carrier.frequency.value = fundamental;
+
+        modulator.type = 'square';
+        modulator.frequency.value = fundamental * 1.5; // Inharmonic ratio
+
+        modulator.connect(modGain);
+        modGain.connect(carrier.frequency); // FM
+        carrier.connect(mainGain);
+        mainGain.connect(this.context.destination);
+
+        // FM Envelope - Sharp Clang
+        modGain.gain.setValueAtTime(1000, time);
+        modGain.gain.exponentialRampToValueAtTime(1, time + 0.5);
+
+        // Amplitude - Long Sustain
+        mainGain.gain.setValueAtTime(velocity * 0.5, time);
+        mainGain.gain.exponentialRampToValueAtTime(0.001, time + 2.5);
+
+        carrier.start(time);
+        modulator.start(time);
+        carrier.stop(time + 2.5);
+        modulator.stop(time + 2.5);
+
+        // B. Schroeder Metallic Body (Optional Square Arrays) - Simplified here for performance using bright specific noise
         if (!this.noiseBuffer) return;
 
-        // 1. The "Stick" (High Freq Click)
-        const stickSource = this.context.createBufferSource();
-        stickSource.buffer = this.noiseBuffer;
-        const stickFilter = this.context.createBiquadFilter();
-        stickFilter.type = 'highpass';
-        stickFilter.frequency.value = 8000;
-        const stickGain = this.context.createGain();
+        const noise = this.context.createBufferSource();
+        noise.buffer = this.noiseBuffer;
 
-        stickSource.connect(stickFilter);
-        stickFilter.connect(stickGain);
-        stickGain.connect(this.context.destination);
+        const bpf = this.context.createBiquadFilter();
+        bpf.type = 'bandpass';
+        bpf.frequency.value = 4500;
+        bpf.Q.value = 10; // High resonance -> tones
 
-        stickGain.gain.setValueAtTime(velocity * 0.4, time);
-        stickGain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
-        stickSource.start(time);
-        stickSource.stop(time + 0.1);
+        const noiseGain = this.context.createGain();
 
-        // 2. The "Bell/Teacup" Tone (High Q Bandpass)
-        const bellSource = this.context.createBufferSource();
-        bellSource.buffer = this.noiseBuffer;
-        const bellFilter = this.context.createBiquadFilter();
-        bellFilter.type = 'bandpass';
-        bellFilter.frequency.value = 4500; // The specific ride pitch
-        bellFilter.Q.value = 25; // Super High Q = Pure Tone from Noise
-        const bellGain = this.context.createGain();
+        noise.connect(bpf);
+        bpf.connect(noiseGain);
+        noiseGain.connect(this.context.destination);
 
-        bellSource.connect(bellFilter);
-        bellFilter.connect(bellGain);
-        bellGain.connect(this.context.destination);
+        noiseGain.gain.setValueAtTime(velocity * 0.2, time);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 2.0); // Metallic shimmer
 
-        bellGain.gain.setValueAtTime(velocity * 0.6, time);
-        bellGain.gain.exponentialRampToValueAtTime(0.01, time + 1.2);
-        bellSource.start(time);
-        bellSource.stop(time + 1.5);
+        noise.start(time);
+        noise.stop(time + 2.0);
     }
 
     /**
-     * Plays a Rock Snare Drum (Tone + Noise).
-     * (ES) Reproduce un Redoblante de Rock (Tono + Ruido).
+     * Plays a Rock Snare Drum.
+     * @param snaresOn If true (default), plays noise. If false, timbal-like tone.
      */
-    public playRockSnare(time: number, velocity: number = 1.0) {
+    public playRockSnare(time: number, velocity: number = 1.0, snaresOn: boolean = true) {
         // 1. Tonal component (Body)
         const osc = this.context.createOscillator();
         const oscGain = this.context.createGain();
         osc.connect(oscGain);
         oscGain.connect(this.context.destination);
 
-        osc.frequency.setValueAtTime(250, time);
+        const basePitch = snaresOn ? 250 : 350; // Higher pitch if OFF (Timbal-like)
+        osc.frequency.setValueAtTime(basePitch, time);
+
         oscGain.gain.setValueAtTime(velocity * 0.5, time);
-        oscGain.gain.exponentialRampToValueAtTime(0.01, time + 0.2);
+        oscGain.gain.exponentialRampToValueAtTime(0.01, time + (snaresOn ? 0.2 : 0.3));
 
         osc.start(time);
-        osc.stop(time + 0.2);
+        osc.stop(time + 0.35);
 
         // 2. Noise component (Snares)
-        if (!this.noiseBuffer) return;
-        const noise = this.context.createBufferSource();
-        noise.buffer = this.noiseBuffer;
-        const noiseFilter = this.context.createBiquadFilter();
-        noiseFilter.type = 'highpass';
-        noiseFilter.frequency.value = 1000;
-        const noiseGain = this.context.createGain();
+        if (snaresOn && this.noiseBuffer) {
+            const noise = this.context.createBufferSource();
+            noise.buffer = this.noiseBuffer;
+            const noiseFilter = this.context.createBiquadFilter();
+            noiseFilter.type = 'highpass';
+            noiseFilter.frequency.value = 1000;
+            const noiseGain = this.context.createGain();
 
-        noise.connect(noiseFilter);
-        noiseFilter.connect(noiseGain);
-        noiseGain.connect(this.context.destination);
+            noise.connect(noiseFilter);
+            noiseFilter.connect(noiseGain);
+            noiseGain.connect(this.context.destination);
 
-        noiseGain.gain.setValueAtTime(velocity * 0.8, time);
-        noiseGain.gain.exponentialRampToValueAtTime(0.01, time + 0.25);
+            noiseGain.gain.setValueAtTime(velocity * 0.8, time);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, time + 0.25);
 
-        noise.start(time);
-        noise.stop(time + 0.25);
+            noise.start(time);
+            noise.stop(time + 0.25);
+        }
     }
 
     /**
-     * Plays a Hi-Hat using multiple square waves for metallic sound.
-     * (ES) Reproduce un Hi-Hat usando múltiples ondas cuadradas para sonido metálico.
+     * Plays a Hi-Hat.
+     * Unified logic for Open/Closed.
      */
     public playHiHat(time: number, velocity: number = 1.0, open: boolean = false) {
-        // Simplified metallic noise using high-pass filtered noise for standard efficiency
-        // (ES) Ruido metálico simplificado usando ruido filtrado paso-alto para eficiencia
         if (!this.noiseBuffer) return;
 
         const source = this.context.createBufferSource();
@@ -221,7 +295,7 @@ class DrumSynthesizer {
         const gain = this.context.createGain();
 
         // Envelope: Short for closed, longer for open
-        const decay = open ? 0.3 : 0.05;
+        const decay = open ? 0.4 : 0.05; // 400ms vs 50ms
 
         source.connect(filter);
         filter.connect(gain);
@@ -236,9 +310,6 @@ class DrumSynthesizer {
 
     /**
      * Plays the "Parche" (Head) sound of a Bombo Legüero.
-     * Low frequency, deep, with a "skin" texture.
-     * (ES) Reproduce el sonido de "Parche" de un Bombo Legüero.
-     * Frecuencia baja, profunda, con textura de "piel".
      */
     public playBomboLegueroParche(time: number, velocity: number = 1.0) {
         // Deep, earthy thud. Wood shell resonance + skin tension.
@@ -251,7 +322,7 @@ class DrumSynthesizer {
         osc.connect(gain);
         gain.connect(this.context.destination);
 
-        // Pitch drop: 70Hz -> 40Hz (Slower drop for "looser" skin feel)
+        // Low pitch
         osc.frequency.setValueAtTime(80, time);
         osc.frequency.exponentialRampToValueAtTime(35, time + 0.3);
 
@@ -262,52 +333,28 @@ class DrumSynthesizer {
         osc.start(time);
         osc.stop(time + 0.45);
 
-        // 2. Body Resonance (Wood Shell) - Low passed Square/Saw mix
-        // This gives the "box" sound.
+        // 2. Body Resonance (Wood Shell)
         const shellOsc = this.context.createOscillator();
         shellOsc.type = 'square';
         const shellFilter = this.context.createBiquadFilter();
         shellFilter.type = 'lowpass';
-        shellFilter.frequency.value = 120; // Muffly wood
+        shellFilter.frequency.value = 120;
 
         const shellGain = this.context.createGain();
         shellOsc.connect(shellFilter);
         shellFilter.connect(shellGain);
         shellGain.connect(this.context.destination);
 
-        shellOsc.frequency.value = 65; // Constant low resonance
+        shellOsc.frequency.value = 65;
         shellGain.gain.setValueAtTime(velocity * 0.3, time);
         shellGain.gain.exponentialRampToValueAtTime(0.01, time + 0.15);
 
         shellOsc.start(time);
         shellOsc.stop(time + 0.2);
-
-        // 3. Attack Click (Skin slap) - Filtered Noise
-        if (this.noiseBuffer) {
-            const noise = this.context.createBufferSource();
-            noise.buffer = this.noiseBuffer;
-            const filter = this.context.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.frequency.value = 600; // Thuddy attack, not clicky
-
-            const noiseGain = this.context.createGain();
-            noise.connect(filter);
-            filter.connect(noiseGain);
-            noiseGain.connect(this.context.destination);
-
-            noiseGain.gain.setValueAtTime(velocity * 0.5, time);
-            noiseGain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
-
-            noise.start(time);
-            noise.stop(time + 0.05);
-        }
     }
 
     public playBomboLegueroAro(time: number, velocity: number = 1.0) {
         // Woodblock / Rim style.
-        // High resonance bandpass filter on noise/pulse.
-
-        // 1. Main Wood Tone (Resonant Filtered Noise)
         if (this.noiseBuffer) {
             const noise = this.context.createBufferSource();
             noise.buffer = this.noiseBuffer;
@@ -316,7 +363,7 @@ class DrumSynthesizer {
             const filter1 = this.context.createBiquadFilter();
             filter1.type = 'bandpass';
             filter1.frequency.value = 1600; // Main pitch
-            filter1.Q.value = 8; // High resonance -> tones
+            filter1.Q.value = 8;
 
             const filter2 = this.context.createBiquadFilter();
             filter2.type = 'bandpass';
@@ -341,10 +388,10 @@ class DrumSynthesizer {
             noise.start(time);
             noise.stop(time + 0.1);
         }
-    }/**
+    }
+
+    /**
      * Plays a standard Metronome Click.
-     * High pitch beep (Sine wave with fast decay).
-     * (ES) Click de metrónomo estándar.
      */
     public playClick(time: number, velocity: number = 1.0) {
         const osc = this.context.createOscillator();
@@ -353,9 +400,7 @@ class DrumSynthesizer {
         osc.connect(gain);
         gain.connect(this.context.destination);
 
-        // High pitch (1000Hz for accent, 800Hz for others - managed by caller or velocity?)
-        // Let's use velocity to detune slightly if needed, or just fixed pitch.
-        // Accent usually higher pitch.
+        // High pitch
         const pitch = velocity > 0.9 ? 1200 : 800;
         osc.frequency.setValueAtTime(pitch, time);
 

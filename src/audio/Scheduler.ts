@@ -1,6 +1,7 @@
 import AudioContextManager from './AudioContextManager';
 import DrumSynthesizer from './DrumSynthesizer';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
+import { PolyphonicSynth } from './PolyphonicSynth';
 
 /**
  * Handles the precise scheduling of audio events.
@@ -10,6 +11,11 @@ import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 class Scheduler {
     private audioContext: AudioContext;
     private synthesizer: DrumSynthesizer;
+
+    // Harmony State
+    private polySynth: PolyphonicSynth;
+    private harmonyProgression: string[][] = [];
+    private harmonyBarIndex: number = 0;
 
     // Timing variables
     private isPlaying: boolean = false;
@@ -34,6 +40,16 @@ class Scheduler {
     constructor() {
         this.audioContext = AudioContextManager.getInstance().getContext();
         this.synthesizer = new DrumSynthesizer();
+        this.polySynth = new PolyphonicSynth();
+    }
+
+    public setHarmonyProgression(chords: string[][]) {
+        this.harmonyProgression = chords;
+        this.harmonyBarIndex = 0;
+    }
+
+    public setHarmonyVolume(vol: number) {
+        this.polySynth.setVolume(vol);
     }
 
     public setTempo(bpm: number) {
@@ -87,6 +103,7 @@ class Scheduler {
 
         this.isPlaying = true;
         this.currentStepIndex = 0;
+        this.harmonyBarIndex = 0; // Reset Harmony
         this.nextNoteTime = this.audioContext.currentTime;
 
         // Start Scheduler Loop
@@ -120,30 +137,67 @@ class Scheduler {
         if (!this.currentPattern) return;
 
         const time = this.nextNoteTime;
-        // const step = this.currentStepIndex + 1; // 1-based logic for steps array if needed. But array is just list.
+
+        // --- HARMONY TRIGGER (Start of Bar) ---
+        if (this.currentStepIndex === 0 && this.harmonyProgression.length > 0) {
+            const chordIndex = this.harmonyBarIndex % this.harmonyProgression.length;
+            const chord = this.harmonyProgression[chordIndex];
+
+            // Calculate Bar Duration for the Pad
+            const ts = this.currentPattern.timeSignature;
+            const beats = ts[0];
+            const barDuration = (60.0 / this.tempo) * beats;
+
+            if (chord && chord.length > 0) {
+                this.polySynth.playChord(chord, barDuration, time);
+            }
+        }
+
+        // --- MICRO-TIMING / GROOVE LOGIC ---
+        let microTimingOffset = 0;
+
+        const sub = this.currentPattern.subdivision;
+        const ts = this.currentPattern.timeSignature; // e.g. [4,4]
+        // Step Duration (Ideal) = (60 / BPM * Beats) / Subdivision
+        const timePerBar = (60.0 / this.tempo) * ts[0];
+        const stepDuration = timePerBar / sub;
+
+        const groove = this.currentPattern.grooveType || 'straight';
+        const idx = this.currentStepIndex;
+
+        if (groove === 'swing_triplet') {
+            const isOffBeat = idx % 2 !== 0;
+            if (isOffBeat) {
+                microTimingOffset = stepDuration * (this.currentPattern.swingBase || 0.15); // Default slight swing
+            }
+        } else if (groove === 'samba_carioca') {
+            const positionInBeat = idx % 4; // 0, 1, 2, 3
+            if (positionInBeat === 1) { // The 'e' (2nd semi)
+                microTimingOffset = stepDuration * 0.18;
+            } else if (positionInBeat === 3) { // The 'a' (4th semi)
+                microTimingOffset = -stepDuration * 0.05;
+            }
+        }
+
+        const playTime = time + microTimingOffset;
 
         // Find steps that match current step index (1-based in pattern data)
         const activeSteps = this.currentPattern.steps.filter(s => s.step === (this.currentStepIndex + 1));
 
         activeSteps.forEach(step => {
-            this.synthesizer.play(step.instrument, time, step.velocity);
+            this.synthesizer.play(step.instrument, playTime, step.velocity, step.modifier);
         });
     }
 
     private nextStep() {
         if (!this.currentPattern) return;
 
-
-        // Wait. Tempo is Beats Per Minute (Quarter Notes usually). 
-        // We need to calculate how much time per STEP.
-
+        // Time per Bar = (60 / BPM) * BeatsPerBar
+        // Time per Step = Time per Bar / Subdivision
         const sub = this.currentPattern.subdivision;
         const ts = this.currentPattern.timeSignature;
         const beatsPerBar = ts[0]; // e.g. 4
-        // const beatUnit = ts[1]; // e.g. 4
 
-        // Time per Bar = (60 / BPM) * BeatsPerBar
-        // Time per Step = Time per Bar / Subdivision
         const timePerBar = (60.0 / this.tempo) * beatsPerBar;
         const timePerStep = timePerBar / sub;
 
@@ -156,6 +210,9 @@ class Scheduler {
         this.currentStepIndex++;
         if (this.currentStepIndex >= sub) {
             this.currentStepIndex = 0; // Bar Wrapped
+
+            // Advance Harmony Pointer
+            this.harmonyBarIndex++;
 
             // Trainer Logic: Increment after N bars
             if (this.trainerActive) {
