@@ -52,8 +52,6 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
             timeSignature: [ts.beats, ts.accum] as [number, number],
             subdivision: newSub,
             // Keep steps that fit in new subdivision. 
-            // Ideally we shouldn't delete if we just change signature but keep subdivision same (e.g. 4/4 -> 3/4).
-            // We just cut off the end.
             steps: pattern.steps.filter(s => s.step <= newSub)
         });
     };
