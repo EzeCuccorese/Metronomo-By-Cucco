@@ -6,7 +6,7 @@
  * Incluye preajustes para ritmos del currículo de la EMPA.
  */
 
-export type InstrumentType = 'kick' | 'snare' | 'hihat_closed' | 'hihat_open' | 'bombo_parche' | 'bombo_aro' | 'click';
+export type InstrumentType = 'kick' | 'snare' | 'hihat_closed' | 'hihat_open' | 'tom_high' | 'tom_low' | 'tom_floor' | 'crash' | 'ride' | 'bombo_parche' | 'bombo_aro' | 'click';
 
 export interface RhythmStep {
     step: number; // 1-indexed step in the grid (e.g., 1 to 16)

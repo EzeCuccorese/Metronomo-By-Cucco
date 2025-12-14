@@ -101,6 +101,12 @@ class Scheduler {
         }
     }
 
+    public playOneShot(instrument: string) {
+        // Play immediately
+        const time = this.audioContext.currentTime;
+        this.synthesizer.play(instrument, time, 1.0); // Full velocity for preview
+    }
+
     private scheduler() {
         // While there are notes that will need to play before the next interval,
         // schedule them and advance the pointer.

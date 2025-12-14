@@ -136,15 +136,33 @@ function App() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isPlaying, trainerActive]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in an input
+      const target = e.target as HTMLElement;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        handleTogglePlay();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPlaying]);
+
   const handleTogglePlay = () => {
+    if (!schedulerRef.current) return;
+
     if (isPlaying) {
-      schedulerRef.current?.stop();
+      schedulerRef.current.stop();
       setIsPlaying(false);
     } else {
       if (trainerActive) {
         setPracticeTimeSeconds(0);
       }
-      schedulerRef.current?.start();
+      schedulerRef.current.start();
       setIsPlaying(true);
     }
   };
@@ -219,6 +237,11 @@ function App() {
       tapTimesRef.current = [];
     }
     lastTapRef.current = now;
+  };
+
+  const handlePreviewSound = (instrument: string) => {
+    if (isPlaying) return; // Only if NOT playing
+    schedulerRef.current?.playOneShot(instrument);
   };
 
   const calculateTotalSeconds = () => {
@@ -371,6 +394,7 @@ function App() {
               pattern={currentPattern}
               onPatternUpdate={(updated) => setCurrentPattern(updated)}
               currentStepIndex={currentStep}
+              onPreviewInstrument={handlePreviewSound}
             />
           </Box>
 

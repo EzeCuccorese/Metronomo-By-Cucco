@@ -6,7 +6,9 @@ import {
     FormControl,
     Select,
     MenuItem,
-    InputLabel
+    InputLabel,
+    ToggleButton,
+    ToggleButtonGroup
 } from '@mui/material';
 import { QuarterNoteIcon, EighthNoteIcon, SixteenthNoteIcon, TripletIcon } from './MusicIcons';
 
@@ -16,16 +18,22 @@ interface PatternEditorProps {
     pattern: RhythmPattern;
     onPatternUpdate: (newPattern: RhythmPattern) => void;
     currentStepIndex?: number;
+    onPreviewInstrument?: (instrument: string) => void;
 }
 
-const INSTRUMENTS_DISPLAY: { type: InstrumentType; label: string }[] = [
-    { type: 'bombo_parche', label: 'Bombo (Parche)' },
-    { type: 'bombo_aro', label: 'Bombo (Aro)' },
-    { type: 'kick', label: 'Batería: Kick' },
-    { type: 'snare', label: 'Batería: Redolante' },
-    { type: 'hihat_closed', label: 'Hi-Hat Cerrado' },
-    { type: 'hihat_open', label: 'Hi-Hat Abierto' },
-    { type: 'click', label: 'Click Metrónomo' },
+const INSTRUMENTS_DISPLAY: { type: InstrumentType; label: string; group: string }[] = [
+    { type: 'bombo_parche', label: 'Bombo (Parche)', group: 'bombo' },
+    { type: 'bombo_aro', label: 'Bombo (Aro)', group: 'bombo' },
+    { type: 'kick', label: 'Batería: Kick', group: 'drums' },
+    { type: 'snare', label: 'Batería: Redolante', group: 'drums' },
+    { type: 'hihat_closed', label: 'Hi-Hat Cerrado', group: 'drums' },
+    { type: 'hihat_open', label: 'Hi-Hat Abierto', group: 'drums' },
+    { type: 'tom_high', label: 'Tom 1 (High)', group: 'drums' },
+    { type: 'tom_low', label: 'Tom 2 (Low)', group: 'drums' },
+    { type: 'tom_floor', label: 'Tom (Chancha)', group: 'drums' },
+    { type: 'crash', label: 'Platillo Crash', group: 'drums' },
+    { type: 'ride', label: 'Platillo Ride', group: 'drums' },
+    { type: 'click', label: 'Click Metrónomo', group: 'metronome' },
 ];
 
 const TIME_SIGNATURES = [
@@ -37,7 +45,7 @@ const TIME_SIGNATURES = [
     { label: '2/2', beats: 2, accum: 2 },
 ];
 
-export default function PatternEditor({ pattern, onPatternUpdate, currentStepIndex = -1 }: PatternEditorProps) {
+export default function PatternEditor({ pattern, onPatternUpdate, currentStepIndex = 0, onPreviewInstrument }: PatternEditorProps) {
 
     // UI State: What grid size are we looking at?
     // Initialize with pattern's subdivision, but allow it to diverge for "Zoom Out" (Reduction).
@@ -46,23 +54,31 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
     // Sync view if pattern updates externally (e.g. preset load), but ONLY if the families match or strictly required.
     // Actually, just syncing on mount or major change is safer.
     useEffect(() => {
-        // If the pattern's subdivision changes to something incompatible with current view, snap view to it.
-        // e.g. View is 4, Pattern changes to 12. View 4 is compatible (12/3=4).
-        // e.g. View is 16, Pattern changes to 12. Incompatible.
-        if (pattern.subdivision % viewSubdivision !== 0 && viewSubdivision % pattern.subdivision !== 0) {
+        // Reset view subdivision if data subdivision changes externally and isn't represented
+        // But we want to preserve View Reduction.
+        if (viewSubdivision > pattern.subdivision || (pattern.subdivision % viewSubdivision !== 0)) {
             setViewSubdivision(pattern.subdivision);
         }
-        // Also if pattern resolution expands beyond view? 
+        // If pattern sub increases (e.g. 4 -> 16), update view to match full resolution? 
+        // User pref: Keep view simple unless needed? 
         // Let's just trust the user's view unless it's impossible.
     }, [pattern.subdivision]);
+
+    // UI State for Filters
+    const [activeFilter, setActiveFilter] = useState('all');
+
+    const handleFilterChange = (_: React.MouseEvent<HTMLElement>, newFilter: string) => {
+        if (newFilter) setActiveFilter(newFilter);
+    };
 
     const handleTimeSignatureChange = (val: string) => {
         const ts = TIME_SIGNATURES.find(t => t.label === val);
         if (!ts) return;
 
         let newSub = pattern.subdivision;
-        if (ts.accum === 8 && pattern.timeSignature[1] === 4) newSub = 6;
-        if (ts.accum === 4 && pattern.timeSignature[1] === 8) newSub = 16;
+        // Basic smart default if switching "families"
+        if (ts.accum === 8 && pattern.timeSignature[1] === 4) newSub = 6; // 4/4 -> 6/8 default to eighths (6)
+        if (ts.accum === 4 && pattern.timeSignature[1] === 8) newSub = 16; // 6/8 -> 4/4 default to sixteenths
 
         onPatternUpdate({
             ...pattern,
@@ -180,6 +196,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
         const currentStep = pattern.steps.find(s => s.step === stepNum && s.instrument === instrument);
         const currentRefVelocity = currentStep ? currentStep.velocity : 0;
 
+        // Cycle Velocity
         let newVelocity = 0;
         if (currentRefVelocity === 0) newVelocity = 0.7;
         else if (currentRefVelocity > 0.6 && currentRefVelocity < 0.9) newVelocity = 1.0;
@@ -187,8 +204,24 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
         else newVelocity = 0;
 
         let newSteps = [...pattern.steps];
+        // Remove existing at this tick
         newSteps = newSteps.filter(s => !(s.step === stepNum && s.instrument === instrument));
-        if (newVelocity > 0) newSteps.push({ step: stepNum, instrument, velocity: newVelocity });
+
+        // Exclusive Hi-Hat Logic
+        if (instrument === 'hihat_closed' && newVelocity > 0) {
+            newSteps = newSteps.filter(s => !(s.step === stepNum && s.instrument === 'hihat_open'));
+        }
+        if (instrument === 'hihat_open' && newVelocity > 0) {
+            newSteps = newSteps.filter(s => !(s.step === stepNum && s.instrument === 'hihat_closed'));
+        }
+
+        if (newVelocity > 0) {
+            newSteps.push({ step: stepNum, instrument, velocity: newVelocity });
+            // PLAY PREVIEW ONLY IF ADDING A NOTE (newVelocity > 0)
+            if (onPreviewInstrument) {
+                onPreviewInstrument(instrument);
+            }
+        }
 
         onPatternUpdate({ ...pattern, steps: newSteps });
     };
@@ -250,6 +283,12 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
     }
     const SubIcon = getIconForView();
 
+    // Filter Logic
+    const visibleInstruments = INSTRUMENTS_DISPLAY.filter(inst => {
+        if (activeFilter === 'all') return true;
+        return inst.group === activeFilter;
+    });
+
     return (
         <Box sx={{ width: '100%', mt: 4, textAlign: 'left' }}>
             {/* Controls */}
@@ -303,6 +342,32 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                 </FormControl>
             </Stack>
 
+            {/* Filter Buttons */}
+            <Stack direction="row" justifyContent="center" sx={{ mb: 2 }}>
+                <ToggleButtonGroup
+                    value={activeFilter}
+                    exclusive
+                    onChange={handleFilterChange}
+                    size="small"
+                    sx={{
+                        '& .MuiToggleButton-root': {
+                            color: 'grey.500',
+                            borderColor: '#333',
+                            '&.Mui-selected': {
+                                color: 'primary.main',
+                                backgroundColor: 'rgba(144, 202, 249, 0.1)',
+                                borderColor: 'primary.main'
+                            }
+                        }
+                    }}
+                >
+                    <ToggleButton value="all">Todos</ToggleButton>
+                    <ToggleButton value="drums">Batería</ToggleButton>
+                    <ToggleButton value="bombo">Legüero</ToggleButton>
+                    <ToggleButton value="metronome">Metrónomo</ToggleButton>
+                </ToggleButtonGroup>
+            </Stack>
+
             {/* Grid Container */}
             <Box sx={{
                 p: 3, width: '100%', background: '#121212', borderRadius: 4,
@@ -341,7 +406,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                     </Stack>
 
                     {/* Instruments */}
-                    {INSTRUMENTS_DISPLAY.map((inst) => (
+                    {visibleInstruments.map((inst) => (
                         <Stack key={inst.type} direction="row" alignItems="center" spacing={1} sx={{
                             mb: 1, p: 1, borderRadius: 2,
                             '&:hover .clear-btn': { opacity: 1 },

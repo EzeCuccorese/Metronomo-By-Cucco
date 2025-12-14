@@ -38,6 +38,11 @@ class DrumSynthesizer {
             case 'snare': this.playRockSnare(time, velocity); break;
             case 'hihat_closed': this.playHiHat(time, velocity, false); break;
             case 'hihat_open': this.playHiHat(time, velocity, true); break;
+            case 'tom_high': this.playTom(time, velocity, 200); break;
+            case 'tom_low': this.playTom(time, velocity, 150); break;
+            case 'tom_floor': this.playTom(time, velocity, 100); break;
+            case 'crash': this.playCrash(time, velocity); break;
+            case 'ride': this.playRide(time, velocity); break;
             case 'click': this.playClick(time, velocity); break;
         }
     }
@@ -63,6 +68,100 @@ class DrumSynthesizer {
 
         osc.start(time);
         osc.stop(time + 0.5);
+    }
+
+    /**
+    * Plays a Tom (High, Low, Floor).
+    * (ES) Reproduce un Tom (Alto, Bajo, Chancha).
+    */
+    public playTom(time: number, velocity: number, pitch: number) {
+        const osc = this.context.createOscillator();
+        const gain = this.context.createGain();
+
+        osc.connect(gain);
+        gain.connect(this.context.destination);
+
+        // Pitch Drop - Faster and deeper for "dry" sound
+        osc.frequency.setValueAtTime(pitch, time);
+        osc.frequency.exponentialRampToValueAtTime(pitch * 0.2, time + 0.15); // Faster drop
+
+        // Volume Envelope - Very short sustain
+        gain.gain.setValueAtTime(velocity, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.2); // Very Short
+
+        osc.start(time);
+        osc.stop(time + 0.25);
+    }
+
+    /**
+     * Plays a Crash Cymbal.
+     * (ES) Reproduce un Platillo Crash.
+     */
+    public playCrash(time: number, velocity: number) {
+        if (!this.noiseBuffer) return;
+
+        const source = this.context.createBufferSource();
+        source.buffer = this.noiseBuffer;
+
+        const filter = this.context.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 2000;
+
+        const gain = this.context.createGain();
+
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.context.destination);
+
+        gain.gain.setValueAtTime(velocity * 0.8, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 1.5); // Long decay
+
+        source.start(time);
+        source.stop(time + 1.5);
+    }
+
+    /**
+    * Plays a Ride Cymbal.
+    * (ES) Reproduce un Platillo Ride.
+    * Uses Resonant Filtering on Noise (Subtractive Synthesis) for a natural cymbal sound.
+    */
+    public playRide(time: number, velocity: number) {
+        if (!this.noiseBuffer) return;
+
+        // 1. The "Stick" (High Freq Click)
+        const stickSource = this.context.createBufferSource();
+        stickSource.buffer = this.noiseBuffer;
+        const stickFilter = this.context.createBiquadFilter();
+        stickFilter.type = 'highpass';
+        stickFilter.frequency.value = 8000;
+        const stickGain = this.context.createGain();
+
+        stickSource.connect(stickFilter);
+        stickFilter.connect(stickGain);
+        stickGain.connect(this.context.destination);
+
+        stickGain.gain.setValueAtTime(velocity * 0.4, time);
+        stickGain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
+        stickSource.start(time);
+        stickSource.stop(time + 0.1);
+
+        // 2. The "Bell/Teacup" Tone (High Q Bandpass)
+        const bellSource = this.context.createBufferSource();
+        bellSource.buffer = this.noiseBuffer;
+        const bellFilter = this.context.createBiquadFilter();
+        bellFilter.type = 'bandpass';
+        bellFilter.frequency.value = 4500; // The specific ride pitch
+        bellFilter.Q.value = 25; // Super High Q = Pure Tone from Noise
+        const bellGain = this.context.createGain();
+
+        bellSource.connect(bellFilter);
+        bellFilter.connect(bellGain);
+        bellGain.connect(this.context.destination);
+
+        bellGain.gain.setValueAtTime(velocity * 0.6, time);
+        bellGain.gain.exponentialRampToValueAtTime(0.01, time + 1.2);
+        bellSource.start(time);
+        bellSource.stop(time + 1.5);
     }
 
     /**
