@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -10,7 +10,11 @@ import {
   Stack,
   useMediaQuery,
   useTheme,
-  Chip
+  Chip,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
@@ -61,6 +65,10 @@ function App() {
   const [trainerEnd, setTrainerEnd] = useState(120);
   const [trainerBars, setTrainerBars] = useState(4);
   const [trainerStep, setTrainerStep] = useState(5);
+  const [trainerMode, setTrainerMode] = useState<'linear' | 'resistance_loop'>('linear');
+
+  // Study State
+  const [totalBarsPracticed, setTotalBarsPracticed] = useState(0);
 
   // Trainer Timing
   const [practiceTimeSeconds, setPracticeTimeSeconds] = useState(0);
@@ -82,10 +90,11 @@ function App() {
     schedulerRef.current = new Scheduler();
     schedulerRef.current.setPattern(currentPattern);
 
-    schedulerRef.current.setOnPlaybackUpdate((step, newBpm, barCount) => {
+    schedulerRef.current.setOnPlaybackUpdate((step, newBpm, barCount, totalBars) => {
       setBpm(newBpm);
       setCurrentStep(step);
       setCurrentBarProgress(barCount);
+      setTotalBarsPracticed(totalBars);
     });
 
     return () => {
@@ -105,7 +114,7 @@ function App() {
 
   useEffect(() => {
     if (schedulerRef.current) {
-      schedulerRef.current.configureTrainer(trainerActive, trainerStart, trainerEnd, trainerBars, trainerStep);
+      schedulerRef.current.configureTrainer(trainerActive, trainerStart, trainerEnd, trainerBars, trainerStep, trainerMode);
     }
     const estimated = calculateTotalSeconds();
     setTotalEstimatedSeconds(estimated);
@@ -280,8 +289,9 @@ function App() {
             {/* Harmony Builder */}
             <Box>
               <HarmonyBuilder
-                onUpdateProgression={(chords) => schedulerRef.current?.setHarmonyProgression(chords)}
-                onVolumeChange={(vol) => schedulerRef.current?.setHarmonyVolume(vol)}
+                onUpdateProgression={useCallback((chords) => schedulerRef.current?.setHarmonyProgression(chords), [])}
+                onVolumeChange={useCallback((vol) => schedulerRef.current?.setHarmonyVolume(vol), [])}
+                onStyleChange={useCallback((style) => schedulerRef.current?.setAccompanimentStyle(style), [])}
               />
             </Box>
 
@@ -297,6 +307,13 @@ function App() {
 
               {trainerActive && (
                 <Stack spacing={2} mt={1}>
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>Modo</InputLabel>
+                    <Select value={trainerMode} label="Modo" onChange={(e) => setTrainerMode(e.target.value as any)}>
+                      <MenuItem value="linear">Lineal</MenuItem>
+                      <MenuItem value="resistance_loop">Resistencia (Loop)</MenuItem>
+                    </Select>
+                  </FormControl>
                   <Stack direction="row" spacing={1}>
                     <TextField label="Inicio" type="number" size="small" value={trainerStart} onChange={(e) => setTrainerStart(Number(e.target.value))} />
                     <TextField label="Fin" type="number" size="small" value={trainerEnd} onChange={(e) => setTrainerEnd(Number(e.target.value))} />
@@ -335,7 +352,13 @@ function App() {
 
           {/* RIGHT: Study Tools (Pomodoro) */}
           <Box sx={{ flex: '0 0 300px', width: isDesktop ? 300 : '100%' }}>
-            <StudyTools />
+            <StudyTools
+              onStopRequest={() => {
+                schedulerRef.current?.stop();
+                setIsPlaying(false);
+              }}
+              totalBarsPracticed={totalBarsPracticed}
+            />
           </Box>
 
         </Stack>

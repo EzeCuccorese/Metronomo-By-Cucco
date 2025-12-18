@@ -32,6 +32,7 @@ const INSTRUMENTS_DISPLAY: { type: InstrumentType; label: string; group: string 
     { type: 'kick', label: 'Kick', group: 'drums' },
     { type: 'snare', label: 'Snare', group: 'drums' },
     { type: 'hihat', label: 'Hi-Hat', group: 'drums' },
+    { type: 'hihat_foot', label: 'HH Foot', group: 'drums' },
     { type: 'ride', label: 'Ride', group: 'drums' },
     { type: 'crash', label: 'Crash', group: 'drums' },
     { type: 'tom_high', label: 'Tom 1', group: 'drums' },
@@ -318,6 +319,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                                     let noteVisual: React.ReactNode = hasNote ? noteChar : null;
                                     if (hasNote) {
                                         if (inst.type === 'hihat') noteVisual = currentStep?.modifier === 'open' ? <Circle size={10} strokeWidth={3} /> : noteChar;
+                                        else if (inst.type === 'hihat_foot') noteVisual = <Typography variant="caption" sx={{ fontSize: '1.2rem', lineHeight: 1 }}>△</Typography>;
                                         else if (inst.type === 'snare') noteVisual = currentStep?.modifier === 'snares_off' ? <Typography variant="caption" sx={{ fontSize: '0.7rem', border: '1px solid', px: 0.3, borderRadius: '2px' }}>T</Typography> : noteChar;
                                         else if (inst.type === 'bombo_leguero' || inst.type === 'rim') noteVisual = (currentStep?.modifier === 'aro' || inst.type === 'rim') ? '×' : noteChar;
                                     }

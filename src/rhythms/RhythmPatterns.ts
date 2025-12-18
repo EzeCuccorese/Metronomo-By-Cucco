@@ -14,7 +14,7 @@ export type InstrumentType =
     'tom_high' | 'tom_low' | 'tom_floor' |
     'crash' |
     'bombo_leguero' |
-    'click' | 'shaker' | 'clave' | 'rim' | 'surdo';
+    'click' | 'shaker' | 'clave' | 'rim' | 'surdo' | 'hihat_foot';
 
 // Map of Icons
 export const InstrumentIcons: Record<InstrumentType, any> = {
@@ -31,7 +31,8 @@ export const InstrumentIcons: Record<InstrumentType, any> = {
     shaker: Zap,
     clave: Music,
     rim: CircleDot,
-    surdo: CircleDot
+    surdo: CircleDot,
+    hihat_foot: Triangle
 };
 
 export interface RhythmStep {
@@ -52,7 +53,7 @@ export interface RhythmPattern {
 
     // --- NEW FIELDS ---
     swingBase?: number; // 0.0 to 1.0
-    grooveType?: 'straight' | 'swing_triplet' | 'samba_carioca' | 'chacarera_poliritmica';
+    grooveType?: 'straight' | 'swing_triplet' | 'samba_carioca' | 'chacarera_poliritmica' | 'zamba_tradicional';
     countingMode: 'numbers' | '1e&a' | '1&2&' | 'triplet_1la2la' | 'mnemonics_chacarera';
     recommendedTempo?: number;
 }
@@ -148,33 +149,51 @@ export const PRESET_PATTERNS: RhythmPattern[] = [
         id: 'chacarera',
         name: 'Chacarera',
         description: 'Folklore Argentino. 6/8 Polirítmico.',
-        timeSignature: [3, 4], // Viewed as 3/4 or 6/8
-        subdivision: 6, // 8ths
+        timeSignature: [6, 8],
+        subdivision: 12, // 16ths in 6/8 to allow for fills
         instruments: ['bombo_leguero', 'rim'],
         grooveType: 'chacarera_poliritmica',
         countingMode: 'mnemonics_chacarera',
         steps: [
-            // "MA - de - RA" (3/4) vs "UN - dos - TRES" (6/8)
-            // 1 (Parche), 2 (Aro), 3 (Parche), 4 (Aro), 5 (Parche), 6 (Aro) - Basic
-            // Chacarera: Clasic 3/4 feel on 6/8
-
-            // 1: Accent (Parche)
+            // PARCHE (KICK): Beats 1 and "3" of the 3/4 feel (which is step 9 in 6/8)
             { step: 1, instrument: 'bombo_leguero', velocity: 1.0, modifier: 'parche' },
+            { step: 9, instrument: 'bombo_leguero', velocity: 0.9, modifier: 'parche' },
+            { step: 11, instrument: 'bombo_leguero', velocity: 0.8, modifier: 'parche' }, // Driving ghost
 
-            // 2: (Aro)
-            { step: 2, instrument: 'bombo_leguero', velocity: 0.8, modifier: 'aro' },
+            // ARO (RIM): "CHA-ca-cha-CA-ca-cha"
+            // (1), 3, 4, 6, 7, (9), 10, 12
+            { step: 3, instrument: 'bombo_leguero', velocity: 0.7, modifier: 'aro' },
+            { step: 4, instrument: 'bombo_leguero', velocity: 0.9, modifier: 'aro' }, // Accent
+            { step: 6, instrument: 'bombo_leguero', velocity: 0.6, modifier: 'aro' },
+            { step: 7, instrument: 'bombo_leguero', velocity: 0.8, modifier: 'aro' },
+            { step: 10, instrument: 'bombo_leguero', velocity: 0.9, modifier: 'aro' }, // Accent
+            { step: 12, instrument: 'bombo_leguero', velocity: 0.6, modifier: 'aro' }
+        ]
+    },
+    {
+        id: 'zamba',
+        name: 'Zamba',
+        description: 'Romántico y pausado. 3/4 con aire de 6/8.',
+        timeSignature: [3, 4],
+        subdivision: 12,
+        instruments: ['bombo_leguero', 'rim'],
+        grooveType: 'zamba_tradicional',
+        countingMode: 'numbers',
+        steps: [
+            // STEP 1: TIERRA (Deep Parche)
+            { step: 1, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'parche' },
 
-            // 3: (Parche - Low)
-            { step: 3, instrument: 'bombo_leguero', velocity: 0.9, modifier: 'parche' },
+            // REPIQUE "ba-da-pám" (Semicorcheas antes del 3)
+            // Steps 7, 8 (Aro) -> 9 (Parche fuerte)
+            { step: 7, instrument: 'bombo_leguero', velocity: 0.5, modifier: 'aro' }, // ba
+            { step: 8, instrument: 'bombo_leguero', velocity: 0.6, modifier: 'aro' }, // da
 
-            // 4: (Aro)
-            { step: 4, instrument: 'bombo_leguero', velocity: 0.8, modifier: 'aro' },
+            // STEP 3 (Step 9 in 12-grid): The "PÁM" (Strong Parche)
+            { step: 9, instrument: 'bombo_leguero', velocity: 1.0, modifier: 'parche' },
 
-            // 5: (Parche - Low)
-            { step: 5, instrument: 'bombo_leguero', velocity: 0.9, modifier: 'parche' },
-
-            // 6: (Aro)
-            { step: 6, instrument: 'bombo_leguero', velocity: 0.8, modifier: 'aro' },
+            // ARO DE RELLENO
+            { step: 5, instrument: 'bombo_leguero', velocity: 0.4, modifier: 'aro' },
+            { step: 11, instrument: 'bombo_leguero', velocity: 0.4, modifier: 'aro' },
         ]
     },
     {

@@ -12,9 +12,12 @@ class AudioContextManager {
     private audioContext: AudioContext;
 
     private constructor() {
-        // (ES) Inicializa el AudioContext estándar
+        // (ES) Inicializa el AudioContext estándar con optimizaciones
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        this.audioContext = new AudioContextClass();
+        this.audioContext = new AudioContextClass({
+            latencyHint: 'interactive',
+            sampleRate: 44100,
+        });
     }
 
     /**

@@ -54,7 +54,12 @@ const TomatoIcon = ({ filled, size = 16 }: { filled: boolean; size?: number }) =
     </Box>
 );
 
-export default function StudyTools() {
+interface StudyToolsProps {
+    onStopRequest?: () => void;
+    totalBarsPracticed?: number;
+}
+
+export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: StudyToolsProps) {
     // Timer State
     const [timerType, setTimerType] = useState<'pomodoro' | 'break'>('pomodoro');
     const [timeLeft, setTimeLeft] = useState(25 * 60);
@@ -106,8 +111,10 @@ export default function StudyTools() {
                 }));
             }
             alert("¡Pomodoro Completado! Tomate un descanso.");
+            if (onStopRequest) onStopRequest(); // Stop Audio
         } else {
             alert("Descanso terminado. ¡A trabajar!");
+            if (onStopRequest) onStopRequest();
         }
     };
 
@@ -232,6 +239,14 @@ export default function StudyTools() {
                     <IconButton onClick={resetTimer} sx={{ color: 'text.secondary' }}><RefreshIcon /></IconButton>
                 </Stack>
             </Box>
+
+            {/* STATS */}
+            <Paper sx={{ p: 1, my: 1, bgcolor: '#1a1a1a', border: '1px solid #333', textAlign: 'center' }}>
+                <Typography variant="caption" color="text.secondary" display="block">COMPASES PRACTICADOS</Typography>
+                <Typography variant="h5" color="primary" fontWeight="bold">
+                    {totalBarsPracticed}
+                </Typography>
+            </Paper>
 
             <Divider sx={{ my: 1, borderColor: '#333' }} />
 

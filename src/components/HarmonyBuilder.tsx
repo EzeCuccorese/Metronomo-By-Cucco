@@ -5,6 +5,7 @@ import { Music, Trash2, RotateCcw } from 'lucide-react';
 interface HarmonyBuilderProps {
     onUpdateProgression: (progression: string[][]) => void;
     onVolumeChange: (vol: number) => void;
+    onStyleChange: (style: string) => void;
 }
 
 const KEYS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -19,18 +20,20 @@ const MODES: { id: ModeType; label: string }[] = [
     { id: 'mixolydian', label: 'Mixolidio (Bluesy)' }
 ];
 
+// 1 unit = Half Bar (1/2 compás)
 interface ChordStep {
     id: string;
-    degree: string; // I, ii, etc.
-    duration: number; // Bars
+    degree: string;
+    durationUnits: number; // Number of half-bars. 1 = 1/2 bar, 2 = 1 bar.
     notes: string[];
 }
 
-export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange }: HarmonyBuilderProps) {
+export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, onStyleChange }: HarmonyBuilderProps) {
     const [rootKey, setRootKey] = useState('C');
     const [mode, setMode] = useState<ModeType>('major');
     const [octave, setOctave] = useState(4);
     const [volume, setVolume] = useState(0.3);
+    const [style, setStyle] = useState('pad');
 
     // Sequence
     const [sequence, setSequence] = useState<ChordStep[]>([]);
@@ -101,7 +104,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange }: 
         const newChord: ChordStep = {
             id: Math.random().toString(36).substr(2, 9),
             degree: getChordType(degreeIndex, mode),
-            duration: 1,
+            durationUnits: 2, // Default to 1 Bar (2 half-bars)
             notes: notes
         };
 
@@ -117,19 +120,25 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange }: 
         const progression: string[][] = [];
 
         sequence.forEach(step => {
-            for (let i = 0; i < step.duration; i++) {
+            // Push N copies of the chord, where N is durationUnits
+            // Each copy represents 1/2 bar of music
+            for (let i = 0; i < step.durationUnits; i++) {
                 progression.push(step.notes);
             }
         });
 
         onUpdateProgression(progression);
-
     }, [sequence, onUpdateProgression]);
 
     const handleVolume = (_: Event, val: number | number[]) => {
         const v = val as number;
         setVolume(v);
         onVolumeChange(v);
+    };
+
+    const handleStyleChange = (val: string) => {
+        setStyle(val);
+        onStyleChange(val);
     };
 
     return (
@@ -149,7 +158,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange }: 
             </Stack>
 
             {/* Global Settings */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '80px 1fr 60px', gap: 1, mb: 2 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 1 }}>
                 <FormControl size="small">
                     <InputLabel>Tono</InputLabel>
                     <Select value={rootKey} label="Tono" onChange={(e) => setRootKey(e.target.value)}>
@@ -161,6 +170,19 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange }: 
                     <InputLabel>Modo</InputLabel>
                     <Select value={mode} label="Modo" onChange={(e) => setMode(e.target.value as ModeType)}>
                         {MODES.map(m => <MenuItem key={m.id} value={m.id}>{m.label}</MenuItem>)}
+                    </Select>
+                </FormControl>
+            </Box>
+
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: 1, mb: 2 }}>
+                <FormControl size="small">
+                    <InputLabel>Estilo</InputLabel>
+                    <Select value={style} label="Estilo" onChange={(e) => handleStyleChange(e.target.value)}>
+                        <MenuItem value="pad">Pad (Sostenido)</MenuItem>
+                        <MenuItem value="quarters">Negras (Marcato)</MenuItem>
+                        <MenuItem value="offbeats">Contratiempos (Reggae/Ska)</MenuItem>
+                        <MenuItem value="arpeggio_8">Arpegio (8 corcheas)</MenuItem>
+                        <MenuItem value="zamba_base">Base Zamba</MenuItem>
                     </Select>
                 </FormControl>
 
@@ -221,17 +243,18 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange }: 
                         <Stack direction="row" alignItems="center" spacing={1}>
                             <Select
                                 size="small" variant="standard"
-                                value={step.duration}
+                                value={step.durationUnits}
                                 onChange={(e) => {
                                     const newSeq = [...sequence];
-                                    newSeq[idx].duration = Number(e.target.value);
+                                    newSeq[idx].durationUnits = Number(e.target.value);
                                     setSequence(newSeq);
                                 }}
-                                sx={{ width: 60 }}
+                                sx={{ width: 100 }}
                             >
-                                <MenuItem value={1}>1 Bar</MenuItem>
-                                <MenuItem value={2}>2 Bars</MenuItem>
-                                <MenuItem value={4}>4 Bars</MenuItem>
+                                <MenuItem value={1}>1/2 Compás</MenuItem>
+                                <MenuItem value={2}>1 Compás</MenuItem>
+                                <MenuItem value={4}>2 Compases</MenuItem>
+                                <MenuItem value={8}>4 Compases</MenuItem>
                             </Select>
 
                             <Button
