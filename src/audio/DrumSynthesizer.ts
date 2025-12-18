@@ -51,6 +51,7 @@ class DrumSynthesizer {
             case 'ride': this.playRide(time, velocity); break;
             case 'click': this.playClick(time, velocity); break;
             case 'shaker': this.playShaker(time, velocity); break;
+            case 'clave': this.playClave(time, velocity); break;
             case 'surdo': this.playSurdo(time, velocity); break;
             case 'rim': this.playBomboLegueroAro(time, velocity); break; // Reuse
         }
@@ -180,61 +181,70 @@ class DrumSynthesizer {
     * Plays a Ride Cymbal.
     * NEW IMPLEMENTATION: Pure FM Bell + Metallic Sustain.
     */
+    /**
+    * Plays a Ride Cymbal.
+    * Improved: More complex metallic wash + high frequency stick impact.
+    */
     public playRide(time: number, velocity: number) {
-        // A. The "Ping" - FM Bell
-        const carrier = this.context.createOscillator();
-        const modulator = this.context.createOscillator();
-        const modGain = this.context.createGain();
-        const mainGain = this.context.createGain();
+        // A. Stick Impact - Sharp, high-frequency "ping" (Dry)
+        const impact = this.context.createOscillator();
+        const impactGain = this.context.createGain();
+        impact.connect(impactGain);
+        impactGain.connect(this.context.destination);
 
-        const fundamental = 350; // Base freq
+        impact.type = 'sine';
+        impact.frequency.setValueAtTime(4500, time);
 
-        carrier.type = 'sine';
-        carrier.frequency.value = fundamental;
+        impactGain.gain.setValueAtTime(velocity * 0.5, time);
+        impactGain.gain.exponentialRampToValueAtTime(0.001, time + 0.03); // Very short
 
-        modulator.type = 'square';
-        modulator.frequency.value = fundamental * 1.5; // Inharmonic ratio
+        impact.start(time);
+        impact.stop(time + 0.05);
 
-        modulator.connect(modGain);
-        modGain.connect(carrier.frequency); // FM
-        carrier.connect(mainGain);
-        mainGain.connect(this.context.destination);
-
-        // FM Envelope - Sharp Clang
-        modGain.gain.setValueAtTime(1000, time);
-        modGain.gain.exponentialRampToValueAtTime(1, time + 0.5);
-
-        // Amplitude - Long Sustain
-        mainGain.gain.setValueAtTime(velocity * 0.5, time);
-        mainGain.gain.exponentialRampToValueAtTime(0.001, time + 2.5);
-
-        carrier.start(time);
-        modulator.start(time);
-        carrier.stop(time + 2.5);
-        modulator.stop(time + 2.5);
-
-        // B. Schroeder Metallic Body (Optional Square Arrays) - Simplified here for performance using bright specific noise
+        // B. The "Body" wash - Simulated edge hit using band-pass filtered noise
         if (!this.noiseBuffer) return;
 
-        const noise = this.context.createBufferSource();
-        noise.buffer = this.noiseBuffer;
+        // Multiple band-passes for complex metallic shimmer
+        const resonances = [6000, 8500, 11000];
+        resonances.forEach((freq, i) => {
+            const noise = this.context.createBufferSource();
+            noise.buffer = this.noiseBuffer!;
 
-        const bpf = this.context.createBiquadFilter();
-        bpf.type = 'bandpass';
-        bpf.frequency.value = 4500;
-        bpf.Q.value = 10; // High resonance -> tones
+            const filter = this.context.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.value = freq;
+            filter.Q.value = 5;
 
-        const noiseGain = this.context.createGain();
+            const noiseGain = this.context.createGain();
 
-        noise.connect(bpf);
-        bpf.connect(noiseGain);
-        noiseGain.connect(this.context.destination);
+            noise.connect(filter);
+            filter.connect(noiseGain);
+            noiseGain.connect(this.context.destination);
 
-        noiseGain.gain.setValueAtTime(velocity * 0.2, time);
-        noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 2.0); // Metallic shimmer
+            // Shimmer envelope
+            noiseGain.gain.setValueAtTime(0, time);
+            noiseGain.gain.linearRampToValueAtTime(velocity * (0.2 - (i * 0.05)), time + 0.02);
+            noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 1.2); // Clean decay
 
-        noise.start(time);
-        noise.stop(time + 2.0);
+            noise.start(time);
+            noise.stop(time + 1.2);
+        });
+
+        // C. Low-frequency metal "hum" (Very subtle, dry)
+        const hum = this.context.createOscillator();
+        const humGain = this.context.createGain();
+        hum.connect(humGain);
+        humGain.connect(this.context.destination);
+
+        hum.type = 'triangle';
+        hum.frequency.setValueAtTime(320, time);
+
+        humGain.gain.setValueAtTime(0, time);
+        humGain.gain.linearRampToValueAtTime(velocity * 0.1, time + 0.05);
+        humGain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+
+        hum.start(time);
+        hum.stop(time + 0.35);
     }
 
     /**
@@ -248,14 +258,16 @@ class DrumSynthesizer {
         osc.connect(oscGain);
         oscGain.connect(this.context.destination);
 
-        const basePitch = snaresOn ? 250 : 350; // Higher pitch if OFF (Timbal-like)
+        // Less extreme pitch difference for OFF, just slightly tighter
+        const basePitch = snaresOn ? 250 : 280;
         osc.frequency.setValueAtTime(basePitch, time);
+        osc.frequency.exponentialRampToValueAtTime(basePitch * 0.5, time + 0.15);
 
-        oscGain.gain.setValueAtTime(velocity * 0.5, time);
-        oscGain.gain.exponentialRampToValueAtTime(0.01, time + (snaresOn ? 0.2 : 0.3));
+        oscGain.gain.setValueAtTime(velocity * 0.6, time);
+        oscGain.gain.exponentialRampToValueAtTime(0.01, time + (snaresOn ? 0.2 : 0.15));
 
         osc.start(time);
-        osc.stop(time + 0.35);
+        osc.stop(time + 0.25);
 
         // 2. Noise component (Snares)
         if (snaresOn && this.noiseBuffer) {
@@ -391,6 +403,26 @@ class DrumSynthesizer {
     }
 
     /**
+     * Plays a Clave sound.
+     */
+    public playClave(time: number, velocity: number = 1.0) {
+        const osc = this.context.createOscillator();
+        const gain = this.context.createGain();
+
+        osc.connect(gain);
+        gain.connect(this.context.destination);
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(2500, time); // High pitched wood
+
+        gain.gain.setValueAtTime(velocity, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+
+        osc.start(time);
+        osc.stop(time + 0.11);
+    }
+
+    /**
      * Plays a standard Metronome Click.
      */
     public playClick(time: number, velocity: number = 1.0) {
@@ -400,12 +432,13 @@ class DrumSynthesizer {
         osc.connect(gain);
         gain.connect(this.context.destination);
 
-        // High pitch
-        const pitch = velocity > 0.9 ? 1200 : 800;
+        // Fixed velocity threshold for pitch differentiation
+        const forte = velocity > 0.8;
+        const pitch = forte ? 1500 : 800;
         osc.frequency.setValueAtTime(pitch, time);
 
         gain.gain.setValueAtTime(velocity, time);
-        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + (forte ? 0.08 : 0.05));
 
         osc.start(time);
         osc.stop(time + 0.1);

@@ -261,11 +261,11 @@ function App() {
           </Stack>
         </Paper>
 
-        {/* MIDDLE SECTION: 2 Columns */}
-        <Stack direction={isDesktop ? 'row' : 'column'} spacing={3} sx={{ flex: 1, mb: 3 }}>
+        {/* MIDDLE SECTION: 3 Columns */}
+        <Stack direction={isDesktop ? 'row' : 'column'} spacing={3} sx={{ flex: 1, mb: 3, alignItems: 'flex-start' }}>
 
-          {/* LEFT: Study Tools & Config */}
-          <Stack spacing={3} sx={{ flex: '0 0 320px', width: isDesktop ? 320 : '100%' }}>
+          {/* LEFT: Harmony, Visualizer & Config */}
+          <Stack spacing={3} sx={{ flex: '0 0 340px', width: isDesktop ? 340 : '100%' }}>
             {/* Visualizer */}
             <Paper sx={{ p: 2, borderRadius: 3, bgcolor: '#1e1e1e' }}>
               <ConductorVisual
@@ -277,7 +277,13 @@ function App() {
               />
             </Paper>
 
-            <StudyTools />
+            {/* Harmony Builder */}
+            <Box>
+              <HarmonyBuilder
+                onUpdateProgression={(chords) => schedulerRef.current?.setHarmonyProgression(chords)}
+                onVolumeChange={(vol) => schedulerRef.current?.setHarmonyVolume(vol)}
+              />
+            </Box>
 
             {/* Trainer Config (Collapsed or Small) */}
             <Paper sx={{ p: 2, borderRadius: 3, borderColor: trainerActive ? 'secondary.main' : 'rgba(255,255,255,0.1)', border: '1px solid' }}>
@@ -307,35 +313,32 @@ function App() {
             </Paper>
           </Stack>
 
-          {/* CENTER/RIGHT: Harmony Builder */}
-          <Box sx={{ flex: 1, minHeight: 400 }}>
-            <HarmonyBuilder
-              onUpdateProgression={(chords) => schedulerRef.current?.setHarmonyProgression(chords)}
-              onVolumeChange={(vol) => schedulerRef.current?.setHarmonyVolume(vol)}
-            />
+          {/* CENTER: Pattern Editor (Caja de Ritmos) */}
+          <Box sx={{ flex: 1, minWidth: 0, width: '100%' }}>
+            <Paper sx={{ p: 2, borderRadius: 3, bgcolor: '#1e1e1e' }}>
+              <Stack direction="row" spacing={2} overflow="auto" pb={1} mb={2}>
+                <Chip label="Metrónomo" onClick={() => loadPreset('metronome')} clickable variant={selectedPatternId === 'metronome' ? 'filled' : 'outlined'} />
+                {PRESET_PATTERNS.slice(0, 5).map(p => (
+                  <Chip key={p.id} label={p.name} onClick={() => loadPreset(p.id)} clickable variant={selectedPatternId === p.id ? 'filled' : 'outlined'} />
+                ))}
+                <Chip label="Custom" onClick={() => loadPreset('custom')} clickable variant={selectedPatternId === 'custom' ? 'filled' : 'outlined'} />
+              </Stack>
+
+              <PatternEditor
+                pattern={currentPattern}
+                onPatternUpdate={(updated) => setCurrentPattern(updated)}
+                currentStepIndex={currentStep}
+                onPreviewInstrument={handlePreviewSound}
+              />
+            </Paper>
+          </Box>
+
+          {/* RIGHT: Study Tools (Pomodoro) */}
+          <Box sx={{ flex: '0 0 300px', width: isDesktop ? 300 : '100%' }}>
+            <StudyTools />
           </Box>
 
         </Stack>
-
-        {/* BOTTOM SECTION: Pattern Editor */}
-        <Box sx={{ width: '100%' }}>
-          <Paper sx={{ p: 2, borderRadius: 3, bgcolor: '#1e1e1e' }}>
-            <Stack direction="row" spacing={2} overflow="auto" pb={1} mb={1}>
-              <Chip label="Metrónomo" onClick={() => loadPreset('metronome')} clickable variant={selectedPatternId === 'metronome' ? 'filled' : 'outlined'} />
-              {PRESET_PATTERNS.slice(0, 5).map(p => (
-                <Chip key={p.id} label={p.name} onClick={() => loadPreset(p.id)} clickable variant={selectedPatternId === p.id ? 'filled' : 'outlined'} />
-              ))}
-              <Chip label="Custom" onClick={() => loadPreset('custom')} clickable variant={selectedPatternId === 'custom' ? 'filled' : 'outlined'} />
-            </Stack>
-
-            <PatternEditor
-              pattern={currentPattern}
-              onPatternUpdate={(updated) => setCurrentPattern(updated)}
-              currentStepIndex={currentStep}
-              onPreviewInstrument={handlePreviewSound}
-            />
-          </Paper>
-        </Box>
 
       </Box>
     </ThemeProvider>
