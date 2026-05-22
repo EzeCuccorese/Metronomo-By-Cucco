@@ -96,6 +96,13 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
         const subPerBeat = pattern.subdivision / oldBeats;
         newSub = newBeats * subPerBeat;
 
+        // SPECIAL HEMIOLA RULE: Preserve 12 steps when switching between 6/8 (beats: 2) and 3/4 (beats: 3)
+        if ((oldBeats === 2 && newBeats === 3) || (oldBeats === 3 && newBeats === 2)) {
+            if (pattern.subdivision % 6 === 0) {
+                newSub = pattern.subdivision;
+            }
+        }
+
         onPatternUpdate({
             ...pattern,
             timeSignature: [ts.beats, ts.accum] as [number, number],

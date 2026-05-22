@@ -1,42 +1,545 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background-color: #070605;
+  font-family: "Outfit", sans-serif;
+}
+
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
+  width: 100%;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Vintage Analogue Studio Console Framing */
+.studio-chassis {
+  background-color: #0c0b0a;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(229, 169, 95, 0.05) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(255, 109, 0, 0.04) 0px, transparent 50%),
+    linear-gradient(to right, rgba(45, 26, 16, 0.45) 0%, rgba(22, 20, 18, 0) 2%, rgba(22, 20, 18, 0) 98%, rgba(45, 26, 16, 0.45) 100%);
+  border: 4px solid #2d1a10; /* Heavy wood frame edge */
+  box-shadow: 
+    0 0 0 1px #5c3924, /* Inner highlights */
+    inset 0 0 45px rgba(0, 0, 0, 0.8),
+    0 20px 50px rgba(0, 0, 0, 0.9);
+  border-radius: 24px;
+  padding: 16px;
+  position: relative;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.console-wood-edge {
+  border: 10px solid #28170e;
+  border-image: linear-gradient(135deg, #422617 0%, #211109 50%, #422617 100%) 10;
+  border-radius: 28px;
+  box-shadow: 
+    inset 0 4px 20px rgba(0, 0, 0, 0.8), 
+    0 12px 30px rgba(0, 0, 0, 0.7);
+  background-color: #12100f;
+}
+
+.brass-trim {
+  border: 1px solid rgba(229, 169, 95, 0.25) !important;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Breathing Retro Arcade Buttons for Transport */
+@keyframes breathingAmber {
+  0% { box-shadow: 0 0 5px rgba(229, 169, 95, 0.4), inset 0 0 10px rgba(229, 169, 95, 0.2); }
+  50% { box-shadow: 0 0 25px rgba(229, 169, 95, 0.85), inset 0 0 15px rgba(229, 169, 95, 0.4); }
+  100% { box-shadow: 0 0 5px rgba(229, 169, 95, 0.4), inset 0 0 10px rgba(229, 169, 95, 0.2); }
+}
+
+@keyframes breathingRed {
+  0% { box-shadow: 0 0 5px rgba(239, 83, 80, 0.4), inset 0 0 10px rgba(239, 83, 80, 0.2); }
+  50% { box-shadow: 0 0 25px rgba(239, 83, 80, 0.85), inset 0 0 15px rgba(239, 83, 80, 0.4); }
+  100% { box-shadow: 0 0 5px rgba(239, 83, 80, 0.4), inset 0 0 10px rgba(239, 83, 80, 0.2); }
+}
+
+.tactile-button-amber {
+  position: relative;
+  background: linear-gradient(180deg, #ffd54f 0%, #ffb300 40%, #ff8f00 100%) !important;
+  border: 2px solid #ffe082 !important;
+  color: #211502 !important;
+  font-weight: 900 !important;
+  text-shadow: 0 1px 1px rgba(255,255,255,0.4);
+  box-shadow: 0 4px 12px rgba(255, 179, 0, 0.35), inset 0 2px 4px rgba(255,255,255,0.6) !important;
+  transition: all 0.15s ease-in-out !important;
+  animation: breathingAmber 2s infinite ease-in-out;
+}
+
+.tactile-button-amber:hover {
+  background: linear-gradient(180deg, #ffe082 0%, #ffca28 40%, #ffb300 100%) !important;
+  box-shadow: 0 6px 16px rgba(255, 179, 0, 0.5), inset 0 2px 4px rgba(255,255,255,0.7) !important;
+  transform: translateY(-1px);
+}
+
+.tactile-button-amber:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 6px rgba(255, 179, 0, 0.2) !important;
+}
+
+.tactile-button-red {
+  position: relative;
+  background: linear-gradient(180deg, #ef5350 0%, #e53935 40%, #c62828 100%) !important;
+  border: 2px solid #ef9a9a !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+  text-shadow: 0 -1px 1px rgba(0,0,0,0.4);
+  box-shadow: 0 4px 12px rgba(229, 57, 53, 0.35), inset 0 2px 4px rgba(255,255,255,0.3) !important;
+  transition: all 0.15s ease-in-out !important;
+  animation: breathingRed 2s infinite ease-in-out;
+}
+
+.tactile-button-red:hover {
+  background: linear-gradient(180deg, #e53935 0%, #d32f2f 40%, #b71c1c 100%) !important;
+  box-shadow: 0 6px 16px rgba(229, 57, 53, 0.5), inset 0 2px 4px rgba(255,255,255,0.4) !important;
+  transform: translateY(-1px);
+}
+
+.tactile-button-red:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 6px rgba(229, 57, 53, 0.2) !important;
+}
+
+.retro-monospaced-screen {
+  background-color: #0b0908 !important;
+  border: 2px solid rgba(229, 169, 95, 0.15) !important;
+  box-shadow: inset 0 0 15px rgba(0,0,0,0.85) !important;
+  font-family: 'Share Tech Mono', monospace !important;
+  color: #e5a95f !important;
+  text-shadow: 0 0 6px rgba(229, 169, 95, 0.6);
+}
+
+/* Mixer Console Rack Frame */
+.mixer-console-rack {
+  background-color: #12100e;
+  border: 3px solid #33261a;
+  border-radius: 16px;
+  box-shadow: 
+    0 10px 25px rgba(0, 0, 0, 0.8),
+    inset 0 1px 1px rgba(255, 255, 255, 0.05);
+  padding: 8px 12px;
+  margin-top: auto;
+  width: 100%;
+  height: 190px;
+  display: flex;
+  flex-direction: column;
+  background-image: 
+    radial-gradient(at 50% 0%, rgba(229, 169, 95, 0.03) 0px, transparent 60%),
+    linear-gradient(to right, rgba(0,0,0,0.4) 0%, transparent 5%, transparent 95%, rgba(0,0,0,0.4) 100%);
+  box-sizing: border-box;
+}
+
+.mixer-header, .mixer-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  background: #191613;
+  border-radius: 6px;
+  border: 1px solid rgba(229, 169, 95, 0.06);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
+}
+
+.mixer-header {
+  margin-bottom: 6px;
+}
+
+.mixer-footer {
+  margin-top: 6px;
+}
+
+.brass-brand {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 900;
+  font-size: 0.75rem;
+  letter-spacing: 0.25em;
+  color: rgba(229, 169, 95, 0.45);
+  text-shadow: 0 1px 1px rgba(0,0,0,0.6);
+  text-transform: uppercase;
+}
+
+/* 3D Bronze/Copper Rack Screws */
+.analog-rack-screw {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8c6239 0%, #4a3118 50%, #2b1c0e 100%);
+  border: 1px solid #1a1007;
+  position: relative;
+  box-shadow: 
+    0 1.5px 3px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0.5px rgba(255,255,255,0.15);
+}
+
+.analog-rack-screw::before {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 1.5px;
+  background-color: #120a04;
+  left: 2px;
+  top: 5.25px;
+  box-shadow: 0 0.5px 0.5px rgba(255,255,255,0.1);
+}
+
+/* VFD/CRT Screen Styles */
+.vfd-screen {
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.35) 50%), #0a1f13;
+  background-size: 100% 4px;
+  border: 1.5px solid #00c853;
+  box-shadow: 
+    inset 0 0 12px rgba(0, 200, 83, 0.65),
+    0 0 8px rgba(0, 200, 83, 0.2);
+  border-radius: 4px;
+  padding: 2px 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.vfd-screen::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(circle, transparent 65%, rgba(0, 0, 0, 0.4) 100%);
+  pointer-events: none;
+}
+
+.vfd-text {
+  font-family: 'Share Tech Mono', monospace;
+  font-weight: bold;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  color: #00ff66;
+  text-shadow: 
+    0 0 4px rgba(0, 255, 102, 0.8),
+    0 0 8px rgba(0, 255, 102, 0.4);
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.vfd-screen-amber {
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.35) 50%), #241400;
+  background-size: 100% 4px;
+  border: 1.5px solid #ff9100;
+  box-shadow: 
+    inset 0 0 12px rgba(255, 145, 0, 0.65),
+    0 0 8px rgba(255, 145, 0, 0.2);
+  border-radius: 4px;
+  padding: 4px 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+.vfd-glow {
+  font-family: 'Share Tech Mono', monospace;
+  font-weight: bold;
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  color: #ffaa00;
+  text-shadow: 
+    0 0 5px rgba(255, 170, 0, 0.8),
+    0 0 10px rgba(255, 170, 0, 0.4);
   text-align: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* Mixer Channels Layout */
+.mixer-channels-container {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+  background-color: #0b0908;
+  border-radius: 8px;
+  padding: 6px 8px;
+  border: 1px solid rgba(229, 169, 95, 0.05);
+  box-shadow: inset 0 6px 15px rgba(0,0,0,0.85);
+  overflow: hidden;
+  height: 120px;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
+@media (max-width: 900px) {
+  .mixer-channels-container {
+    grid-template-columns: repeat(8, 1fr);
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
+@media (max-width: 600px) {
+  .mixer-channels-container {
+    grid-template-columns: repeat(8, 1fr);
   }
 }
 
-.card {
-  padding: 2em;
+/* Individual Channel Strip */
+.mixer-channel-strip {
+  background: linear-gradient(180deg, #181512 0%, #110e0c 100%);
+  border: 1px solid rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+  padding: 4px 2px;
+  display: flex;
+  flex-direction: row; /* Layout elements inside channel horizontally to save vertical space! */
+  align-items: center;
+  justify-content: space-around;
+  box-shadow: 
+    1px 1px 4px rgba(0,0,0,0.4),
+    inset 0 1px 0 rgba(255,255,255,0.02);
+  position: relative;
+  transition: opacity 0.2s ease;
+  height: 100%;
 }
 
-.read-the-docs {
-  color: #888;
+.mixer-channel-strip.muted {
+  background: linear-gradient(180deg, #13110f 0%, #0d0b0a 100%);
+}
+
+/* Panning Knob */
+.channel-pan-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 0;
+  width: auto;
+}
+
+.channel-param-label {
+  font-size: 0.55rem;
+  font-weight: 900;
+  color: #8c7f72;
+  letter-spacing: 0.1em;
+  margin-bottom: 4px;
+}
+
+.pan-knob {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #e0e0e0 0%, #9e9e9e 70%, #616161 100%);
+  border: 1.5px solid #212121;
+  box-shadow: 
+    0 1px 2px rgba(0,0,0,0.6),
+    inset 0 0.5px 0.5px #fff;
+  cursor: ns-resize;
+  position: relative;
+  transition: transform 0.05s ease-out;
+}
+
+.pan-knob-notch {
+  position: absolute;
+  width: 1.8px;
+  height: 6px;
+  background-color: #ff3d00;
+  border-radius: 0.5px;
+  left: calc(50% - 0.9px);
+  top: 1px;
+  box-shadow: 0 0.5px 0.5px rgba(0,0,0,0.5);
+}
+
+.pan-value-display {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.5rem;
+  color: #ff9100;
+  margin-top: 1px;
+  font-weight: bold;
+}
+
+/* VU Peak Meter (Segmented) */
+.channel-vu-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: #080706;
+  border: 1px solid #1c1815;
+  border-radius: 2px;
+  padding: 1.5px;
+  width: 10px;
+  height: 80px;
+  margin-bottom: 0;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.9);
+}
+
+.vu-segment {
+  width: 100%;
+  height: 6px;
+  background-color: #1a1714;
+  border-radius: 0.2px;
+  transition: background-color 0.05s ease;
+}
+
+.vu-segment.green.active {
+  background-color: #00e676;
+  box-shadow: 0 0 4px #00e676;
+}
+
+.vu-segment.yellow.active {
+  background-color: #ffea00;
+  box-shadow: 0 0 4px #ffea00;
+}
+
+.vu-segment.red.active {
+  background-color: #ff1744;
+  box-shadow: 0 0 5px #ff1744;
+}
+
+/* Vertical Fader Section */
+.channel-fader-section {
+  display: flex;
+  width: auto;
+  height: 80px;
+  justify-content: center;
+  position: relative;
+  margin-bottom: 0;
+}
+
+.fader-scale {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  font-size: 0.45rem;
+  font-weight: bold;
+  color: #6d6154;
+  padding-right: 2px;
+  text-align: right;
+  user-select: none;
+  line-height: 1;
+}
+
+.fader-track-container {
+  height: 100%;
+  width: 14px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.fader-track {
+  height: 100%;
+  width: 4px;
+  background-color: #0a0807;
+  border: 1px solid #231f1c;
+  border-radius: 2px;
+  position: relative;
+  box-shadow: 
+    inset 1px 1px 3px rgba(0,0,0,0.9),
+    1px 1px 0 rgba(255,255,255,0.03);
+}
+
+.fader-input {
+  position: absolute;
+  top: 0;
+  left: -8px;
+  width: 20px;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  -webkit-appearance: slider-vertical;
+}
+
+/* 3D Brushed Metal Fader Cap overlay */
+.fader-cap {
+  position: absolute;
+  width: 14px;
+  height: 20px;
+  left: calc(50% - 7px);
+  border-radius: 2px;
+  background: linear-gradient(to right, #757575 0%, #e0e0e0 35%, #ffffff 50%, #e0e0e0 65%, #616161 100%);
+  border: 1px solid #212121;
+  box-shadow: 
+    0 2px 3px rgba(0,0,0,0.8),
+    inset 0 1px 1px rgba(255,255,255,0.7);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: bottom 0.05s ease-out;
+}
+
+.fader-cap-notch {
+  width: 100%;
+  height: 2px;
+  background-color: #ff6d00;
+  box-shadow: 0 0 2px #ff6d00;
+}
+
+/* Mute Toggle Section */
+.channel-mute-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 0;
+  gap: 2px;
+}
+
+.mute-button {
+  background: linear-gradient(180deg, #373330 0%, #211e1c 100%);
+  border: 1px solid #1a1715;
+  color: #b3a290;
+  font-size: 0.45rem;
+  font-weight: 900;
+  padding: 1px 4px;
+  border-radius: 2px;
+  cursor: pointer;
+  box-shadow: 
+    0 1px 2px rgba(0,0,0,0.5),
+    inset 0 0.5px 0 rgba(255,255,255,0.05);
+  transition: all 0.1s ease;
+  line-height: 1;
+}
+
+.mute-button:active, .mute-button.active {
+  background: linear-gradient(180deg, #1c1a18 0%, #12100f 100%);
+  border-color: #ff1744;
+  color: #ff1744;
+  box-shadow: 
+    inset 0 1.5px 3px rgba(0,0,0,0.8),
+    0 0 4px rgba(255, 23, 68, 0.4);
+}
+
+.mute-led {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: #3e2723;
+  border: 0.5px solid #1a0c0a;
+  box-shadow: inset 0 0.5px 1px rgba(0,0,0,0.8);
+  transition: all 0.2s ease;
+}
+
+.mute-led.active {
+  background-color: #ff1744;
+  box-shadow: 
+    0 0 6px #ff1744,
+    0 0 2px #ff1744;
+}
+
+/* Label screen holder */
+.channel-label-holder {
+  width: auto;
+  display: flex;
+  justify-content: center;
+}
+
+.channel-label-screen {
+  border-radius: 3px;
+  padding: 1px 4px !important;
+  border-width: 1px !important;
+}
+
+.channel-label-screen .vfd-text {
+  font-size: 0.55rem;
+  letter-spacing: 0.05em;
+  font-weight: bold;
 }

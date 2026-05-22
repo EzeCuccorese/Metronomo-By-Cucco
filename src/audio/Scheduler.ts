@@ -4,6 +4,15 @@ import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 import { PolyphonicSynth } from './PolyphonicSynth';
 import ClockWorker from './clock.worker?worker'; // Vite Worker Import
 
+interface VisualQueueEvent {
+    step: number;
+    time: number;
+    bpm: number;
+    barCount: number;
+    totalBars: number;
+    pattern: RhythmPattern;
+}
+
 /**
  * Handles the precise scheduling of audio events.
  * Uses the "Lookahead" technique: A `setInterval` (on the main thread)
@@ -29,8 +38,12 @@ class Scheduler {
 
     // Pattern state
     private currentPattern: RhythmPattern | null = null;
+    private queuedPattern: RhythmPattern | null = null;
     private currentStepIndex: number = 0;
     private stepCache: Map<number, any[]> = new Map(); // Cache active steps per index
+
+    // Precise Visual Synchronization Queue
+    private visualQueue: VisualQueueEvent[] = [];
 
     // Speed Trainer State
     private trainerActive: boolean = false;
@@ -54,6 +67,12 @@ class Scheduler {
         this.synthesizer = new DrumSynthesizer();
         this.polySynth = new PolyphonicSynth();
 
+        // Connect Polyphonic Synth to the multi-channel mixer strip
+        const synthChannelNode = this.synthesizer.getChannelNode('synth');
+        if (synthChannelNode) {
+            this.polySynth.connect(synthChannelNode);
+        }
+
         // Initialize Worker
         this.clockWorker = new ClockWorker();
         this.clockWorker.onmessage = (e) => {
@@ -61,6 +80,21 @@ class Scheduler {
                 this.scheduler();
             }
         };
+
+        // Start the high-precision visual loop on requestAnimationFrame
+        requestAnimationFrame(this.runVisualUpdateLoop);
+    }
+
+    public setChannelVolume(name: string, volume: number) {
+        this.synthesizer.setChannelVolume(name, volume);
+    }
+
+    public setChannelPan(name: string, pan: number) {
+        this.synthesizer.setChannelPan(name, pan);
+    }
+
+    public setChannelMute(name: string, isMuted: boolean) {
+        this.synthesizer.setChannelMute(name, isMuted);
     }
 
     public setAccompanimentStyle(style: any) {
@@ -68,7 +102,6 @@ class Scheduler {
     }
 
     public setHarmonyProgression(chords: string[][]) {
-        // Simple check to avoid resetting if identical (helps with React StrictMode / Re-renders)
         const isDifferent = JSON.stringify(this.harmonyProgression) !== JSON.stringify(chords);
         if (isDifferent) {
             this.harmonyProgression = chords;
@@ -84,18 +117,13 @@ class Scheduler {
         if (this.tempo === bpm) return;
 
         // Instant Tempo Change Logic
-        // We adjust nextNoteTime to preserve the phase but at the new rate.
-
-        // Calculate factor
         const ratio = this.tempo / bpm;
         this.tempo = bpm;
 
-        // If playing, we need to scale the time remaining to the next note
         if (this.isPlaying) {
             const now = this.audioContext.currentTime;
             const timeToNext = this.nextNoteTime - now;
 
-            // If timeToNext is reasonable (not negative or huge), scale it
             if (timeToNext > 0 && timeToNext < 1.0) {
                 this.nextNoteTime = now + (timeToNext * ratio);
             }
@@ -103,33 +131,33 @@ class Scheduler {
     }
 
     public setPattern(pattern: RhythmPattern) {
-        // Build Cache
-        this.stepCache.clear();
-        pattern.steps.forEach(step => {
-            if (!this.stepCache.has(step.step)) {
-                this.stepCache.set(step.step, []);
-            }
-            this.stepCache.get(step.step)!.push(step);
-        });
-
-        // If playing, try to keep relative position
+        if (this.currentPattern && this.currentPattern.id === pattern.id) {
+            return; // Avoid redundant sets and feedback loops!
+        }
         if (this.isPlaying && this.currentPattern) {
-            const oldSub = this.currentPattern.subdivision;
-            const newSub = pattern.subdivision;
-
-            // Calculate progress (0 to 1)
-            const progress = this.currentStepIndex / oldSub;
-
-            this.currentPattern = pattern;
-
-            // Map to new subdivision
-            this.currentStepIndex = Math.floor(progress * newSub);
+            // Queue the rhythm switch smoothly for the start of the next bar
+            this.queuedPattern = pattern;
         } else {
-            // Not playing or first set
+            // Not playing or first load, apply instantly
             this.currentPattern = pattern;
+            this.queuedPattern = null;
             this.currentStepIndex = 0;
             this.trainerCurrentBarCount = 0;
+            this.visualQueue = [];
+
+            // Build Cache
+            this.stepCache.clear();
+            pattern.steps.forEach(step => {
+                if (!this.stepCache.has(step.step)) {
+                    this.stepCache.set(step.step, []);
+                }
+                this.stepCache.get(step.step)!.push(step);
+            });
         }
+    }
+
+    public getQueuedPatternId(): string | null {
+        return this.queuedPattern ? this.queuedPattern.id : null;
     }
 
     public configureTrainer(
@@ -167,9 +195,9 @@ class Scheduler {
         return { totalBars: this.totalBarsPracticed };
     }
 
-    private onPlaybackUpdate: ((step: number, bpm: number, barCount: number, totalBars: number) => void) | null = null;
+    private onPlaybackUpdate: ((step: number, bpm: number, barCount: number, totalBars: number, pattern: RhythmPattern) => void) | null = null;
 
-    public setOnPlaybackUpdate(callback: (step: number, bpm: number, barCount: number, totalBars: number) => void) {
+    public setOnPlaybackUpdate(callback: (step: number, bpm: number, barCount: number, totalBars: number, pattern: RhythmPattern) => void) {
         this.onPlaybackUpdate = callback;
     }
 
@@ -178,8 +206,9 @@ class Scheduler {
 
         this.isPlaying = true;
         this.currentStepIndex = 0;
-        this.harmonyBarIndex = 0; // Reset Harmony
-        this.nextNoteTime = this.audioContext.currentTime + 0.05; // Added slight buffer
+        this.harmonyBarIndex = 0;
+        this.visualQueue = [];
+        this.nextNoteTime = this.audioContext.currentTime + 0.05; // Slight buffer
 
         // Start Worker
         this.clockWorker?.postMessage({ action: 'start', interval: this.lookahead });
@@ -188,34 +217,31 @@ class Scheduler {
     public stop() {
         this.isPlaying = false;
         this.clockWorker?.postMessage({ action: 'stop' });
+        this.visualQueue = [];
+        this.queuedPattern = null;
     }
 
     public playOneShot(instrument: string) {
-        // Play immediately
         const time = this.audioContext.currentTime;
         this.synthesizer.play(instrument, time, 1.0); // Full velocity for preview
     }
 
     private scheduler() {
-        // While there are notes that will need to play before the next interval,
-        // schedule them and advance the pointer.
         while (this.nextNoteTime < this.audioContext.currentTime + this.scheduleAheadTime) {
-            this.scheduleNote();
-            this.nextStep();
+            const time = this.nextNoteTime;
+            this.scheduleNote(time);
+            this.nextStep(time);
         }
     }
 
-    private scheduleNote() {
+    private scheduleNote(time: number) {
         if (!this.currentPattern) return;
 
-        const time = this.nextNoteTime;
+        const sub = this.currentPattern.subdivision;
+        const ts = this.currentPattern.timeSignature;
 
         // --- HARMONY TRIGGER (Start of Bar OR Middle of Bar) ---
-        // Supports Half-Bar resolution (2 chords per bar)
-        const sub = this.currentPattern.subdivision;
         const midPoint = Math.floor(sub / 2);
-
-        // Is this a trigger point?
         const isStart = this.currentStepIndex === 0;
         const isMiddle = this.currentStepIndex === midPoint;
 
@@ -223,36 +249,31 @@ class Scheduler {
             const chordIndex = this.harmonyBarIndex % this.harmonyProgression.length;
             const chord = this.harmonyProgression[chordIndex];
 
-            // Previous Chord for Voice Leading
             const prevIndex = (this.harmonyBarIndex === 0)
                 ? 0
                 : (this.harmonyBarIndex - 1) % this.harmonyProgression.length;
             const prevChord = (this.harmonyBarIndex > 0) ? this.harmonyProgression[prevIndex] : [];
 
-            // Calculate Duration: It's a HALF BAR duration now
-            const ts = this.currentPattern.timeSignature;
+            // Correct Duration: contemple compound meters (beats * 60 / tempo) scaled by denominator
             const beats = ts[0];
-            const wholeBarSeconds = (60.0 / this.tempo) * beats;
+            const wholeBarSeconds = (60.0 / this.tempo) * (4.0 / ts[1]) * beats;
             const chordDuration = wholeBarSeconds / 2;
 
             if (chord && chord.length > 0) {
                 this.polySynth.playChord(chord, chordDuration, time, this.accompanimentStyle, prevChord);
             }
 
-            // Advance Harmony Pointer (Consuming 1 slot from the progression array)
             this.harmonyBarIndex++;
-            this.totalBarsPracticed += 0.5; // Tracking
+            this.totalBarsPracticed += 0.5;
         }
 
-        // Use Cached Steps (Optimization)
+        // Use Cached Steps
         const activeSteps = this.stepCache.get(this.currentStepIndex + 1) || [];
 
-        // Create microTimingOffset variable but don't re-declare sub/ts
-        let microTimingOffset = (Math.random() - 0.5) * 0.004; // +/- 2ms humanize jitter
+        let microTimingOffset = (Math.random() - 0.5) * 0.003; // Slight humanize jitter (3ms)
 
-        // Reuse variables from above block (sub, ts already declared around line 215)
-        // Step Duration (Ideal) = (60 / BPM * Beats) / Subdivision
-        const timePerBar = (60.0 / this.tempo) * ts[0];
+        // Step Duration (Ideal) - Fixed formula scaling by denominator
+        const timePerBar = (60.0 / this.tempo) * (4.0 / ts[1]) * ts[0];
         const stepDuration = timePerBar / sub;
 
         const groove = this.currentPattern.grooveType || 'straight';
@@ -261,35 +282,51 @@ class Scheduler {
         if (groove === 'swing_triplet') {
             const isOffBeat = idx % 2 !== 0;
             if (isOffBeat) {
-                microTimingOffset = stepDuration * (this.currentPattern.swingBase || 0.15); // Default slight swing
+                microTimingOffset = stepDuration * (this.currentPattern.swingBase || 0.15);
             }
         } else if (groove === 'samba_carioca') {
-            const positionInBeat = idx % 4; // 0, 1, 2, 3
-            if (positionInBeat === 1) { // The 'e' (2nd semi)
+            const positionInBeat = idx % 4;
+            if (positionInBeat === 1) {
                 microTimingOffset = stepDuration * 0.18;
-            } else if (positionInBeat === 3) { // The 'a' (4th semi)
+            } else if (positionInBeat === 3) {
                 microTimingOffset = -stepDuration * 0.05;
             }
         } else if (groove === 'chacarera_poliritmica') {
-            // "Empuje" en el tiempo 3 del 3/4 (Step 9 en 12 subdivisiones)
+            // Urgency on beat 3 of 3/4 feel (Step 9)
             if (activeSteps.some(s => s.step === 9)) {
-                // Adelantamos 2ms para dar sensación de urgencia
-                microTimingOffset = -0.002;
+                microTimingOffset = -0.003; // Adelantado 3ms
             }
         } else if (groove === 'zamba_tradicional') {
-            // El "Pám" del ba-da-Pám (Step 9) va un poco atrás (sentado)
+            // Drag on the main "Pám" (Step 9)
             if (activeSteps.some(s => s.step === 9)) {
-                // Drag de 10% de la duración del paso
-                microTimingOffset = stepDuration * 0.10;
+                microTimingOffset = stepDuration * 0.12; // Drag 12% of step duration
+            }
+        } else if (groove === 'chamame_saltadito') {
+            // Bouncing triplet swing with dynamic anticipation on step 5 (-6ms) and step 11 (-4ms)
+            if (idx === 4) {
+                microTimingOffset = -0.006;
+            } else if (idx === 10) {
+                microTimingOffset = -0.004;
+            }
+        } else if (groove === 'salsa_tumbao') {
+            // Syncopated conga/clave groove with anticipation on the "ponche" steps 8 and 16 (-4ms)
+            if (idx === 7 || idx === 15) {
+                microTimingOffset = -0.004;
+            }
+        } else if (groove === 'cumbia_colombiana') {
+            // Driving shaker galopa swing: dragging the middle-beats slightly, anticipating the drop
+            const pos = idx % 4;
+            if (pos === 1) {
+                microTimingOffset = stepDuration * 0.08;
+            } else if (pos === 3) {
+                microTimingOffset = -stepDuration * 0.04;
             }
         }
 
         const playTime = time + microTimingOffset;
 
         if (this.silenceModeActive && this.isMutedBar) {
-            // Visual feedback only (if we had it), but no audio
-            // Optional: Play only visuals? For now, silence audio.
-            return;
+            return; // Silent bar
         }
 
         activeSteps.forEach(step => {
@@ -297,29 +334,50 @@ class Scheduler {
         });
     }
 
-    private nextStep() {
+    private nextStep(time: number) {
         if (!this.currentPattern) return;
 
-        // Time per Bar = (60 / BPM) * BeatsPerBar
-        // Time per Step = Time per Bar / Subdivision
         const sub = this.currentPattern.subdivision;
         const ts = this.currentPattern.timeSignature;
-        const beatsPerBar = ts[0]; // e.g. 4
+        const beatsPerBar = ts[0];
 
-        const timePerBar = (60.0 / this.tempo) * beatsPerBar;
+        // Fixed Bar and Step Durations
+        const timePerBar = (60.0 / this.tempo) * (4.0 / ts[1]) * beatsPerBar;
         const timePerStep = timePerBar / sub;
 
-        // Save CURRENT step for UI update
         const scheduledStep = this.currentStepIndex;
 
         this.nextNoteTime += timePerStep;
+
+        // Push scheduled event parameters to visual queue with exact target audio time
+        this.visualQueue.push({
+            step: scheduledStep,
+            time: time,
+            bpm: Math.round(this.tempo),
+            barCount: this.trainerCurrentBarCount,
+            totalBars: this.totalBarsPracticed,
+            pattern: this.currentPattern
+        });
 
         // Advance Step Index
         this.currentStepIndex++;
         if (this.currentStepIndex >= sub) {
             this.currentStepIndex = 0; // Bar Wrapped
 
-            // Advance Harmony Pointer -> MOVED TO TRIGGER LOGIC
+            // Apply queued pattern switch precisely at the bar boundary!
+            if (this.queuedPattern) {
+                this.currentPattern = this.queuedPattern;
+                this.queuedPattern = null;
+
+                // Rebuild cache for the new pattern
+                this.stepCache.clear();
+                this.currentPattern.steps.forEach(step => {
+                    if (!this.stepCache.has(step.step)) {
+                        this.stepCache.set(step.step, []);
+                    }
+                    this.stepCache.get(step.step)!.push(step);
+                });
+            }
 
             // Handle Silence Mode Trigger
             if (this.silenceModeActive) {
@@ -328,7 +386,7 @@ class Scheduler {
                 this.isMutedBar = false;
             }
 
-            // Trainer Logic: Increment after N bars
+            // Trainer Logic
             if (this.trainerActive) {
                 this.trainerCurrentBarCount++;
 
@@ -336,38 +394,56 @@ class Scheduler {
                     this.trainerCurrentBarCount = 0;
 
                     if (this.trainerMode === 'linear') {
-                        // EXISTING LINEAR LOGIC
                         if (this.trainerStartBpm < this.trainerEndBpm) {
                             this.tempo = Math.min(this.tempo + this.trainerBpmStep, this.trainerEndBpm);
                         } else if (this.trainerStartBpm > this.trainerEndBpm) {
                             this.tempo = Math.max(this.tempo - this.trainerBpmStep, this.trainerEndBpm);
                         }
                     } else if (this.trainerMode === 'resistance_loop') {
-                        // RESISTANCE MODE
                         const isAtTarget = this.tempo >= this.trainerEndBpm;
 
                         if (isAtTarget) {
                             this.trainerHoldBars++;
-                            // Hold for 4 intervals (arbitrary "Resistance" phase)
                             if (this.trainerHoldBars > 4) {
-                                // Cool down
                                 this.tempo = Math.round(this.tempo * this.trainerCoolDownFactor);
                                 this.trainerHoldBars = 0;
                             }
                         } else {
-                            // Rise up
                             this.tempo = Math.min(this.tempo + this.trainerBpmStep, this.trainerEndBpm);
                         }
                     }
                 }
             }
         }
-
-        if (this.onPlaybackUpdate) {
-            // Send the step we just scheduled, not the next one
-            this.onPlaybackUpdate(scheduledStep, Math.round(this.tempo), this.trainerCurrentBarCount, this.totalBarsPracticed);
-        }
     }
+
+    /**
+     * Bucle requestAnimationFrame que corre continuamente en el hilo principal.
+     * Lee la cola visual y gatilla el callback de React EXACTAMENTE cuando el
+     * reloj de audio pasa el tiempo de reproducción programado.
+     */
+    private runVisualUpdateLoop = () => {
+        if (this.isPlaying) {
+            const now = this.audioContext.currentTime;
+            let latestUpdate: VisualQueueEvent | null = null;
+
+            // Consumir todos los eventos que ya se tendrían que estar reproduciendo
+            while (this.visualQueue.length > 0 && this.visualQueue[0].time <= now) {
+                latestUpdate = this.visualQueue.shift() || null;
+            }
+
+            if (latestUpdate && this.onPlaybackUpdate) {
+                this.onPlaybackUpdate(
+                    latestUpdate.step,
+                    latestUpdate.bpm,
+                    latestUpdate.barCount,
+                    latestUpdate.totalBars,
+                    latestUpdate.pattern
+                );
+            }
+        }
+        requestAnimationFrame(this.runVisualUpdateLoop);
+    };
 }
 
 export default Scheduler;

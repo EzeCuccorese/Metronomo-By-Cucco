@@ -12,6 +12,10 @@ class DrumSynthesizer {
     private noiseBuffer: AudioBuffer | null = null;
     private masterGain: GainNode;
     private ambienceFilter: BiquadFilterNode;
+    private saturator: WaveShaperNode;
+
+    // Multi-channel mixer strips
+    private channels: Record<string, { gain: GainNode; panner: StereoPannerNode | null; originalVolume: number; isMuted: boolean }> = {};
 
     // Node Pools
     private gainPool: GainNode[] = [];
@@ -21,6 +25,9 @@ class DrumSynthesizer {
     private bomboBuffer: AudioBuffer | null = null;
     private aroBuffer: AudioBuffer | null = null;
 
+    // Shaker push/pull alternating state
+    private shakerState: boolean = false;
+
     constructor() {
         this.context = AudioContextManager.getInstance().getContext();
         this.createNoiseBuffer();
@@ -28,7 +35,18 @@ class DrumSynthesizer {
 
         // Initialize Master Bus
         this.masterGain = this.context.createGain();
-        this.masterGain.gain.value = 0.9; // Headroom
+        this.masterGain.gain.value = 0.85; // Headroom
+
+        // Setup saturator (soft clipping warm analog emulation)
+        this.saturator = this.context.createWaveShaper();
+        const n_samples = 44100;
+        const curve = new Float32Array(n_samples);
+        for (let i = 0; i < n_samples; ++i) {
+            const x = (i * 2) / n_samples - 1;
+            curve[i] = Math.tanh(x * 1.2); // Warm analog tube saturation emulation
+        }
+        this.saturator.curve = curve;
+        this.saturator.oversample = '4x';
 
         // Ambience / Room Simulation (Warmth + High air dampening)
         this.ambienceFilter = this.context.createBiquadFilter();
@@ -36,15 +54,81 @@ class DrumSynthesizer {
         this.ambienceFilter.frequency.value = 150;
         this.ambienceFilter.gain.value = 3.0; // Boost bass/warmth
 
-        // Chain: Master -> Ambience -> Destination
-        this.masterGain.connect(this.ambienceFilter);
+        // Chain: Master -> Saturator -> Ambience -> Destination
+        this.masterGain.connect(this.saturator);
+        this.saturator.connect(this.ambienceFilter);
         this.ambienceFilter.connect(this.context.destination);
+
+        // Initialize Mixer Channels
+        const channelNames = ['bombo', 'clave', 'shaker', 'kick', 'snare', 'hihat', 'click', 'synth'];
+        channelNames.forEach(name => {
+            const gainNode = this.context.createGain();
+            gainNode.gain.value = 1.0;
+
+            const pannerNode = this.context.createStereoPanner ? this.context.createStereoPanner() : null;
+            if (pannerNode) {
+                pannerNode.pan.value = 0.0;
+            }
+
+            // Route: gainNode -> pannerNode -> masterGain
+            if (pannerNode) {
+                gainNode.connect(pannerNode);
+                pannerNode.connect(this.masterGain);
+            } else {
+                gainNode.connect(this.masterGain);
+            }
+
+            this.channels[name] = {
+                gain: gainNode,
+                panner: pannerNode,
+                originalVolume: 1.0,
+                isMuted: false
+            };
+        });
 
         // Pre-fill pools (optional but good for warmup)
         for (let i = 0; i < 20; i++) {
             this.gainPool.push(this.context.createGain());
             this.filterPool.push(this.context.createBiquadFilter());
         }
+    }
+
+    public getChannelNode(name: string): AudioNode {
+        const chan = this.channels[name];
+        if (chan) {
+            return chan.gain;
+        }
+        return this.masterGain;
+    }
+
+    public setChannelVolume(name: string, volume: number) {
+        const chan = this.channels[name];
+        if (chan) {
+            chan.originalVolume = volume;
+            if (!chan.isMuted) {
+                chan.gain.gain.setValueAtTime(volume, this.context.currentTime);
+            }
+        }
+    }
+
+    public setChannelPan(name: string, pan: number) {
+        const chan = this.channels[name];
+        if (chan && chan.panner) {
+            chan.panner.pan.setValueAtTime(pan, this.context.currentTime);
+        }
+    }
+
+    public setChannelMute(name: string, isMuted: boolean) {
+        const chan = this.channels[name];
+        if (chan) {
+            chan.isMuted = isMuted;
+            chan.gain.gain.setValueAtTime(isMuted ? 0 : chan.originalVolume, this.context.currentTime);
+        }
+    }
+
+    private connectVoiceToChannel(voiceNode: AudioNode, channelName: string) {
+        const chanNode = this.getChannelNode(channelName);
+        voiceNode.connect(chanNode);
     }
 
     // --- POOLING SYSTEM ---
@@ -92,89 +176,190 @@ class DrumSynthesizer {
      * Pre-renders complex sounds using OfflineAudioContext to save CPU.
      */
     private async initPreRenderedSounds() {
-        // Render 1 second of audio
-        const offlineCtx = new OfflineAudioContext(1, 44100 * 1.0, 44100);
+        // Render 1.2 seconds of audio for the deep woolly Bombo Legüero drum skin hit
+        const bomboCtx = new OfflineAudioContext(1, 44100 * 1.2, 44100);
+        const bomboGain = bomboCtx.createGain();
+        bomboGain.connect(bomboCtx.destination);
 
-        // --- RENDER BOMBO PARCHE ---
-        const bomboGain = offlineCtx.createGain();
-        bomboGain.connect(offlineCtx.destination);
+        // 1. SKIN TRANSIENT (Triangle sweep 180Hz -> 55Hz in 10ms for a thick, woolly mazo strike impact)
+        const transientOsc = bomboCtx.createOscillator();
+        transientOsc.type = 'triangle';
+        transientOsc.frequency.setValueAtTime(180, 0);
+        transientOsc.frequency.exponentialRampToValueAtTime(55, 0.01);
 
-        // 1. MEMBRANE
-        const membraneOsc = offlineCtx.createOscillator();
-        membraneOsc.type = 'sine';
-        membraneOsc.frequency.setValueAtTime(80, 0);
-        membraneOsc.frequency.exponentialRampToValueAtTime(35, 0.4);
+        const transientGain = bomboCtx.createGain();
+        transientGain.gain.setValueAtTime(0, 0);
+        transientGain.gain.linearRampToValueAtTime(0.9, 0.001);
+        transientGain.gain.exponentialRampToValueAtTime(0.001, 0.012);
 
-        const membraneGain = offlineCtx.createGain();
-        membraneOsc.connect(membraneGain);
-        membraneGain.connect(bomboGain);
+        transientOsc.connect(transientGain);
+        transientGain.connect(bomboGain);
+        transientOsc.start(0);
 
-        membraneGain.gain.setValueAtTime(0, 0);
-        membraneGain.gain.linearRampToValueAtTime(0.9, 0.008);
-        membraneGain.gain.exponentialRampToValueAtTime(0.01, 0.5);
-        membraneOsc.start(0);
+        // 2. LEATHER RESONANCE (Pink Noise to emulate animal fur scraping on thick goat skin)
+        const leatherNoise = bomboCtx.createBufferSource();
+        const noiseBuf = bomboCtx.createBuffer(1, 44100 * 0.6, 44100);
+        const noiseDataArray = noiseBuf.getChannelData(0);
+        
+        let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+        for (let i = 0; i < noiseBuf.length; i++) {
+            const white = Math.random() * 2 - 1;
+            b0 = 0.99886 * b0 + white * 0.0555179;
+            b1 = 0.99332 * b1 + white * 0.0750759;
+            b2 = 0.96900 * b2 + white * 0.1538520;
+            b3 = 0.86650 * b3 + white * 0.3104856;
+            b4 = 0.55000 * b4 + white * 0.5329522;
+            b5 = -0.7616 * b5 - white * 0.0168980;
+            noiseDataArray[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+            noiseDataArray[i] *= 0.11; // Normalize approximate volume
+            b6 = white * 0.115926;
+        }
+        leatherNoise.buffer = noiseBuf;
 
-        // 2. SHELL
-        const shellOsc = offlineCtx.createOscillator();
-        shellOsc.type = 'triangle';
-        const shellFilter = offlineCtx.createBiquadFilter();
-        shellFilter.type = 'bandpass';
-        shellFilter.frequency.value = 140;
-        shellFilter.Q.value = 2;
+        const leatherFilter = bomboCtx.createBiquadFilter();
+        leatherFilter.type = 'lowpass';
+        leatherFilter.frequency.setValueAtTime(85, 0);
+        leatherFilter.Q.setValueAtTime(4.0, 0);
 
-        const shellGain = offlineCtx.createGain();
-        shellOsc.connect(shellFilter);
-        shellFilter.connect(shellGain);
-        shellGain.connect(bomboGain);
+        const leatherBandpass = bomboCtx.createBiquadFilter();
+        leatherBandpass.type = 'bandpass';
+        leatherBandpass.frequency.setValueAtTime(150, 0);
+        leatherBandpass.Q.setValueAtTime(2.0, 0);
 
-        shellOsc.frequency.value = 90;
-        shellGain.gain.setValueAtTime(0, 0);
-        shellGain.gain.linearRampToValueAtTime(0.4, 0.01);
-        shellGain.gain.exponentialRampToValueAtTime(0.01, 0.2);
-        shellOsc.start(0);
+        const leatherGain = bomboCtx.createGain();
+        leatherGain.gain.setValueAtTime(0, 0);
+        leatherGain.gain.linearRampToValueAtTime(0.75, 0.005);
+        leatherGain.gain.exponentialRampToValueAtTime(0.001, 0.25);
 
-        // 3. ATTACK (Noise needs to be generated manually for offline context or reused?)
-        // Minimal synth for attack
-        const noiseData = offlineCtx.createBuffer(1, 44100, 44100);
-        const nd = noiseData.getChannelData(0);
-        for (let i = 0; i < noiseData.length; i++) nd[i] = Math.random() * 2 - 1;
+        const noiseGainLow = bomboCtx.createGain();
+        noiseGainLow.gain.setValueAtTime(0.8, 0);
+        const noiseGainBP = bomboCtx.createGain();
+        noiseGainBP.gain.setValueAtTime(0.3, 0);
 
-        const clickSrc = offlineCtx.createBufferSource();
-        clickSrc.buffer = noiseData;
-        const clickFilter = offlineCtx.createBiquadFilter();
-        clickFilter.type = 'highpass';
-        clickFilter.frequency.value = 2500;
-        const clickGain = offlineCtx.createGain();
-        clickSrc.connect(clickFilter);
-        clickFilter.connect(clickGain);
-        clickGain.connect(bomboGain);
+        leatherNoise.connect(leatherFilter);
+        leatherFilter.connect(noiseGainLow);
+        noiseGainLow.connect(leatherGain);
 
-        clickGain.gain.setValueAtTime(0.4, 0);
-        clickGain.gain.exponentialRampToValueAtTime(0.001, 0.02);
-        clickSrc.start(0);
+        leatherNoise.connect(leatherBandpass);
+        leatherBandpass.connect(noiseGainBP);
+        noiseGainBP.connect(leatherGain);
 
-        this.bomboBuffer = await offlineCtx.startRendering();
+        leatherGain.connect(bomboGain);
+        leatherNoise.start(0);
 
-        // --- RENDER BOMBO ARO ---
+        // 3. CAVITY BOOM & MEMBRANE RESONANCE (Acoustic physical modeling of drum shell and skin)
+        // 3.1. Deep sub-bass fundamental at 58Hz
+        const subOsc = bomboCtx.createOscillator();
+        subOsc.type = 'sine';
+        subOsc.frequency.setValueAtTime(58, 0);
+
+        const subGain = bomboCtx.createGain();
+        subGain.gain.setValueAtTime(0, 0);
+        subGain.gain.linearRampToValueAtTime(0.9, 0.015);
+        subGain.gain.exponentialRampToValueAtTime(0.001, 0.7);
+
+        subOsc.connect(subGain);
+        subGain.connect(bomboGain);
+        subOsc.start(0);
+
+        // 3.2. Circular membrane inharmonic mode (1,1) at 58Hz * 1.59 = 92.2Hz
+        const inharmonicOsc = bomboCtx.createOscillator();
+        inharmonicOsc.type = 'sine';
+        inharmonicOsc.frequency.setValueAtTime(58 * 1.59, 0);
+
+        const inharmonicGain = bomboCtx.createGain();
+        inharmonicGain.gain.setValueAtTime(0, 0);
+        inharmonicGain.gain.linearRampToValueAtTime(0.35, 0.01);
+        inharmonicGain.gain.exponentialRampToValueAtTime(0.001, 0.18);
+
+        inharmonicOsc.connect(inharmonicGain);
+        inharmonicGain.connect(bomboGain);
+        inharmonicOsc.start(0);
+
+        // 3.3. Ceibo wood drum shell resonance at 58Hz * 2 = 116Hz
+        const ceiboResonance = bomboCtx.createOscillator();
+        ceiboResonance.type = 'triangle'; // triangle waves add pleasant woody warmth
+        ceiboResonance.frequency.setValueAtTime(116, 0);
+
+        const ceiboGain = bomboCtx.createGain();
+        ceiboGain.gain.setValueAtTime(0, 0);
+        ceiboGain.gain.linearRampToValueAtTime(0.2, 0.01);
+        ceiboGain.gain.exponentialRampToValueAtTime(0.001, 0.3);
+
+        ceiboResonance.connect(ceiboGain);
+        ceiboGain.connect(bomboGain);
+        ceiboResonance.start(0);
+
+        this.bomboBuffer = await bomboCtx.startRendering();
+
+        // --- RENDER BOMBO ARO (Ceibo hollow wood click - Physical Modeling using FM Synthesis) ---
         const aroCtx = new OfflineAudioContext(1, 44100 * 0.5, 44100);
         const aroOut = aroCtx.createGain();
         aroOut.connect(aroCtx.destination);
 
+        // 1. FM SYNTHESIS (Ceibo hollow thick wood trunk modeling at lower inharmonic frequencies)
+        const carrier = aroCtx.createOscillator();
+        const modulator = aroCtx.createOscillator();
+        const modGain = aroCtx.createGain();
+
+        carrier.type = 'sine';
+        carrier.frequency.setValueAtTime(200, 0); // Carrier at 200Hz
+
+        modulator.type = 'sine';
+        modulator.frequency.setValueAtTime(390, 0); // Modulator at 390Hz (inharmonic ratio ~1.95)
+
+        modGain.gain.setValueAtTime(360, 0); // High index for high wooden strike transient
+        modGain.gain.exponentialRampToValueAtTime(0.01, 0.03);
+
+        const fmGain = aroCtx.createGain();
+        fmGain.gain.setValueAtTime(0, 0);
+        fmGain.gain.linearRampToValueAtTime(0.9, 0.001);
+        fmGain.gain.exponentialRampToValueAtTime(0.001, 0.055);
+
+        modulator.connect(modGain);
+        modGain.connect(carrier.frequency);
+        carrier.connect(fmGain);
+        fmGain.connect(aroOut);
+
+        modulator.start(0);
+        carrier.start(0);
+
+        // 1.2. Secondary wood resonance mode (Helmholtz hollow box tone at 580Hz)
+        const ceiboHollow = aroCtx.createOscillator();
+        ceiboHollow.type = 'sine';
+        ceiboHollow.frequency.setValueAtTime(580, 0);
+
+        const hollowGain = aroCtx.createGain();
+        hollowGain.gain.setValueAtTime(0, 0);
+        hollowGain.gain.linearRampToValueAtTime(0.25, 0.001);
+        hollowGain.gain.exponentialRampToValueAtTime(0.001, 0.02);
+
+        ceiboHollow.connect(hollowGain);
+        hollowGain.connect(aroOut);
+        ceiboHollow.start(0);
+
+        // 2. STICK SCRAPE & WOOD CRACK (Band-pass filtered wood noise)
         const aroNoise = aroCtx.createBufferSource();
-        aroNoise.buffer = noiseData; // Reuse noise buffer data
+        const aroNoiseBuf = aroCtx.createBuffer(1, 44100 * 0.15, 44100);
+        const aroND = aroNoiseBuf.getChannelData(0);
+        for (let i = 0; i < aroNoiseBuf.length; i++) {
+            aroND[i] = Math.random() * 2 - 1;
+        }
+        aroNoise.buffer = aroNoiseBuf;
 
-        const f1 = aroCtx.createBiquadFilter();
-        f1.type = 'bandpass'; f1.frequency.value = 1600; f1.Q.value = 6;
-        const g1 = aroCtx.createGain();
-        aroNoise.connect(f1); f1.connect(g1); g1.connect(aroOut);
-        g1.gain.setValueAtTime(0, 0); g1.gain.linearRampToValueAtTime(0.8, 0.002); g1.gain.exponentialRampToValueAtTime(0.01, 0.08);
+        const crackFilter = aroCtx.createBiquadFilter();
+        crackFilter.type = 'bandpass';
+        crackFilter.frequency.setValueAtTime(1000, 0); // 1.0kHz band-pass resonances
+        crackFilter.Q.setValueAtTime(3.0, 0);
 
-        const f2 = aroCtx.createBiquadFilter();
-        f2.type = 'bandpass'; f2.frequency.value = 2800; f2.Q.value = 8;
-        const g2 = aroCtx.createGain();
-        aroNoise.connect(f2); f2.connect(g2); g2.connect(aroOut);
-        g2.gain.setValueAtTime(0, 0); g2.gain.linearRampToValueAtTime(0.5, 0.002); g2.gain.exponentialRampToValueAtTime(0.01, 0.05);
+        const crackGain = aroCtx.createGain();
+        crackGain.gain.setValueAtTime(0, 0);
+        crackGain.gain.linearRampToValueAtTime(0.5, 0.001);
+        crackGain.gain.exponentialRampToValueAtTime(0.001, 0.016);
 
+        aroNoise.connect(crackFilter);
+        crackFilter.connect(crackGain);
+        crackGain.connect(aroOut);
         aroNoise.start(0);
 
         this.aroBuffer = await aroCtx.startRendering();
@@ -210,14 +395,13 @@ class DrumSynthesizer {
 
     /**
      * Plays a Rock Kick Drum (Tight, punchy).
-     * (ES) Reproduce un Bombo de Rock (Ajustado, con pegada).
      */
     public playRockKick(time: number, velocity: number = 1.0) {
         const osc = this.context.createOscillator();
         const gain = this.getGain();
 
         osc.connect(gain);
-        gain.connect(this.masterGain);
+        this.connectVoiceToChannel(gain, 'kick');
 
         // Frequency sweep (50Hz -> 0Hz)
         osc.frequency.setValueAtTime(150, time);
@@ -243,7 +427,8 @@ class DrumSynthesizer {
         const gain = this.getGain();
 
         osc.connect(gain);
-        gain.connect(this.masterGain);
+        const channelName = pitch > 180 ? 'snare' : 'kick';
+        this.connectVoiceToChannel(gain, channelName);
 
         // Pitch Drop - Faster and deeper for "dry" sound
         osc.frequency.setValueAtTime(pitch, time);
@@ -269,7 +454,7 @@ class DrumSynthesizer {
         const gain = this.context.createGain();
 
         osc.connect(gain);
-        gain.connect(this.masterGain);
+        this.connectVoiceToChannel(gain, 'bombo');
 
         // Deep/Muffled
         osc.frequency.setValueAtTime(45, time);
@@ -283,31 +468,50 @@ class DrumSynthesizer {
     }
 
     /**
-   * Plays a Shaker.
-   * Filtered noise with short envelope.
-   */
+     * Plays a Shaker & Guache.
+     * Sweep dynamic bandpass filtered white noise with push/pull alternate acoustics.
+     */
     public playShaker(time: number, velocity: number) {
         if (!this.noiseBuffer) return;
 
         const source = this.context.createBufferSource();
         source.buffer = this.noiseBuffer;
 
-        const filter = this.context.createBiquadFilter();
+        const filter = this.getFilter();
         filter.type = 'bandpass';
-        filter.frequency.value = 6000;
-        filter.Q.value = 1;
 
-        const gain = this.context.createGain();
+        // Alternate shaker direction (push/pull) for natural texture
+        const isPush = this.shakerState;
+        this.shakerState = !this.shakerState;
+
+        const startFreq = isPush ? 3200 : 4500;
+        const endFreq = isPush ? 6400 : 3400;
+        const q = isPush ? 2.2 : 1.2;
+        const decay = isPush ? 0.045 : 0.095;
+        const volumeFactor = isPush ? 0.28 : 0.18;
+
+        // Apply sweeping dynamic bandpass filter
+        filter.Q.setValueAtTime(q, time);
+        filter.frequency.setValueAtTime(startFreq, time);
+        filter.frequency.exponentialRampToValueAtTime(endFreq, time + decay);
+
+        const gain = this.getGain();
 
         source.connect(filter);
         filter.connect(gain);
-        gain.connect(this.masterGain);
+        this.connectVoiceToChannel(gain, 'shaker');
 
-        gain.gain.setValueAtTime(velocity * 0.3, time);
-        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(velocity * volumeFactor, time + 0.003);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + decay);
+
+        source.onended = () => {
+            this.releaseFilter(filter);
+            this.releaseGain(gain);
+        };
 
         source.start(time);
-        source.stop(time + 0.1);
+        source.stop(time + decay + 0.02);
     }
 
     /**
@@ -327,7 +531,7 @@ class DrumSynthesizer {
 
         source.connect(filter);
         filter.connect(gain);
-        gain.connect(this.masterGain);
+        this.connectVoiceToChannel(gain, 'hihat');
 
         gain.gain.setValueAtTime(velocity * 0.8, time);
         gain.gain.exponentialRampToValueAtTime(0.01, time + 1.5); // Long decay
@@ -349,7 +553,7 @@ class DrumSynthesizer {
         const impact = this.context.createOscillator();
         const impactGain = this.getGain();
         impact.connect(impactGain);
-        impactGain.connect(this.masterGain);
+        this.connectVoiceToChannel(impactGain, 'hihat');
 
         impact.type = 'sine';
         impact.frequency.setValueAtTime(4500, time);
@@ -380,7 +584,7 @@ class DrumSynthesizer {
 
             noise.connect(filter);
             filter.connect(noiseGain);
-            noiseGain.connect(this.masterGain);
+            this.connectVoiceToChannel(noiseGain, 'hihat');
 
             // Shimmer envelope
             noiseGain.gain.setValueAtTime(0, time);
@@ -400,7 +604,7 @@ class DrumSynthesizer {
         const hum = this.context.createOscillator();
         const humGain = this.getGain();
         hum.connect(humGain);
-        humGain.connect(this.masterGain);
+        this.connectVoiceToChannel(humGain, 'hihat');
 
         hum.type = 'triangle';
         hum.frequency.setValueAtTime(320, time);
@@ -424,7 +628,7 @@ class DrumSynthesizer {
         const osc = this.context.createOscillator();
         const oscGain = this.getGain();
         osc.connect(oscGain);
-        oscGain.connect(this.masterGain);
+        this.connectVoiceToChannel(oscGain, 'snare');
 
         // Less extreme pitch difference for OFF, just slightly tighter
         const basePitch = snaresOn ? 250 : 280;
@@ -449,7 +653,7 @@ class DrumSynthesizer {
 
             noise.connect(noiseFilter);
             noiseFilter.connect(noiseGain);
-            noiseGain.connect(this.masterGain);
+            this.connectVoiceToChannel(noiseGain, 'snare');
 
             noiseGain.gain.setValueAtTime(velocity * 0.8, time);
             noiseGain.gain.exponentialRampToValueAtTime(0.01, time + 0.25);
@@ -485,7 +689,7 @@ class DrumSynthesizer {
 
         source.connect(filter);
         filter.connect(gain);
-        gain.connect(this.masterGain);
+        this.connectVoiceToChannel(gain, 'hihat');
 
         gain.gain.setValueAtTime(velocity * 0.6, time);
         gain.gain.exponentialRampToValueAtTime(0.01, time + decay);
@@ -519,7 +723,7 @@ class DrumSynthesizer {
 
         source.connect(filter);
         filter.connect(gain);
-        gain.connect(this.masterGain);
+        this.connectVoiceToChannel(gain, 'hihat');
 
         gain.gain.setValueAtTime(velocity * 0.7, time);
         gain.gain.exponentialRampToValueAtTime(0.01, time + decay);
@@ -552,7 +756,7 @@ class DrumSynthesizer {
 
         source.connect(dynamicsFilter);
         dynamicsFilter.connect(gain);
-        gain.connect(this.masterGain);
+        this.connectVoiceToChannel(gain, 'bombo');
 
         source.playbackRate.value = 1.0 + ((Math.random() - 0.5) * 0.02); // Tiny pitch jitter
         gain.gain.setValueAtTime(velocity, time);
@@ -579,7 +783,7 @@ class DrumSynthesizer {
         const gain = this.getGain();
         source.connect(dynamicsFilter);
         dynamicsFilter.connect(gain);
-        gain.connect(this.masterGain);
+        this.connectVoiceToChannel(gain, 'bombo');
 
         gain.gain.setValueAtTime(velocity, time);
         source.playbackRate.value = 1.0 + ((Math.random() - 0.5) * 0.04);
@@ -597,21 +801,60 @@ class DrumSynthesizer {
      * Plays a Clave sound.
      */
     public playClave(time: number, velocity: number = 1.0) {
-        const osc = this.context.createOscillator();
-        const gain = this.getGain();
+        // High quality physical modeling of hardwood rosewood claves
+        // Mode 1: 1800 Hz (Bandpass Q=25)
+        // Mode 2: 2200 Hz (Bandpass Q=25)
+        // Fed by a short 2ms noise click (impulse excitation)
+        
+        if (!this.noiseBuffer) return;
 
-        osc.connect(gain);
-        gain.connect(this.masterGain);
+        const impulseSource = this.context.createBufferSource();
+        impulseSource.buffer = this.noiseBuffer;
 
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(2500, time); // High pitched wood
+        const impulseGain = this.context.createGain();
+        impulseGain.gain.setValueAtTime(0, time);
+        impulseGain.gain.linearRampToValueAtTime(velocity * 0.95, time + 0.001);
+        impulseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.003); // 3ms impulse excitation
 
-        gain.gain.setValueAtTime(velocity, time);
-        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+        // Dual bandpass filters in parallel
+        const bp1 = this.getFilter();
+        bp1.type = 'bandpass';
+        bp1.frequency.setValueAtTime(1800, time);
+        bp1.Q.setValueAtTime(25.0, time);
 
-        osc.onended = () => this.releaseGain(gain);
-        osc.start(time);
-        osc.stop(time + 0.11);
+        const bp2 = this.getFilter();
+        bp2.type = 'bandpass';
+        bp2.frequency.setValueAtTime(2200, time);
+        bp2.Q.setValueAtTime(25.0, time);
+
+        // Mix gain after filters
+        const mixGain1 = this.getGain();
+        mixGain1.gain.setValueAtTime(0.7, time);
+        mixGain1.gain.exponentialRampToValueAtTime(0.001, time + 0.075); // rapid wood decay
+
+        const mixGain2 = this.getGain();
+        mixGain2.gain.setValueAtTime(0.5, time);
+        mixGain2.gain.exponentialRampToValueAtTime(0.001, time + 0.055); // high mode decay
+
+        impulseSource.connect(impulseGain);
+        
+        impulseGain.connect(bp1);
+        bp1.connect(mixGain1);
+        mixGain1.connect(this.getChannelNode('clave'));
+
+        impulseGain.connect(bp2);
+        bp2.connect(mixGain2);
+        mixGain2.connect(this.getChannelNode('clave'));
+
+        impulseSource.start(time);
+        impulseSource.stop(time + 0.08);
+
+        impulseSource.onended = () => {
+            this.releaseFilter(bp1);
+            this.releaseFilter(bp2);
+            this.releaseGain(mixGain1);
+            this.releaseGain(mixGain2);
+        };
     }
 
     /**
@@ -622,7 +865,7 @@ class DrumSynthesizer {
         const gain = this.getGain();
 
         osc.connect(gain);
-        gain.connect(this.masterGain);
+        this.connectVoiceToChannel(gain, 'click');
 
         // Fixed velocity threshold for pitch differentiation
         const forte = velocity > 0.8;

@@ -190,40 +190,67 @@ export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: St
     const progress = 100 - (timeLeft / (timerType === 'pomodoro' ? 25 * 60 : 5 * 60)) * 100;
 
     return (
-        <Paper sx={{ p: 2, bgcolor: '#1e1e1e', borderRadius: 4, height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Paper className="brass-trim" sx={{ p: 2.5, bgcolor: '#141210', borderRadius: 4, height: '100%', display: 'flex', flexDirection: 'column' }}>
 
             {/* TIMER VISUAL */}
-            <Box sx={{ textAlign: 'center', mb: 2, position: 'relative', bgcolor: '#121212', p: 3, borderRadius: 3 }}>
+            <Box 
+                className="retro-monospaced-screen" 
+                sx={{ 
+                    textAlign: 'center', 
+                    mb: 2.5, 
+                    position: 'relative', 
+                    p: 3, 
+                    borderRadius: 3,
+                    border: '2px solid rgba(229, 169, 95, 0.3) !important',
+                    boxShadow: 'inset 0 0 15px rgba(0,0,0,0.9), 0 0 10px rgba(229, 169, 95, 0.15) !important'
+                }}
+            >
                 <Stack direction="row" spacing={1} justifyContent="center" mb={2}>
                     <Button size="small" variant={timerType === 'pomodoro' ? "contained" : "text"}
                         onClick={() => setMode('pomodoro')}
-                        sx={{ color: timerType === 'pomodoro' ? 'white' : 'text.secondary', bgcolor: timerType === 'pomodoro' ? '#ef5350' : 'transparent', '&:hover': { bgcolor: '#e53935' } }}
+                        sx={{ 
+                            color: timerType === 'pomodoro' ? '#181512' : 'rgba(229, 169, 95, 0.65)', 
+                            bgcolor: timerType === 'pomodoro' ? '#e5a95f' : 'transparent', 
+                            fontWeight: 'bold',
+                            fontFamily: '"Outfit", sans-serif',
+                            '&:hover': { bgcolor: timerType === 'pomodoro' ? '#ffd54f' : 'rgba(229, 169, 95, 0.1)' } 
+                        }}
                     > Focus </Button>
                     <Button size="small" variant={timerType === 'break' ? "contained" : "text"}
                         onClick={() => setMode('break')}
-                        sx={{ color: timerType === 'break' ? 'black' : 'text.secondary', bgcolor: timerType === 'break' ? '#ffca28' : 'transparent', '&:hover': { bgcolor: '#ffc107' } }}
+                        sx={{ 
+                            color: timerType === 'break' ? '#181512' : 'rgba(229, 169, 95, 0.65)', 
+                            bgcolor: timerType === 'break' ? '#ff6d00' : 'transparent', 
+                            fontWeight: 'bold',
+                            fontFamily: '"Outfit", sans-serif',
+                            '&:hover': { bgcolor: timerType === 'break' ? '#ff8f00' : 'rgba(229, 169, 95, 0.1)' } 
+                        }}
                     > Descanso </Button>
                 </Stack>
 
                 <Box sx={{ position: 'relative', display: 'inline-flex', mb: 2 }}>
                     {/* Background Track */}
-                    <CircularProgress variant="determinate" value={100} size={140} thickness={1} sx={{ color: '#333', position: 'absolute' }} />
+                    <CircularProgress variant="determinate" value={100} size={140} thickness={1.2} sx={{ color: '#27201b', position: 'absolute' }} />
                     <CircularProgress
                         variant="determinate"
                         value={progress}
                         size={140}
-                        thickness={4}
+                        thickness={4.5}
                         sx={{
-                            color: timerType === 'pomodoro' ? '#ef5350' : '#ffa726',
-                            filter: 'drop-shadow(0 0 10px rgba(239, 83, 80, 0.4))',
+                            color: timerType === 'pomodoro' ? '#e5a95f' : '#ff6d00',
+                            filter: `drop-shadow(0 0 8px ${timerType === 'pomodoro' ? 'rgba(229, 169, 95, 0.5)' : 'rgba(255, 109, 0, 0.5)'})`,
                             transition: 'all 1s linear',
                             strokeLinecap: 'round'
                         }}
                     />
                     <Box sx={{ top: 0, left: 0, bottom: 0, right: 0, position: 'absolute', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
-                        <TomatoIcon filled={true} size={32} />
-                        <Typography variant="h4" fontWeight="bold" sx={{ fontFamily: 'monospace', mt: 1 }}>{formatTime(timeLeft)}</Typography>
-                        <Typography variant="caption" color="text.secondary">{isActive ? 'CORRIENDO' : 'PAUSADO'}</Typography>
+                        <TomatoIcon filled={true} size={28} />
+                        <Typography variant="h4" fontWeight="bold" sx={{ fontFamily: '"Share Tech Mono", monospace', mt: 1, color: '#e5a95f', textShadow: '0 0 6px rgba(229, 169, 95, 0.6)' }}>
+                            {formatTime(timeLeft)}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(229, 169, 95, 0.5)', fontWeight: 'bold', letterSpacing: '0.08em', fontSize: '0.65rem' }}>
+                            {isActive ? 'CORRIENDO' : 'PAUSADO'}
+                        </Typography>
                     </Box>
                 </Box>
 

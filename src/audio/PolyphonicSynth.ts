@@ -52,6 +52,11 @@ export class PolyphonicSynth {
         this.output.gain.value = 0.3; // Master volume for harmony
     }
 
+    public connect(node: AudioNode) {
+        this.output.disconnect();
+        this.output.connect(node);
+    }
+
     public playChord(notes: string[], duration: number, time: number, style: AccompanimentStyle = 'pad', prevNotes: string[] = []) {
         // 1. VOICE LEADING: Optimize inversions
         const optimizedNotes = this.applyVoiceLeading(notes, prevNotes);
