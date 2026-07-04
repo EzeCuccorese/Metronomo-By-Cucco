@@ -156,7 +156,7 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
     }));
   }, [pattern.id, onMuteChange, onVolumeChange]);
 
-  // Initialize panning and volume to audio manager on start
+  // Initialize panning and volume to audio manager on start/playback toggles
   useEffect(() => {
     channels.forEach(ch => {
       onVolumeChange(ch.id, ch.isMuted ? 0 : ch.volume);
@@ -164,7 +164,7 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
       onMuteChange(ch.id, ch.isMuted);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isPlaying]);
 
   const handleVolumeSliderChange = (channelId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value);
