@@ -79,10 +79,13 @@ export default function ConductorVisual({
     const trail3Ref = useRef<{ x: number; y: number; alpha: number }[]>([]);
     const trail2Ref = useRef<{ x: number; y: number; alpha: number }[]>([]);
 
-    const lastStepTimeRef = useRef<number>(performance.now());
+    const lastStepTimeRef = useRef<number>(0);
     const prevStepIndexRef = useRef<number>(-1);
 
     useEffect(() => {
+        if (lastStepTimeRef.current === 0) {
+            lastStepTimeRef.current = performance.now();
+        }
         if (currentStepIndex !== prevStepIndexRef.current) {
             prevStepIndexRef.current = currentStepIndex;
             lastStepTimeRef.current = performance.now();
@@ -527,7 +530,7 @@ export default function ConductorVisual({
         return () => {
             cancelAnimationFrame(animationFrameId);
         };
-    }, [currentStepIndex, visualMode, beats, stepsPerBeat, bpm]);
+    }, [currentStepIndex, visualMode, beats, stepsPerBeat, bpm, pattern.grooveType, pattern.subdivision, pattern.timeSignature]);
 
     // Beat Dots visual feedback (Underneath the Canvas)
     const countText = getCountingText(currentStepIndex, subdivision, countingMode, timeSignature);

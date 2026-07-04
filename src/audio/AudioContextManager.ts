@@ -13,7 +13,10 @@ class AudioContextManager {
 
     private constructor() {
         // (ES) Inicializa el AudioContext estándar con optimizaciones
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        const AudioContextClass = window.AudioContext || (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!AudioContextClass) {
+            throw new Error("Web Audio API not supported in this browser");
+        }
         this.audioContext = new AudioContextClass({
             latencyHint: 'interactive',
             sampleRate: 44100,

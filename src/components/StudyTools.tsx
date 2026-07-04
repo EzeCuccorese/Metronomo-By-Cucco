@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Box, Typography, Button, Stack, Paper, IconButton,
     CircularProgress, List, ListItem, ListItemText,
@@ -33,17 +33,17 @@ export interface Task {
 
 const TomatoIcon = ({ filled, size = 16 }: { filled: boolean; size?: number }) => (
     <Box
-        component="span"
-        sx={{
-            width: size,
-            height: size,
-            display: 'inline-block',
-            lineHeight: 0,
-            mr: 0.5,
-            filter: filled ? 'none' : 'grayscale(100%) opacity(0.2)',
-            transform: filled ? 'scale(1)' : 'scale(0.9)',
-            transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-        }}
+         component="span"
+         sx={{
+             width: size,
+             height: size,
+             display: 'inline-block',
+             lineHeight: 0,
+             mr: 0.5,
+             filter: filled ? 'none' : 'grayscale(100%) opacity(0.2)',
+             transform: filled ? 'scale(1)' : 'scale(0.9)',
+             transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+         }}
     >
         <svg viewBox="0 0 24 24" fill={filled ? "#ef5350" : "#666"} xmlns="http://www.w3.org/2000/svg">
             <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 5C13.66 5 15 6.34 15 8H9C9 6.34 10.34 5 12 5Z" />
@@ -78,25 +78,7 @@ export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: St
 
     const intervalRef = useRef<number | null>(null);
 
-    // Timer Logic
-    useEffect(() => {
-        if (isActive) {
-            intervalRef.current = window.setInterval(() => {
-                setTimeLeft((prev) => {
-                    if (prev <= 0) {
-                        handleTimerComplete();
-                        return 0;
-                    }
-                    return prev - 1;
-                });
-            }, 1000);
-        } else {
-            if (intervalRef.current) clearInterval(intervalRef.current);
-        }
-        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-    }, [isActive, timerType]);
-
-    const handleTimerComplete = () => {
+    const handleTimerComplete = useCallback(() => {
         setIsActive(false);
         // Play sound?
 
@@ -116,7 +98,25 @@ export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: St
             alert("Descanso terminado. ¡A trabajar!");
             if (onStopRequest) onStopRequest();
         }
-    };
+    }, [timerType, activeTaskId, onStopRequest]);
+
+    // Timer Logic
+    useEffect(() => {
+        if (isActive) {
+            intervalRef.current = window.setInterval(() => {
+                setTimeLeft((prev) => {
+                    if (prev <= 0) {
+                        handleTimerComplete();
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        } else {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        }
+        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    }, [isActive, timerType, handleTimerComplete]);
 
     const toggleTimer = () => setIsActive(!isActive);
     const resetTimer = () => {

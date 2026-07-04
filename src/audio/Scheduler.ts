@@ -1,8 +1,25 @@
 import AudioContextManager from './AudioContextManager';
 import DrumSynthesizer from './DrumSynthesizer';
-import type { RhythmPattern } from '../rhythms/RhythmPatterns';
+import type { RhythmPattern, RhythmStep } from '../rhythms/RhythmPatterns';
 import { PolyphonicSynth } from './PolyphonicSynth';
-import ClockWorker from './clock.worker?worker'; // Vite Worker Import
+import type { AccompanimentStyle } from './PolyphonicSynth';
+import ClockWorker from './clock.worker?worker&inline'; // Vite Worker Import
+
+export interface FormSection {
+    name: string;
+    audioId: 'Intro' | 'Estrofa' | 'Interludio' | 'Estribillo' | 'Zapateo' | 'Precuenta' | 'Silencio';
+    bars: number;
+    isFinal?: boolean;
+}
+
+export interface FormState {
+    sectionName: string;
+    sectionBar: number;
+    sectionTotalBars: number;
+    totalFormBars: number;
+    part: number;
+    isFinal: boolean;
+}
 
 interface VisualQueueEvent {
     step: number;
@@ -11,6 +28,50 @@ interface VisualQueueEvent {
     barCount: number;
     totalBars: number;
     pattern: RhythmPattern;
+    formState?: FormState;
+    chordIndex: number;
+}
+
+function buildFormSections(genre: string, introBars: number): FormSection[] {
+    const list: FormSection[] = [];
+    
+    const addPart = (partNum: number) => {
+        const suffix = partNum === 1 ? '1ra' : '2da';
+        list.push({ name: `PRECUENTA (${suffix})`, audioId: 'Precuenta', bars: 2 });
+        list.push({ name: `INTRODUCCIÓN (${suffix})`, audioId: 'Intro', bars: introBars });
+        
+        if (genre === 'Chacarera Simple') {
+            list.push({ name: 'ESTROFA 1', audioId: 'Estrofa', bars: 8 });
+            list.push({ name: 'INTERLUDIO 1', audioId: 'Interludio', bars: introBars });
+            list.push({ name: 'ESTROFA 2', audioId: 'Estrofa', bars: 8 });
+            list.push({ name: 'INTERLUDIO 2', audioId: 'Interludio', bars: introBars });
+            list.push({ name: 'ESTROFA 3', audioId: 'Estrofa', bars: 8 });
+            list.push({ name: 'ESTRIBILLO (¡Se acaba!)', audioId: 'Estribillo', bars: 8, isFinal: true });
+        } else if (genre === 'Chacarera Doble') {
+            list.push({ name: 'ESTROFA 1', audioId: 'Estrofa', bars: 12 });
+            list.push({ name: 'INTERLUDIO 1', audioId: 'Interludio', bars: introBars });
+            list.push({ name: 'ESTROFA 2', audioId: 'Estrofa', bars: 12 });
+            list.push({ name: 'INTERLUDIO 2', audioId: 'Interludio', bars: introBars });
+            list.push({ name: 'ESTROFA 3', audioId: 'Estrofa', bars: 12 });
+            list.push({ name: 'ESTRIBILLO (¡Se acaba!)', audioId: 'Estribillo', bars: 12, isFinal: true });
+        } else if (genre === 'Zamba' || genre === 'Cueca Norteña') {
+            list.push({ name: 'ESTROFA 1', audioId: 'Estrofa', bars: 12 });
+            list.push({ name: 'ESTROFA 2', audioId: 'Estrofa', bars: 12 });
+            list.push({ name: 'ESTRIBILLO (¡Se acaba!)', audioId: 'Estribillo', bars: 12, isFinal: true });
+        } else if (genre === 'Gato Norteño') {
+            list.push({ name: 'ESTROFA 1 (A-A-B)', audioId: 'Estrofa', bars: 12 });
+            list.push({ name: 'ZAPATEO 1', audioId: 'Zapateo', bars: 8 });
+            list.push({ name: 'ZARANDEO / GIRO (A)', audioId: 'Estrofa', bars: 4 });
+            list.push({ name: 'ZAPATEO 2', audioId: 'Zapateo', bars: 8 });
+            list.push({ name: '¡AHURA! (B Final)', audioId: 'Estribillo', bars: 4, isFinal: true });
+        }
+    };
+
+    addPart(1);
+    list.push({ name: 'ENTRE TIEMPO (Silencio)', audioId: 'Silencio', bars: 1 });
+    addPart(2);
+
+    return list;
 }
 
 /**
@@ -26,6 +87,7 @@ class Scheduler {
     private polySynth: PolyphonicSynth;
     private harmonyProgression: string[][] = [];
     private harmonyBarIndex: number = 0;
+    private currentChordIndex: number = -1;
     private accompanimentStyle: 'pad' | 'quarters' | 'offbeats' | 'arpeggio_8' | 'zamba_base' = 'pad';
 
     // Timing variables
@@ -40,7 +102,7 @@ class Scheduler {
     private currentPattern: RhythmPattern | null = null;
     private queuedPattern: RhythmPattern | null = null;
     private currentStepIndex: number = 0;
-    private stepCache: Map<number, any[]> = new Map(); // Cache active steps per index
+    private stepCache: Map<number, RhythmStep[]> = new Map(); // Cache active steps per index
 
     // Precise Visual Synchronization Queue
     private visualQueue: VisualQueueEvent[] = [];
@@ -58,8 +120,18 @@ class Scheduler {
 
     // Study Features
     private silenceModeActive: boolean = false;
-    private silenceChance: number = 0.2; // 20% chance to mute a bar
+    private silenceChance: number = 0.5;
     private isMutedBar: boolean = false;
+
+    // Formas (Folk Structures) State
+    private formasMode: boolean = false;
+    private formasGenre: string = 'Chacarera Simple';
+    private formasIntroBars: number = 8;
+    private formSections: FormSection[] = [];
+    private currentSectionIdx: number = 0;
+    private currentFormBar: number = 0;
+    private currentFormTotalBars: number = 0;
+    private currentFormPart: number = 1;
     private totalBarsPracticed: number = 0;
 
     constructor() {
@@ -74,12 +146,14 @@ class Scheduler {
         }
 
         // Initialize Worker
-        this.clockWorker = new ClockWorker();
-        this.clockWorker.onmessage = (e) => {
-            if (e.data === 'tick') {
-                this.scheduler();
-            }
-        };
+        if (typeof Worker !== 'undefined') {
+            this.clockWorker = new ClockWorker();
+            this.clockWorker.onmessage = (e) => {
+                if (e.data === 'tick') {
+                    this.scheduler();
+                }
+            };
+        }
 
         // Start the high-precision visual loop on requestAnimationFrame
         requestAnimationFrame(this.runVisualUpdateLoop);
@@ -97,7 +171,7 @@ class Scheduler {
         this.synthesizer.setChannelMute(name, isMuted);
     }
 
-    public setAccompanimentStyle(style: any) {
+    public setAccompanimentStyle(style: AccompanimentStyle) {
         this.accompanimentStyle = style;
     }
 
@@ -119,6 +193,11 @@ class Scheduler {
         // Instant Tempo Change Logic
         const ratio = this.tempo / bpm;
         this.tempo = bpm;
+
+        // Sync all queued visual events to the new tempo to prevent race conditions in React state
+        this.visualQueue.forEach(event => {
+            event.bpm = bpm;
+        });
 
         if (this.isPlaying) {
             const now = this.audioContext.currentTime;
@@ -177,6 +256,9 @@ class Scheduler {
 
         if (active) {
             this.tempo = start;
+            this.visualQueue.forEach(event => {
+                event.bpm = start;
+            });
             this.trainerCurrentBarCount = 0;
             this.trainerHoldBars = 0;
         }
@@ -195,10 +277,32 @@ class Scheduler {
         return { totalBars: this.totalBarsPracticed };
     }
 
-    private onPlaybackUpdate: ((step: number, bpm: number, barCount: number, totalBars: number, pattern: RhythmPattern) => void) | null = null;
+    private onPlaybackUpdate: ((
+        step: number,
+        bpm: number,
+        barCount: number,
+        totalBars: number,
+        pattern: RhythmPattern,
+        formState: FormState | null,
+        chordIndex: number
+    ) => void) | null = null;
 
-    public setOnPlaybackUpdate(callback: (step: number, bpm: number, barCount: number, totalBars: number, pattern: RhythmPattern) => void) {
+    public setOnPlaybackUpdate(callback: (
+        step: number,
+        bpm: number,
+        barCount: number,
+        totalBars: number,
+        pattern: RhythmPattern,
+        formState: FormState | null,
+        chordIndex: number
+    ) => void) {
         this.onPlaybackUpdate = callback;
+    }
+
+    public configureFormas(enabled: boolean, genre: string, introBars: number) {
+        this.formasMode = enabled;
+        this.formasGenre = genre;
+        this.formasIntroBars = introBars;
     }
 
     public start() {
@@ -207,8 +311,17 @@ class Scheduler {
         this.isPlaying = true;
         this.currentStepIndex = 0;
         this.harmonyBarIndex = 0;
+        this.currentChordIndex = -1;
         this.visualQueue = [];
         this.nextNoteTime = this.audioContext.currentTime + 0.05; // Slight buffer
+
+        if (this.formasMode) {
+            this.formSections = buildFormSections(this.formasGenre, this.formasIntroBars);
+            this.currentSectionIdx = 0;
+            this.currentFormBar = 0;
+            this.currentFormTotalBars = 0;
+            this.currentFormPart = 1;
+        }
 
         // Start Worker
         this.clockWorker?.postMessage({ action: 'start', interval: this.lookahead });
@@ -219,6 +332,8 @@ class Scheduler {
         this.clockWorker?.postMessage({ action: 'stop' });
         this.visualQueue = [];
         this.queuedPattern = null;
+        this.harmonyBarIndex = 0;
+        this.currentChordIndex = -1;
     }
 
     public playOneShot(instrument: string) {
@@ -227,6 +342,11 @@ class Scheduler {
     }
 
     private scheduler() {
+        // Prevent falling behind and scheduling past notes (which Web Audio plays simultaneously on start/resume)
+        if (this.nextNoteTime < this.audioContext.currentTime) {
+            this.nextNoteTime = this.audioContext.currentTime;
+        }
+
         while (this.nextNoteTime < this.audioContext.currentTime + this.scheduleAheadTime) {
             const time = this.nextNoteTime;
             this.scheduleNote(time);
@@ -245,8 +365,24 @@ class Scheduler {
         const isStart = this.currentStepIndex === 0;
         const isMiddle = this.currentStepIndex === midPoint;
 
-        if ((isStart || isMiddle) && this.harmonyProgression.length > 0) {
-            const chordIndex = this.harmonyBarIndex % this.harmonyProgression.length;
+        const currentSec = this.formasMode && this.formSections[this.currentSectionIdx] ? this.formSections[this.currentSectionIdx] : null;
+        let shouldPlayHarmony = true;
+        if (this.formasMode && currentSec) {
+            if (currentSec.audioId === 'Precuenta' || currentSec.audioId === 'Silencio') {
+                shouldPlayHarmony = false;
+            }
+        }
+
+        if (isStart || isMiddle) {
+            if (this.harmonyProgression.length > 0 && shouldPlayHarmony) {
+                this.currentChordIndex = this.harmonyBarIndex % this.harmonyProgression.length;
+            } else {
+                this.currentChordIndex = -1;
+            }
+        }
+
+        if ((isStart || isMiddle) && this.harmonyProgression.length > 0 && shouldPlayHarmony) {
+            const chordIndex = this.currentChordIndex;
             const chord = this.harmonyProgression[chordIndex];
 
             const prevIndex = (this.harmonyBarIndex === 0)
@@ -330,8 +466,37 @@ class Scheduler {
         }
 
         activeSteps.forEach(step => {
+            if (currentSec) {
+                if (currentSec.audioId === 'Precuenta' && step.instrument !== 'click') {
+                    return; // Count-in: only play metronome tick
+                }
+                if (currentSec.audioId === 'Silencio') {
+                    return; // Mute everything
+                }
+                if ((currentSec.audioId === 'Intro' || currentSec.audioId === 'Interludio') && step.instrument === 'bombo_leguero' && step.modifier !== 'aro') {
+                    return; // Mute bombo skin parche hits in intro/interludio
+                }
+            }
             this.synthesizer.play(step.instrument, playTime, step.velocity, step.modifier);
         });
+
+        // Auto-schedule metronome guide click on beat boundaries
+        const stepsPerBeat = sub / ts[0];
+        const isBeatStart = (this.currentStepIndex % stepsPerBeat) === 0;
+
+        if (isBeatStart) {
+            const hasExplicitClick = activeSteps.some(s => s.instrument === 'click');
+            if (!hasExplicitClick) {
+                const clickVelocity = (this.currentStepIndex === 0) ? 1.0 : 0.6;
+                let shouldPlayClick = true;
+                if (currentSec && currentSec.audioId === 'Silencio') {
+                    shouldPlayClick = false;
+                }
+                if (shouldPlayClick) {
+                    this.synthesizer.play('click', playTime, clickVelocity);
+                }
+            }
+        }
     }
 
     private nextStep(time: number) {
@@ -350,13 +515,24 @@ class Scheduler {
         this.nextNoteTime += timePerStep;
 
         // Push scheduled event parameters to visual queue with exact target audio time
+        const currentFormState = this.formasMode && this.formSections[this.currentSectionIdx] ? {
+            sectionName: this.formSections[this.currentSectionIdx].name,
+            sectionBar: this.currentFormBar,
+            sectionTotalBars: this.formSections[this.currentSectionIdx].bars,
+            totalFormBars: this.currentFormTotalBars,
+            part: this.currentFormPart,
+            isFinal: !!this.formSections[this.currentSectionIdx].isFinal
+        } : undefined;
+
         this.visualQueue.push({
             step: scheduledStep,
             time: time,
             bpm: Math.round(this.tempo),
             barCount: this.trainerCurrentBarCount,
             totalBars: this.totalBarsPracticed,
-            pattern: this.currentPattern
+            pattern: this.currentPattern,
+            formState: currentFormState,
+            chordIndex: this.currentChordIndex
         });
 
         // Advance Step Index
@@ -364,10 +540,46 @@ class Scheduler {
         if (this.currentStepIndex >= sub) {
             this.currentStepIndex = 0; // Bar Wrapped
 
+            if (this.formasMode && this.formSections.length > 0) {
+                this.currentFormBar++;
+                this.currentFormTotalBars++;
+                
+                const currentSec = this.formSections[this.currentSectionIdx];
+                if (this.currentFormBar >= currentSec.bars) {
+                    this.currentSectionIdx++;
+                    this.currentFormBar = 0;
+                    
+                    if (this.currentSectionIdx >= this.formSections.length) {
+                        this.stop();
+                        if (this.onPlaybackUpdate) {
+                            this.onPlaybackUpdate(0, this.tempo, 0, this.totalBarsPracticed, this.currentPattern!, {
+                                sectionName: '¡TERMINÓ!',
+                                sectionBar: 0,
+                                sectionTotalBars: 0,
+                                totalFormBars: this.currentFormTotalBars,
+                                part: 2,
+                                isFinal: true
+                            }, this.currentChordIndex);
+                        }
+                        return;
+                    } else {
+                        const newSec = this.formSections[this.currentSectionIdx];
+                        if (newSec.name.includes('(2da)')) {
+                            this.currentFormPart = 2;
+                        }
+                    }
+                }
+            }
+
             // Apply queued pattern switch precisely at the bar boundary!
             if (this.queuedPattern) {
                 this.currentPattern = this.queuedPattern;
                 this.queuedPattern = null;
+
+                // Automatically switch tempo to the recommended tempo of the new pattern
+                if (this.currentPattern.recommendedTempo) {
+                    this.tempo = this.currentPattern.recommendedTempo;
+                }
 
                 // Rebuild cache for the new pattern
                 this.stepCache.clear();
@@ -438,7 +650,9 @@ class Scheduler {
                     latestUpdate.bpm,
                     latestUpdate.barCount,
                     latestUpdate.totalBars,
-                    latestUpdate.pattern
+                    latestUpdate.pattern,
+                    latestUpdate.formState || null,
+                    latestUpdate.chordIndex
                 );
             }
         }

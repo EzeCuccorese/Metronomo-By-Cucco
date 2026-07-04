@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
     Box,
     Typography,
@@ -25,6 +25,12 @@ interface PatternEditorProps {
 
 const INSTRUMENTS_DISPLAY: { type: InstrumentType; label: string; group: string }[] = [
     { type: 'bombo_leguero', label: 'Bombo', group: 'bombo' },
+    { type: 'caja', label: 'Caja Coplera', group: 'latino' },
+    { type: 'cajon', label: 'Cajón', group: 'latino' },
+    { type: 'palmas', label: 'Palmas', group: 'latino' },
+    { type: 'candombe_chico', label: 'Chico', group: 'latino' },
+    { type: 'candombe_repique', label: 'Repique', group: 'latino' },
+    { type: 'candombe_piano', label: 'Piano C.', group: 'latino' },
     { type: 'surdo', label: 'Surdo', group: 'latino' },
     { type: 'rim', label: 'Aro', group: 'latino' },
     { type: 'clave', label: 'Clave', group: 'latino' },
@@ -61,18 +67,20 @@ type ToolType = 'ghost' | 'piano' | 'pen' | 'forte' | 'accent' | 'eraser';
 export default function PatternEditor({ pattern, onPatternUpdate, currentStepIndex = 0, onPreviewInstrument }: PatternEditorProps) {
 
     // UI State
+    const [prevSubdivision, setPrevSubdivision] = useState(pattern.subdivision);
     const [viewSubdivision, setViewSubdivision] = useState(pattern.subdivision);
     const [activeFilter, setActiveFilter] = useState('all');
     const [selectedIntensity, setSelectedIntensity] = useState<ToolType>('pen');
     const [selectedModifier, setSelectedModifier] = useState<'open' | 'closed'>('closed');
     const [isMouseDown, setIsMouseDown] = useState(false);
 
-    // Sync subdivision if pattern changes externally
-    useEffect(() => {
+    // Sync subdivision if pattern changes externally (render-phase state adjustment)
+    if (pattern.subdivision !== prevSubdivision) {
+        setPrevSubdivision(pattern.subdivision);
         if (viewSubdivision > pattern.subdivision || (pattern.subdivision % viewSubdivision !== 0)) {
             setViewSubdivision(pattern.subdivision);
         }
-    }, [pattern.subdivision]);
+    }
 
     const handleFilterChange = (_: React.MouseEvent<HTMLElement>, newFilter: string) => {
         if (newFilter) setActiveFilter(newFilter);
@@ -164,7 +172,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
     // Main Interaction Logic
     const handleCellInteraction = (viewColIndex: number, instrument: InstrumentType, forceErase = false) => {
         const stepNum = Math.round(viewColIndex * stepsPerViewStep) + 1;
-        let newSteps = [...pattern.steps];
+        const newSteps = [...pattern.steps];
         const existingStep = newSteps.find(s => s.step === stepNum && s.instrument === instrument);
 
         if (selectedIntensity === 'eraser' || forceErase) {
@@ -181,7 +189,9 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
         let modifier: RhythmStep['modifier'] = undefined;
         if (instrument === 'hihat') modifier = selectedModifier === 'open' ? 'open' : 'closed';
         if (instrument === 'snare') modifier = selectedModifier === 'open' ? 'snares_off' : undefined;
-        if (instrument === 'bombo_leguero') modifier = selectedModifier === 'open' ? 'aro' : 'parche';
+        if (instrument === 'bombo_leguero' || instrument === 'caja' || instrument === 'cajon') {
+            modifier = selectedModifier === 'open' ? 'aro' : 'parche';
+        }
 
         const newStep: RhythmStep = { step: stepNum, instrument, velocity, modifier };
 
@@ -208,17 +218,16 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
             onMouseUp={() => setIsMouseDown(false)}
             onMouseLeave={() => setIsMouseDown(false)}
         >
-
             {/* Toolbar Row 1: Filters & TimeSig */}
-            <Stack direction="row" spacing={2} sx={{ mb: 2 }} alignItems="center" justifyContent="space-between" flexWrap="wrap">
-                <Stack direction="row" spacing={2}>
+            <Box sx={{ display: 'flex', gap: 2, mb: 2, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', width: '100%' }}>
+                <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
                     <ToggleButtonGroup value={activeFilter} exclusive onChange={handleFilterChange} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)' }}>
                         <ToggleButton value="all">Todos</ToggleButton>
                         <ToggleButton value="drums">Batería</ToggleButton>
                         <ToggleButton value="latino">Latino</ToggleButton>
                     </ToggleButtonGroup>
 
-                    <Divider orientation="vertical" flexItem />
+                    <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
 
                     {/* Intensities Section */}
                     <ToggleButtonGroup
@@ -236,7 +245,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                         <ToggleButton value="eraser" title="Goma / Borrar"><Eraser size={14} /></ToggleButton>
                     </ToggleButtonGroup>
 
-                    <Divider orientation="vertical" flexItem />
+                    <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
 
                     {/* Modifiers Section (Open/Closed selection) */}
                     <Box sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1, p: 0.2, display: 'flex' }}>
@@ -255,9 +264,9 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                             </Tooltip>
                         </ToggleButtonGroup>
                     </Box>
-                </Stack>
+                </Box>
 
-                <Stack direction="row" spacing={1}>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                     <Select
                         size="small"
                         value={currentStepsPerBeat}
@@ -284,8 +293,8 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                     </Select>
 
                     <IconButton size="small" color="error" onClick={clearPattern} sx={{ ml: 1, opacity: 0.6 }}><Trash2 size={18} /></IconButton>
-                </Stack>
-            </Stack>
+                </Box>
+            </Box>
 
             {/* Grid */}
             <Box sx={{ overflowX: 'auto', pb: 2 }}>
@@ -328,7 +337,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                                         if (inst.type === 'hihat') noteVisual = currentStep?.modifier === 'open' ? <Circle size={10} strokeWidth={3} /> : noteChar;
                                         else if (inst.type === 'hihat_foot') noteVisual = <Typography variant="caption" sx={{ fontSize: '1.2rem', lineHeight: 1 }}>△</Typography>;
                                         else if (inst.type === 'snare') noteVisual = currentStep?.modifier === 'snares_off' ? <Typography variant="caption" sx={{ fontSize: '0.7rem', border: '1px solid', px: 0.3, borderRadius: '2px' }}>T</Typography> : noteChar;
-                                        else if (inst.type === 'bombo_leguero' || inst.type === 'rim') noteVisual = (currentStep?.modifier === 'aro' || inst.type === 'rim') ? '×' : noteChar;
+                                        else if (inst.type === 'bombo_leguero' || inst.type === 'caja' || inst.type === 'cajon' || inst.type === 'rim') noteVisual = (currentStep?.modifier === 'aro' || inst.type === 'rim') ? '×' : noteChar;
                                     }
 
                                     const getIntensityColor = (v: number) => {
@@ -358,7 +367,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                                                 userSelect: 'none'
                                             }}
                                         >
-                                            {hasNote && <Box sx={{ filter: (inst.type === 'hihat' && currentStep?.modifier === 'open') ? 'drop-shadow(0 0 4px rgba(244, 143, 177, 0.5))' : 'none', transform: currentStep?.velocity! < 0.6 ? 'scale(0.8)' : 'scale(1)' }}>{noteVisual}</Box>}
+                                            {hasNote && <Box sx={{ filter: (inst.type === 'hihat' && currentStep?.modifier === 'open') ? 'drop-shadow(0 0 4px rgba(244, 143, 177, 0.5))' : 'none', transform: (currentStep?.velocity ?? 1.0) < 0.6 ? 'scale(0.8)' : 'scale(1)' }}>{noteVisual}</Box>}
                                         </Box>
                                     );
                                 })}

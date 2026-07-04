@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Box, Typography, Select, MenuItem, Stack, Slider, FormControl, InputLabel, Button, Divider, Chip } from '@mui/material';
 import { Music, Trash2, RotateCcw } from 'lucide-react';
 
@@ -6,6 +6,7 @@ interface HarmonyBuilderProps {
     onUpdateProgression: (progression: string[][]) => void;
     onVolumeChange: (vol: number) => void;
     onStyleChange: (style: string) => void;
+    activeHalfBarIndex?: number;
 }
 
 const KEYS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -28,7 +29,29 @@ interface ChordStep {
     notes: string[];
 }
 
-export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, onStyleChange }: HarmonyBuilderProps) {
+const getScaleIntervals = (m: ModeType) => {
+    // Semitones from root
+    switch (m) {
+        case 'major': return [0, 2, 4, 5, 7, 9, 11]; // I, ii, iii, IV, V, vi, viidim
+        case 'minor': return [0, 2, 3, 5, 7, 8, 10]; // i, iidim, III, iv, v, VI, VII
+        case 'dorian': return [0, 2, 3, 5, 7, 9, 10]; // i, ii, III, IV, v, vidim, VII
+        case 'mixolydian': return [0, 2, 4, 5, 7, 9, 10]; // I, ii, iii, IV, V, vi, VII
+    }
+};
+
+const getChordType = (degreeIndex: number, m: ModeType) => {
+    // Simplified Triad mapping
+    const map: Record<ModeType, string[]> = {
+        'major': ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'],
+        'minor': ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII'],
+        'dorian': ['i', 'ii', 'III', 'IV', 'v', 'vi°', 'VII'],
+        'mixolydian': ['I', 'ii', 'iii°', 'IV', 'v', 'vi', 'VII']
+    };
+
+    return map[m][degreeIndex];
+};
+
+export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, onStyleChange, activeHalfBarIndex }: HarmonyBuilderProps) {
     const [rootKey, setRootKey] = useState('C');
     const [mode, setMode] = useState<ModeType>('major');
     const [octave, setOctave] = useState(4);
@@ -38,42 +61,12 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
     // Sequence
     const [sequence, setSequence] = useState<ChordStep[]>([]);
 
-    // Audio Generation Logic inside Component (or helper)
-    // We map Degrees to Intervals based on Mode
-
-    const getScaleIntervals = (m: ModeType) => {
-        // Semitones from root
-        switch (m) {
-            case 'major': return [0, 2, 4, 5, 7, 9, 11]; // I, ii, iii, IV, V, vi, viidim
-            case 'minor': return [0, 2, 3, 5, 7, 8, 10]; // i, iidim, III, iv, v, VI, VII
-            case 'dorian': return [0, 2, 3, 5, 7, 9, 10]; // i, ii, III, IV, v, vidim, VII
-            case 'mixolydian': return [0, 2, 4, 5, 7, 9, 10]; // I, ii, iii, IV, V, vi, VII
-        }
-    };
-
-    const getChordType = (degreeIndex: number, m: ModeType) => {
-        // Simplified Triad mapping
-        // 0=I, 1=II...
-        // Major: I(Maj), ii(min), iii(min), IV(Maj), V(Maj), vi(min), vii(dim)
-
-        // Let's use standard Roman Numerals map for simplicity
-
-        const map: Record<ModeType, string[]> = {
-            'major': ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'],
-            'minor': ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII'],
-            'dorian': ['i', 'ii', 'III', 'IV', 'v', 'vi°', 'VII'],
-            'mixolydian': ['I', 'ii', 'iii°', 'IV', 'v', 'vi', 'VII']
-        };
-
-        return map[m][degreeIndex];
-    };
-
     const availableDegrees = [0, 1, 2, 3, 4, 5, 6].map(i => ({
         index: i,
         label: getChordType(i, mode)
     }));
 
-    const addChord = (degreeIndex: number) => {
+    const addChord = useCallback((degreeIndex: number) => {
         // Calculate actual notes
         // 1. Get Root Note Index
         const NOTE_ORDER = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -109,11 +102,11 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
         };
 
         setSequence(prev => [...prev, newChord]);
-    };
+    }, [rootKey, mode, octave]);
 
-    const removeChord = (id: string) => {
+    const removeChord = useCallback((id: string) => {
         setSequence(prev => prev.filter(c => c.id !== id));
-    };
+    }, []);
 
     // Sync with Parent
     useEffect(() => {
@@ -140,6 +133,19 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
         setStyle(val);
         onStyleChange(val);
     };
+
+    // Find which sequence step corresponds to activeHalfBarIndex
+    let activeSequenceIdx = -1;
+    if (activeHalfBarIndex !== undefined && activeHalfBarIndex >= 0) {
+        let accUnits = 0;
+        for (let i = 0; i < sequence.length; i++) {
+            accUnits += sequence[i].durationUnits;
+            if (activeHalfBarIndex < accUnits) {
+                activeSequenceIdx = i;
+                break;
+            }
+        }
+    }
 
     return (
         <Box sx={{
@@ -222,7 +228,10 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
                 {sequence.map((step, idx) => (
                     <Box key={step.id} sx={{
                         p: 1, borderRadius: 1,
-                        bgcolor: 'background.paper',
+                        bgcolor: idx === activeSequenceIdx ? 'rgba(229, 169, 95, 0.15)' : 'background.paper',
+                        border: idx === activeSequenceIdx ? '1px solid #e5a95f' : '1px solid transparent',
+                        boxShadow: idx === activeSequenceIdx ? '0 0 10px rgba(229, 169, 95, 0.2)' : 'none',
+                        transition: 'all 0.2s ease-in-out',
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                     }}>
                         <Stack direction="row" alignItems="center" spacing={2}>

@@ -1,4 +1,3 @@
-/* eslint-disable no-restricted-globals */
 // Web Worker for Metronome Clock
 // Runs timer in a background thread to avoid main thread blocking (UI jank)
 

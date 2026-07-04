@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Box,
   Button,
@@ -19,11 +19,15 @@ import {
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import SpeedIcon from '@mui/icons-material/Speed';
+import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import './App.css';
 
 import Scheduler from './audio/Scheduler';
+import type { FormState } from './audio/Scheduler';
+import type { AccompanimentStyle } from './audio/PolyphonicSynth';
+import AudioContextManager from './audio/AudioContextManager';
 import { PRESET_PATTERNS } from './rhythms/RhythmPatterns';
 import PatternEditor from './components/PatternEditor';
 import ConductorVisual from './components/ConductorVisual';
@@ -105,7 +109,13 @@ function App() {
 
   // Trainer Timing
   const [practiceTimeSeconds, setPracticeTimeSeconds] = useState(0);
-  const [totalEstimatedSeconds, setTotalEstimatedSeconds] = useState(0);
+  // Formas (Folk Structures) State
+  const [formasMode, setFormasMode] = useState(false);
+  const [formasGenre, setFormasGenre] = useState<'Chacarera Simple' | 'Chacarera Doble' | 'Zamba' | 'Cueca Norteña' | 'Gato Norteño'>('Chacarera Simple');
+  const [formasIntroBars, setFormasIntroBars] = useState<number>(8);
+  const [currentFormState, setCurrentFormState] = useState<FormState | null>(null);
+
+  const [activeHarmonyIndex, setActiveHarmonyIndex] = useState<number>(-1);
 
   // Active Pattern State
   const [currentPattern, setCurrentPattern] = useState<RhythmPattern>(() => {
@@ -119,11 +129,83 @@ function App() {
   const tapTimesRef = useRef<number[]>([]);
   const timerRef = useRef<number | null>(null);
 
+  const calculateTotalSeconds = useCallback(() => {
+    if (!trainerActive) return 0;
+    if (trainerStep === 0) return 0;
+    const range = Math.abs(trainerEnd - trainerStart);
+    const stepsCount = Math.ceil(range / trainerStep);
+    const beatsPerBar = currentPattern.timeSignature[0];
+    let totalSeconds = 0;
+    let currentBpm = trainerStart;
+    const direction = trainerEnd > trainerStart ? 1 : -1;
+    for (let i = 0; i <= stepsCount; i++) {
+      const segmentTime = (trainerBars * beatsPerBar * 60) / (currentBpm || 60);
+      totalSeconds += segmentTime;
+      if ((direction === 1 && currentBpm >= trainerEnd) || (direction === -1 && currentBpm <= trainerEnd)) break;
+      currentBpm += (trainerStep * direction);
+    }
+    return totalSeconds;
+  }, [trainerActive, trainerStep, trainerStart, trainerEnd, trainerBars, currentPattern.timeSignature]);
+
+  const formatSeconds = useCallback((sec: number) => {
+    const mins = Math.floor(sec / 60);
+    const s = Math.round(sec % 60);
+    return `${mins} min ${s} seg`;
+  }, []);
+
+  const handleTogglePlay = useCallback(async () => {
+    if (!schedulerRef.current) return;
+
+    if (isPlaying) {
+      schedulerRef.current.stop();
+      setIsPlaying(false);
+      setActiveHarmonyIndex(-1);
+    } else {
+      await AudioContextManager.getInstance().resume();
+      if (trainerActive) {
+        setPracticeTimeSeconds(0);
+        setBpm(trainerStart);
+      }
+      schedulerRef.current.start();
+      setIsPlaying(true);
+    }
+  }, [isPlaying, trainerActive, trainerStart]);
+
+  const handlePreviewSound = useCallback(async (instrument: string) => {
+    if (isPlaying) return;
+    await AudioContextManager.getInstance().resume();
+    schedulerRef.current?.playOneShot(instrument);
+  }, [isPlaying]);
+
+  const handleUpdateProgression = useCallback((chords: string[][]) => {
+    schedulerRef.current?.setHarmonyProgression(chords);
+  }, []);
+
+  const handleHarmonyVolumeChange = useCallback((vol: number) => {
+    schedulerRef.current?.setHarmonyVolume(vol);
+  }, []);
+
+  const handleAccompanimentStyleChange = useCallback((style: string) => {
+    schedulerRef.current?.setAccompanimentStyle(style as AccompanimentStyle);
+  }, []);
+
+  const handleChannelVolumeChange = useCallback((channel: string, vol: number) => {
+    schedulerRef.current?.setChannelVolume(channel, vol);
+  }, []);
+
+  const handleChannelPanChange = useCallback((channel: string, pan: number) => {
+    schedulerRef.current?.setChannelPan(channel, pan);
+  }, []);
+
+  const handleChannelMuteChange = useCallback((channel: string, muted: boolean) => {
+    schedulerRef.current?.setChannelMute(channel, muted);
+  }, []);
+
   useEffect(() => {
     schedulerRef.current = new Scheduler();
     schedulerRef.current.setPattern(currentPattern);
 
-    schedulerRef.current.setOnPlaybackUpdate((step, newBpm, barCount, totalBars, activePattern) => {
+    schedulerRef.current.setOnPlaybackUpdate((step, newBpm, barCount, totalBars, activePattern, formUpdate, chordIndex) => {
       setBpm(newBpm);
       setCurrentStep(step);
       setCurrentBarProgress(barCount);
@@ -133,12 +215,21 @@ function App() {
         setSelectedPatternId(activePattern.id);
       }
       setQueuedPatternId(schedulerRef.current?.getQueuedPatternId() || null);
+      setCurrentFormState(formUpdate || null);
+      setActiveHarmonyIndex(chordIndex);
     });
 
     return () => {
       schedulerRef.current?.stop();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (schedulerRef.current) {
+      schedulerRef.current.configureFormas(formasMode, formasGenre, formasIntroBars);
+    }
+  }, [formasMode, formasGenre, formasIntroBars]);
 
   useEffect(() => {
     schedulerRef.current?.setTempo(bpm);
@@ -154,9 +245,9 @@ function App() {
     if (schedulerRef.current) {
       schedulerRef.current.configureTrainer(trainerActive, trainerStart, trainerEnd, trainerBars, trainerStep, trainerMode);
     }
-    const estimated = calculateTotalSeconds();
-    setTotalEstimatedSeconds(estimated);
-  }, [trainerActive, trainerStart, trainerEnd, trainerBars, trainerStep, currentPattern.timeSignature]);
+  }, [trainerActive, trainerStart, trainerEnd, trainerBars, trainerStep, trainerMode]);
+
+  const totalEstimatedSeconds = useMemo(() => calculateTotalSeconds(), [calculateTotalSeconds]);
 
   // Timer Effect for Practice Countdown
   useEffect(() => {
@@ -183,22 +274,7 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPlaying]);
-
-  const handleTogglePlay = () => {
-    if (!schedulerRef.current) return;
-
-    if (isPlaying) {
-      schedulerRef.current.stop();
-      setIsPlaying(false);
-    } else {
-      if (trainerActive) {
-        setPracticeTimeSeconds(0);
-      }
-      schedulerRef.current.start();
-      setIsPlaying(true);
-    }
-  };
+  }, [handleTogglePlay]);
 
   const loadPreset = (patternId: string) => {
     let newPattern: RhythmPattern | undefined;
@@ -230,6 +306,9 @@ function App() {
         setSelectedPatternId(patternId);
         setQueuedPatternId(null);
       }
+      if (newPattern.recommendedTempo) {
+        setBpm(newPattern.recommendedTempo);
+      }
     }
   };
 
@@ -251,41 +330,12 @@ function App() {
     lastTapRef.current = now;
   };
 
-  const handlePreviewSound = (instrument: string) => {
-    if (isPlaying) return;
-    schedulerRef.current?.playOneShot(instrument);
-  };
-
-  const calculateTotalSeconds = () => {
-    if (!trainerActive) return 0;
-    if (trainerStep === 0) return 0;
-    const range = Math.abs(trainerEnd - trainerStart);
-    const stepsCount = Math.ceil(range / trainerStep);
-    const beatsPerBar = currentPattern.timeSignature[0];
-    let totalSeconds = 0;
-    let currentBpm = trainerStart;
-    const direction = trainerEnd > trainerStart ? 1 : -1;
-    for (let i = 0; i <= stepsCount; i++) {
-      const segmentTime = (trainerBars * beatsPerBar * 60) / (currentBpm || 60);
-      totalSeconds += segmentTime;
-      if ((direction === 1 && currentBpm >= trainerEnd) || (direction === -1 && currentBpm <= trainerEnd)) break;
-      currentBpm += (trainerStep * direction);
-    }
-    return totalSeconds;
-  };
-
-  const formatSeconds = (sec: number) => {
-    const mins = Math.floor(sec / 60);
-    const s = Math.round(sec % 60);
-    return `${mins} min ${s} seg`;
-  };
-
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
-      <Box sx={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', p: 1, bgcolor: '#070605', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' }}>
+      <Box sx={{ height: isDesktop ? '100vh' : 'auto', minHeight: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', p: 1, bgcolor: '#070605', overflowY: isDesktop ? 'hidden' : 'auto', overflowX: 'hidden', justifyContent: 'center', alignItems: 'center' }}>
         
-        <Box className="studio-chassis console-wood-edge" sx={{ width: '100%', height: '100%', maxWidth: '1440px', display: 'flex', flexDirection: 'column', p: 1.5, boxSizing: 'border-box' }}>
+        <Box className="studio-chassis console-wood-edge" sx={{ width: '100%', height: isDesktop ? '100%' : 'auto', minHeight: isDesktop ? 'none' : '100%', maxWidth: '1440px', display: 'flex', flexDirection: 'column', p: 1.5, boxSizing: 'border-box' }}>
           
           {/* HEADER & GLOBAL CONTROLS */}
           <Paper 
@@ -483,7 +533,8 @@ function App() {
           <Stack direction={isDesktop ? 'row' : 'column'} spacing={2} sx={{ flex: 1, minHeight: 0, mb: 1.5, alignItems: 'stretch', overflow: 'hidden' }}>
 
             {/* LEFT: Harmony, Visualizer & Config */}
-            <Stack spacing={2} sx={{ flex: '0 0 310px', width: isDesktop ? 310 : '100%', height: '100%', overflowY: 'auto', pr: 0.5, '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(229,169,95,0.1)', borderRadius: '2px' } }}>
+            <Box sx={{ flex: isDesktop ? '0 0 310px' : 'none', width: isDesktop ? 310 : '100%', height: isDesktop ? '100%' : 'auto', overflowY: isDesktop ? 'auto' : 'visible', pr: isDesktop ? 0.5 : 0 }}>
+              <Stack spacing={2} sx={{ '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(229,169,95,0.1)', borderRadius: '2px' } }}>
               {/* Visualizer */}
               <Paper className="brass-trim" sx={{ p: 1.5, borderRadius: 3, bgcolor: '#141210' }}>
                 <ConductorVisual
@@ -499,9 +550,10 @@ function App() {
               {/* Harmony Builder */}
               <Box>
                 <HarmonyBuilder
-                  onUpdateProgression={useCallback((chords) => schedulerRef.current?.setHarmonyProgression(chords), [])}
-                  onVolumeChange={useCallback((vol) => schedulerRef.current?.setHarmonyVolume(vol), [])}
-                  onStyleChange={useCallback((style) => schedulerRef.current?.setAccompanimentStyle(style), [])}
+                  onUpdateProgression={handleUpdateProgression}
+                  onVolumeChange={handleHarmonyVolumeChange}
+                  onStyleChange={handleAccompanimentStyleChange}
+                  activeHalfBarIndex={activeHarmonyIndex}
                 />
               </Box>
 
@@ -528,7 +580,7 @@ function App() {
                   <Stack spacing={1.2} mt={0.5}>
                     <FormControl size="small" fullWidth>
                       <InputLabel sx={{ fontSize: '0.75rem' }}>Modo</InputLabel>
-                      <Select sx={{ fontSize: '0.75rem' }} value={trainerMode} label="Modo" onChange={(e) => setTrainerMode(e.target.value as any)}>
+                      <Select sx={{ fontSize: '0.75rem' }} value={trainerMode} label="Modo" onChange={(e) => setTrainerMode(e.target.value as 'linear' | 'resistance_loop')}>
                         <MenuItem value="linear">Lineal</MenuItem>
                         <MenuItem value="resistance_loop">Resistencia (Loop)</MenuItem>
                       </Select>
@@ -549,11 +601,128 @@ function App() {
                   </Stack>
                 )}
               </Paper>
+
+              {/* MODO FORMAS DE FOLKLORE */}
+              <Paper 
+                className="brass-trim" 
+                sx={{ 
+                  p: 1.5, 
+                  borderRadius: 3, 
+                  bgcolor: '#141210',
+                  borderColor: formasMode ? '#e5a95f !important' : 'rgba(229, 169, 95, 0.25) !important',
+                  transition: 'border-color 0.3s ease'
+                }}
+              >
+                <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <MusicNoteIcon fontSize="small" color={formasMode ? "primary" : "disabled"} />
+                    <Typography variant="caption" fontWeight="900" sx={{ letterSpacing: '0.03em', fontSize: '0.75rem' }}>MODO ESTRUCTURAS (FORMAS)</Typography>
+                  </Stack>
+                  <Switch 
+                    size="small" 
+                    checked={formasMode} 
+                    onChange={(e) => {
+                      const enabled = e.target.checked;
+                      setFormasMode(enabled);
+                      if (enabled) {
+                        let matchedPresetId = 'chacarera';
+                        if (formasGenre === 'Zamba') matchedPresetId = 'zamba';
+                        else if (formasGenre === 'Gato Norteño') matchedPresetId = 'gato';
+                        else if (formasGenre === 'Cueca Norteña') matchedPresetId = 'chacarera';
+                        loadPreset(matchedPresetId);
+                      }
+                    }} 
+                    color="primary" 
+                  />
+                </Stack>
+
+                {formasMode && (
+                  <Stack spacing={1.2} mt={0.5}>
+                    <FormControl size="small" fullWidth>
+                      <InputLabel sx={{ fontSize: '0.75rem' }}>Danza</InputLabel>
+                      <Select 
+                        sx={{ fontSize: '0.75rem' }} 
+                        value={formasGenre} 
+                        label="Danza" 
+                        onChange={(e) => {
+                          const val = e.target.value as typeof formasGenre;
+                          setFormasGenre(val);
+                          
+                          let matchedPresetId = 'chacarera';
+                          if (val === 'Zamba') {
+                            matchedPresetId = 'zamba';
+                            setFormasIntroBars(12);
+                          } else if (val === 'Cueca Norteña') {
+                            matchedPresetId = 'chacarera';
+                            setFormasIntroBars(12);
+                          } else if (val === 'Gato Norteño') {
+                            matchedPresetId = 'gato';
+                            setFormasIntroBars(8);
+                          } else {
+                            setFormasIntroBars(8);
+                          }
+                          loadPreset(matchedPresetId);
+                        }}
+                      >
+                        <MenuItem value="Chacarera Simple">Chacarera Simple</MenuItem>
+                        <MenuItem value="Chacarera Doble">Chacarera Doble</MenuItem>
+                        <MenuItem value="Zamba">Zamba</MenuItem>
+                        <MenuItem value="Cueca Norteña">Cueca Norteña</MenuItem>
+                        <MenuItem value="Gato Norteño">Gato Norteño</MenuItem>
+                      </Select>
+                    </FormControl>
+
+                    <FormControl size="small" fullWidth>
+                      <InputLabel sx={{ fontSize: '0.75rem' }}>Compases Intro</InputLabel>
+                      <Select 
+                        sx={{ fontSize: '0.75rem' }} 
+                        value={formasIntroBars} 
+                        label="Compases Intro" 
+                        onChange={(e) => setFormasIntroBars(Number(e.target.value))}
+                      >
+                        <MenuItem value={6}>6 Compases</MenuItem>
+                        <MenuItem value={8}>8 Compases</MenuItem>
+                        {(formasGenre === 'Zamba' || formasGenre === 'Cueca Norteña') && <MenuItem value={9}>9 Compases</MenuItem>}
+                        {(formasGenre === 'Zamba' || formasGenre === 'Cueca Norteña') && <MenuItem value={12}>12 Compases</MenuItem>}
+                      </Select>
+                    </FormControl>
+
+                    {currentFormState && (
+                      <Box sx={{ p: 1.2, borderRadius: 1.5, bgcolor: '#0b0908', border: '1px solid rgba(229, 169, 95, 0.12)' }}>
+                        <Stack direction="row" justifyContent="space-between" mb={0.5}>
+                          <Typography variant="caption" sx={{ color: '#ff6d00', fontWeight: '900', letterSpacing: '0.05em', fontSize: '0.7rem' }}>
+                            {currentFormState.sectionName.toUpperCase()}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#e5a95f', fontWeight: 'bold', fontSize: '0.65rem' }}>
+                            PARTE {currentFormState.part === 1 ? '1ra' : '2da'}
+                          </Typography>
+                        </Stack>
+                        <Typography variant="body2" sx={{ fontFamily: '"Share Tech Mono", monospace', color: '#f4f1ed', fontWeight: 'bold', fontSize: '0.75rem', textAlign: 'center', my: 0.5 }}>
+                          Compás {currentFormState.sectionBar + 1} de {currentFormState.sectionTotalBars}
+                        </Typography>
+                        
+                        {/* Progress bar */}
+                        <Box sx={{ width: '100%', height: 4, bgcolor: 'rgba(255,255,255,0.06)', borderRadius: 1, overflow: 'hidden' }}>
+                          <Box 
+                            sx={{ 
+                              width: `${((currentFormState.sectionBar + 1) / currentFormState.sectionTotalBars) * 100}%`, 
+                              height: '100%', 
+                              bgcolor: '#e5a95f',
+                              transition: 'width 0.1s linear'
+                            }} 
+                          />
+                        </Box>
+                      </Box>
+                    )}
+                  </Stack>
+                )}
+              </Paper>
             </Stack>
+          </Box>
 
             {/* CENTER: Pattern Editor (Caja de Ritmos) */}
-            <Box sx={{ flex: 1, minWidth: 0, width: '100%', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-              <Paper className="brass-trim" sx={{ p: 1.5, borderRadius: 3, bgcolor: '#141210', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            <Box sx={{ flex: 1, minWidth: 0, width: '100%', display: 'flex', flexDirection: 'column', height: isDesktop ? '100%' : 'auto', overflow: isDesktop ? 'hidden' : 'visible' }}>
+              <Paper className="brass-trim" sx={{ p: 1.5, borderRadius: 3, bgcolor: '#141210', display: 'flex', flexDirection: 'column', height: isDesktop ? '100%' : 'auto', overflow: isDesktop ? 'hidden' : 'visible' }}>
                 {/* Presets Row */}
                 <Stack 
                   direction="row" 
@@ -639,7 +808,7 @@ function App() {
                 </Box>
 
                 {/* Secuenciador Editor - Internally Scrollable if needed */}
-                <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(229,169,95,0.1)', borderRadius: '2px' } }}>
+                <Box sx={{ flex: isDesktop ? 1 : 'none', minHeight: 0, overflowY: isDesktop ? 'auto' : 'visible', '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(229,169,95,0.1)', borderRadius: '2px' } }}>
                   <PatternEditor
                     pattern={currentPattern}
                     onPatternUpdate={(updated) => setCurrentPattern(updated)}
@@ -651,7 +820,7 @@ function App() {
             </Box>
 
             {/* RIGHT: Study Tools (Pomodoro) */}
-            <Box sx={{ flex: '0 0 280px', width: isDesktop ? 280 : '100%', height: '100%', overflowY: 'auto', '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(229,169,95,0.1)', borderRadius: '2px' } }}>
+            <Box sx={{ flex: isDesktop ? '0 0 280px' : 'none', width: isDesktop ? 280 : '100%', height: isDesktop ? '100%' : 'auto', overflowY: isDesktop ? 'auto' : 'visible', '&::-webkit-scrollbar': { width: '4px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(229,169,95,0.1)', borderRadius: '2px' } }}>
               <StudyTools
                 onStopRequest={() => {
                   schedulerRef.current?.stop();
@@ -668,9 +837,9 @@ function App() {
             pattern={currentPattern}
             currentStep={currentStep}
             isPlaying={isPlaying}
-            onVolumeChange={useCallback((channel, vol) => schedulerRef.current?.setChannelVolume(channel, vol), [])}
-            onPanChange={useCallback((channel, pan) => schedulerRef.current?.setChannelPan(channel, pan), [])}
-            onMuteChange={useCallback((channel, muted) => schedulerRef.current?.setChannelMute(channel, muted), [])}
+            onVolumeChange={handleChannelVolumeChange}
+            onPanChange={handleChannelPanChange}
+            onMuteChange={handleChannelMuteChange}
           />
           
         </Box>

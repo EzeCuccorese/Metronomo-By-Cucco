@@ -119,54 +119,101 @@ export class PolyphonicSynth {
     private playVoice(note: string, duration: number, time: number, type: 'long' | 'short' | 'pluck' = 'long') {
         const freq = getFrequency(note);
 
-        const osc1 = this.context.createOscillator();
-        const osc2 = this.context.createOscillator();
+        const fundamental = this.context.createOscillator();
+        const secondHarmonic = this.context.createOscillator();
+        const thirdHarmonic = this.context.createOscillator();
+        const tine = this.context.createOscillator();
+        
+        const harmonicGain1 = this.context.createGain();
+        const harmonicGain2 = this.context.createGain();
+        const harmonicGain3 = this.context.createGain();
+        const tineGain = this.context.createGain();
+        const tremoloGain = this.context.createGain();
         const filter = this.context.createBiquadFilter();
         const env = this.context.createGain();
 
-        // Sound Design Setup
-        osc1.type = type === 'pluck' ? 'square' : 'sawtooth';
-        osc1.frequency.value = freq;
+        // 1. Fundamental tone (Sine)
+        fundamental.type = 'sine';
+        fundamental.frequency.value = freq;
+        harmonicGain1.gain.value = 0.65;
 
-        osc2.type = 'triangle';
-        osc2.frequency.value = freq * 1.001;
+        // 2. Second Harmonic (Sine at double freq)
+        secondHarmonic.type = 'sine';
+        secondHarmonic.frequency.value = freq * 2.0;
+        harmonicGain2.gain.value = 0.22;
+
+        // 3. Third Harmonic (Sine at triple freq)
+        thirdHarmonic.type = 'sine';
+        thirdHarmonic.frequency.value = freq * 3.0;
+        harmonicGain3.gain.value = 0.08;
+
+        // 4. Metallic Tine (High pitch triangle transient)
+        tine.type = 'triangle';
+        tine.frequency.value = Math.max(3000, freq * 8);
+        tineGain.gain.setValueAtTime(0.18, time);
+        tineGain.gain.exponentialRampToValueAtTime(0.001, time + 0.03);
+
+        // Connections
+        fundamental.connect(harmonicGain1);
+        secondHarmonic.connect(harmonicGain2);
+        thirdHarmonic.connect(harmonicGain3);
+
+        harmonicGain1.connect(filter);
+        harmonicGain2.connect(filter);
+        harmonicGain3.connect(filter);
+
+        tine.connect(tineGain);
+        tineGain.connect(env); // bypass filter to preserve sharp click transience
 
         filter.type = 'lowpass';
+        filter.connect(tremoloGain);
+        tremoloGain.connect(env);
+        env.connect(this.output);
+
+        // 5. LFO Tremolo Modulation (modulates tremoloGain)
+        const lfo = this.context.createOscillator();
+        const lfoGain = this.context.createGain();
+        lfo.type = 'sine';
+        lfo.frequency.value = 5.0; // 5Hz sweep
+        lfoGain.gain.value = 0.15; // 15% depth
+
+        tremoloGain.gain.value = 1.0;
+        lfo.connect(lfoGain);
+        lfoGain.connect(tremoloGain.gain);
 
         if (type === 'long') {
-            filter.frequency.setValueAtTime(400, time);
-            filter.frequency.linearRampToValueAtTime(800, time + duration * 0.5);
+            filter.frequency.setValueAtTime(450, time);
+            filter.frequency.exponentialRampToValueAtTime(750, time + duration * 0.4);
 
             env.gain.setValueAtTime(0, time);
-            env.gain.linearRampToValueAtTime(0.3, time + 0.1);
-            env.gain.setValueAtTime(0.3, time + duration - 0.2);
+            env.gain.linearRampToValueAtTime(0.28, time + 0.08); // smooth attack
+            env.gain.setValueAtTime(0.28, time + duration - 0.2);
             env.gain.linearRampToValueAtTime(0, time + duration);
         } else if (type === 'short') {
-            filter.frequency.value = 1200;
+            filter.frequency.value = 950;
             env.gain.setValueAtTime(0, time);
-            env.gain.linearRampToValueAtTime(0.4, time + 0.01);
+            env.gain.linearRampToValueAtTime(0.35, time + 0.01);
             env.gain.exponentialRampToValueAtTime(0.01, time + 0.15);
         } else {
             // Pluck
-            filter.frequency.setValueAtTime(3000, time);
-            filter.frequency.exponentialRampToValueAtTime(200, time + 0.2);
-            env.gain.setValueAtTime(0.4, time);
-            env.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+            filter.frequency.setValueAtTime(2500, time);
+            filter.frequency.exponentialRampToValueAtTime(150, time + 0.18);
+            env.gain.setValueAtTime(0.35, time);
+            env.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
         }
 
+        // Start/Stop oscillators
+        fundamental.start(time);
+        secondHarmonic.start(time);
+        thirdHarmonic.start(time);
+        tine.start(time);
+        lfo.start(time);
 
-
-        // Connections
-        osc1.connect(filter);
-        osc2.connect(filter);
-        filter.connect(env);
-        env.connect(this.output);
-
-        // Start/Stop
-        osc1.start(time);
-        osc2.start(time);
-        osc1.stop(time + duration + 0.1);
-        osc2.stop(time + duration + 0.1);
+        fundamental.stop(time + duration + 0.1);
+        secondHarmonic.stop(time + duration + 0.1);
+        thirdHarmonic.stop(time + duration + 0.1);
+        tine.stop(time + 0.05);
+        lfo.stop(time + duration + 0.1);
     }
 
     public setVolume(vol: number) {

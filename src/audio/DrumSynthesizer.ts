@@ -13,6 +13,8 @@ class DrumSynthesizer {
     private masterGain: GainNode;
     private ambienceFilter: BiquadFilterNode;
     private saturator: WaveShaperNode;
+    private audioBuffers: Map<string, AudioBuffer> = new Map();
+    public loadPromise: Promise<void> | null = null;
 
     // Multi-channel mixer strips
     private channels: Record<string, { gain: GainNode; panner: StereoPannerNode | null; originalVolume: number; isMuted: boolean }> = {};
@@ -32,6 +34,7 @@ class DrumSynthesizer {
         this.context = AudioContextManager.getInstance().getContext();
         this.createNoiseBuffer();
         this.initPreRenderedSounds();
+        this.loadPromise = this.loadAssets();
 
         // Initialize Master Bus
         this.masterGain = this.context.createGain();
@@ -156,6 +159,170 @@ class DrumSynthesizer {
     private releaseFilter(node: BiquadFilterNode) {
         node.disconnect();
         this.filterPool.push(node);
+    }
+
+    private async loadAsset(name: string, url: string) {
+        try {
+            const response = await fetch(url);
+            const arrayBuffer = await response.arrayBuffer();
+            const audioBuffer = await this.context.decodeAudioData(arrayBuffer);
+            this.audioBuffers.set(name, audioBuffer);
+        } catch (e) {
+            console.error(`Failed to load asset ${name} from ${url}`, e);
+        }
+    }
+
+    private async loadAssets() {
+        const assets = [
+            { name: 'kick', url: '/audio/kick.wav' },
+            { name: 'snare', url: '/audio/snare.wav' },
+            { name: 'hihat', url: '/audio/hihat.wav' },
+            { name: 'hihat-open', url: '/audio/hihat-open.wav' },
+            { name: 'ride', url: '/audio/ride.wav' },
+            { name: 'surdo', url: '/audio/surdo.wav' },
+            { name: 'tom_high', url: '/audio/tom1.wav' },
+            { name: 'tom_low', url: '/audio/tom2.wav' },
+            { name: 'tom_floor', url: '/audio/tom3.wav' },
+            { name: 'bombo_parche_raw', url: '/audio/bombo_parche.ogg' },
+            { name: 'bombo_aro_raw', url: '/audio/bombo_aro.ogg' },
+            { name: 'caja_raw', url: '/audio/caja.ogg' },
+            { name: 'cajon_raw', url: '/audio/cajon.ogg' },
+            { name: 'palmas_raw', url: '/audio/palmas.ogg' },
+            { name: 'shaker_real_raw', url: '/audio/shaker_real.ogg' },
+            { name: 'clave_raw', url: '/audio/clave.ogg' },
+            { name: 'candombe_chico_raw', url: '/audio/candombe_chico.ogg' },
+            { name: 'candombe_repique_raw', url: '/audio/candombe_repique.ogg' },
+            { name: 'candombe_piano_raw', url: '/audio/candombe_piano.ogg' }
+        ];
+
+        await Promise.all(assets.map(asset => this.loadAsset(asset.name, asset.url)));
+        this.trimBomboAssets();
+    }
+
+    private trimBomboAssets() {
+        const rawParche = this.audioBuffers.get('bombo_parche_raw');
+        if (rawParche) {
+            const trimmed = this.trimBuffer(rawParche, 0.02, 0.8);
+            this.audioBuffers.set('bombo_parche', trimmed);
+        }
+
+        const rawAro = this.audioBuffers.get('bombo_aro_raw');
+        if (rawAro) {
+            const trimmed = this.trimBuffer(rawAro, 0.02, 0.25);
+            this.audioBuffers.set('bombo_aro', trimmed);
+        }
+
+        const rawCaja = this.audioBuffers.get('caja_raw');
+        if (rawCaja) {
+            const trimmed = this.trimBuffer(rawCaja, 0.02, 0.8);
+            this.audioBuffers.set('caja', trimmed);
+        }
+
+        const rawCajon = this.audioBuffers.get('cajon_raw');
+        if (rawCajon) {
+            const trimmed = this.trimBuffer(rawCajon, 0.02, 0.8);
+            this.audioBuffers.set('cajon', trimmed);
+        }
+
+        const rawPalmas = this.audioBuffers.get('palmas_raw');
+        if (rawPalmas) {
+            const trimmed = this.trimBuffer(rawPalmas, 0.02, 0.4);
+            this.audioBuffers.set('palmas', trimmed);
+        }
+
+        const rawShakerReal = this.audioBuffers.get('shaker_real_raw');
+        if (rawShakerReal) {
+            const trimmed = this.trimBuffer(rawShakerReal, 0.01, 0.3);
+            this.audioBuffers.set('shaker_real', trimmed);
+        }
+
+        const rawClave = this.audioBuffers.get('clave_raw');
+        if (rawClave) {
+            const trimmed = this.trimBuffer(rawClave, 0.02, 0.3);
+            this.audioBuffers.set('clave', trimmed);
+        }
+
+        const rawChico = this.audioBuffers.get('candombe_chico_raw');
+        if (rawChico) {
+            const trimmed = this.trimBuffer(rawChico, 0.02, 0.5);
+            this.audioBuffers.set('candombe_chico', trimmed);
+        }
+
+        const rawRepique = this.audioBuffers.get('candombe_repique_raw');
+        if (rawRepique) {
+            const trimmed = this.trimBuffer(rawRepique, 0.02, 0.5);
+            this.audioBuffers.set('candombe_repique', trimmed);
+        }
+
+        const rawPiano = this.audioBuffers.get('candombe_piano_raw');
+        if (rawPiano) {
+            const trimmed = this.trimBuffer(rawPiano, 0.02, 0.8);
+            this.audioBuffers.set('candombe_piano', trimmed);
+        }
+    }
+
+    private trimBuffer(buffer: AudioBuffer, threshold: number, durationSec: number): AudioBuffer {
+        const sampleRate = buffer.sampleRate;
+        const numChannels = buffer.numberOfChannels;
+        const trimLength = Math.min(buffer.length, Math.floor(durationSec * sampleRate));
+        
+        // Find peak index in first channel
+        const firstChanData = buffer.getChannelData(0);
+        let peakIndex = 0;
+        for (let i = 0; i < firstChanData.length; i++) {
+            if (Math.abs(firstChanData[i]) > threshold) {
+                peakIndex = i;
+                break;
+            }
+        }
+
+        const trimmedBuffer = this.context.createBuffer(numChannels, trimLength, sampleRate);
+
+        for (let ch = 0; ch < numChannels; ch++) {
+            const srcData = buffer.getChannelData(ch);
+            const dstData = trimmedBuffer.getChannelData(ch);
+            
+            for (let i = 0; i < trimLength; i++) {
+                const srcIdx = peakIndex + i;
+                if (srcIdx < srcData.length) {
+                    dstData[i] = srcData[srcIdx];
+                } else {
+                    dstData[i] = 0;
+                }
+                
+                const decayStart = Math.floor(trimLength * 0.75);
+                if (i > decayStart) {
+                    const decayProgress = (i - decayStart) / (trimLength - decayStart);
+                    dstData[i] *= Math.exp(-decayProgress * 4.0);
+                }
+            }
+        }
+
+        return trimmedBuffer;
+    }
+
+    private playBuffer(bufferName: string, channelName: string, time: number, velocity: number, pitchRate: number = 1.0): boolean {
+        const buffer = this.audioBuffers.get(bufferName);
+        if (!buffer) {
+            return false;
+        }
+
+        const source = this.context.createBufferSource();
+        source.buffer = buffer;
+        source.playbackRate.setValueAtTime(pitchRate, time);
+
+        const channel = this.channels[channelName];
+        if (!channel || channel.isMuted) return true;
+
+        const gainNode = this.context.createGain();
+        const gainVal = Math.pow(velocity, 1.5); // Fixed: do not scale by channel.originalVolume twice!
+        gainNode.gain.setValueAtTime(gainVal, time);
+
+        source.connect(gainNode);
+        gainNode.connect(channel.gain);
+
+        source.start(time);
+        return true;
     }
 
     /**
@@ -390,6 +557,12 @@ class DrumSynthesizer {
             case 'surdo': this.playSurdo(time, velocity); break;
             case 'hihat_foot': this.playHiHatFoot(time, velocity); break;
             case 'rim': this.playBomboLegueroAro(time, velocity); break; // Reuse
+            case 'caja': this.playCaja(time, velocity, modifier); break;
+            case 'cajon': this.playCajon(time, velocity, modifier); break;
+            case 'palmas': this.playPalmas(time, velocity); break;
+            case 'candombe_chico': this.playCandombeChico(time, velocity); break;
+            case 'candombe_repique': this.playCandombeRepique(time, velocity); break;
+            case 'candombe_piano': this.playCandombePiano(time, velocity); break;
         }
     }
 
@@ -397,6 +570,7 @@ class DrumSynthesizer {
      * Plays a Rock Kick Drum (Tight, punchy).
      */
     public playRockKick(time: number, velocity: number = 1.0) {
+        if (this.playBuffer('kick', 'kick', time, velocity)) return;
         const osc = this.context.createOscillator();
         const gain = this.getGain();
 
@@ -423,11 +597,16 @@ class DrumSynthesizer {
     * Plays a Tom (High, Low, Floor).
     */
     public playTom(time: number, velocity: number, pitch: number) {
+        let bufName = 'tom_low';
+        if (pitch > 180) bufName = 'tom_high';
+        else if (pitch < 120) bufName = 'tom_floor';
+        const channelName = pitch > 180 ? 'snare' : 'kick';
+        if (this.playBuffer(bufName, channelName, time, velocity)) return;
+
         const osc = this.context.createOscillator();
         const gain = this.getGain();
 
         osc.connect(gain);
-        const channelName = pitch > 180 ? 'snare' : 'kick';
         this.connectVoiceToChannel(gain, channelName);
 
         // Pitch Drop - Faster and deeper for "dry" sound
@@ -450,6 +629,7 @@ class DrumSynthesizer {
     * Plays a Surdo (Deep samba drum).
     */
     public playSurdo(time: number, velocity: number) {
+        if (this.playBuffer('surdo', 'bombo', time, velocity)) return;
         const osc = this.context.createOscillator();
         const gain = this.context.createGain();
 
@@ -472,6 +652,7 @@ class DrumSynthesizer {
      * Sweep dynamic bandpass filtered white noise with push/pull alternate acoustics.
      */
     public playShaker(time: number, velocity: number) {
+        if (this.playBuffer('shaker_real', 'shaker', time, velocity)) return;
         if (!this.noiseBuffer) return;
 
         const source = this.context.createBufferSource();
@@ -514,10 +695,8 @@ class DrumSynthesizer {
         source.stop(time + decay + 0.02);
     }
 
-    /**
-     * Plays a Crash Cymbal.
-     */
     public playCrash(time: number, velocity: number) {
+        if (this.playBuffer('ride', 'hihat', time, velocity, 1.35)) return;
         if (!this.noiseBuffer) return;
 
         const source = this.context.createBufferSource();
@@ -542,13 +721,10 @@ class DrumSynthesizer {
 
     /**
     * Plays a Ride Cymbal.
-    * NEW IMPLEMENTATION: Pure FM Bell + Metallic Sustain.
-    */
-    /**
-    * Plays a Ride Cymbal.
     * Improved: More complex metallic wash + high frequency stick impact.
     */
     public playRide(time: number, velocity: number) {
+        if (this.playBuffer('ride', 'hihat', time, velocity, 1.0)) return;
         // A. Stick Impact - Sharp, high-frequency "ping" (Dry)
         const impact = this.context.createOscillator();
         const impactGain = this.getGain();
@@ -624,6 +800,7 @@ class DrumSynthesizer {
      * @param snaresOn If true (default), plays noise. If false, timbal-like tone.
      */
     public playRockSnare(time: number, velocity: number = 1.0, snaresOn: boolean = true) {
+        if (this.playBuffer('snare', 'snare', time, velocity)) return;
         // 1. Tonal component (Body)
         const osc = this.context.createOscillator();
         const oscGain = this.getGain();
@@ -673,6 +850,8 @@ class DrumSynthesizer {
      * Unified logic for Open/Closed.
      */
     public playHiHat(time: number, velocity: number = 1.0, open: boolean = false) {
+        const bufName = open ? 'hihat-open' : 'hihat';
+        if (this.playBuffer(bufName, 'hihat', time, velocity)) return;
         if (!this.noiseBuffer) return;
 
         const source = this.context.createBufferSource();
@@ -707,6 +886,7 @@ class DrumSynthesizer {
      * Plays a Hi-Hat Foot (Pedal "Chick").
      */
     public playHiHatFoot(time: number, velocity: number = 1.0) {
+        if (this.playBuffer('hihat', 'hihat', time, velocity * 0.7)) return;
         if (!this.noiseBuffer) return;
 
         const source = this.context.createBufferSource();
@@ -741,6 +921,7 @@ class DrumSynthesizer {
      * Plays the "Parche" (Head) sound of a Bombo Legüero.
      */
     public playBomboLegueroParche(time: number, velocity: number = 1.0) {
+        if (this.playBuffer('bombo_parche', 'bombo', time, velocity)) return;
         if (!this.bomboBuffer) return;
 
         const source = this.context.createBufferSource();
@@ -771,6 +952,7 @@ class DrumSynthesizer {
     }
 
     public playBomboLegueroAro(time: number, velocity: number = 1.0) {
+        if (this.playBuffer('bombo_aro', 'bombo', time, velocity)) return;
         if (!this.aroBuffer) return;
 
         const source = this.context.createBufferSource();
@@ -801,6 +983,7 @@ class DrumSynthesizer {
      * Plays a Clave sound.
      */
     public playClave(time: number, velocity: number = 1.0) {
+        if (this.playBuffer('clave', 'clave', time, velocity)) return;
         // High quality physical modeling of hardwood rosewood claves
         // Mode 1: 1800 Hz (Bandpass Q=25)
         // Mode 2: 2200 Hz (Bandpass Q=25)
@@ -878,6 +1061,40 @@ class DrumSynthesizer {
         osc.onended = () => this.releaseGain(gain);
         osc.start(time);
         osc.stop(time + 0.1);
+    }
+
+    public playCaja(time: number, velocity: number = 1.0, modifier?: string) {
+        const isAro = modifier === 'aro' || modifier === 'open';
+        const pitch = isAro ? 1.45 : 1.0;
+        if (this.playBuffer('caja', 'snare', time, velocity, pitch)) return;
+        this.playRockSnare(time, velocity * (isAro ? 0.75 : 1.0), false);
+    }
+
+    public playCajon(time: number, velocity: number = 1.0, modifier?: string) {
+        const isAro = modifier === 'aro' || modifier === 'open';
+        const pitch = isAro ? 1.55 : 1.0;
+        if (this.playBuffer('cajon', 'kick', time, velocity, pitch)) return;
+        this.playRockKick(time, velocity * (isAro ? 0.65 : 1.0));
+    }
+
+    public playPalmas(time: number, velocity: number = 1.0) {
+        if (this.playBuffer('palmas', 'snare', time, velocity)) return;
+        this.playRockSnare(time, velocity * 0.5, false);
+    }
+
+    public playCandombeChico(time: number, velocity: number = 1.0) {
+        if (this.playBuffer('candombe_chico', 'tom_high', time, velocity)) return;
+        this.playTom(time, velocity, 200);
+    }
+
+    public playCandombeRepique(time: number, velocity: number = 1.0) {
+        if (this.playBuffer('candombe_repique', 'tom_low', time, velocity)) return;
+        this.playTom(time, velocity, 150);
+    }
+
+    public playCandombePiano(time: number, velocity: number = 1.0) {
+        if (this.playBuffer('candombe_piano', 'tom_floor', time, velocity)) return;
+        this.playTom(time, velocity, 100);
     }
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 
 interface MixerConsoleProps {
@@ -29,11 +29,15 @@ const INITIAL_CHANNELS: ChannelState[] = [
   { id: 'synth', name: 'TECLADO', volume: 0.7, pan: -0.3, isMuted: false },
 ];
 
-export const getChannelForInstrument = (inst: string): string => {
+const SCREW_ANGLES = [12, 45, 87, 34, 115, 78, 62, 95];
+
+const getChannelForInstrument = (inst: string): string => {
   switch (inst) {
     case 'bombo_leguero':
     case 'rim':
     case 'surdo':
+    case 'cajon':
+    case 'candombe_piano':
       return 'bombo';
     case 'clave':
       return 'clave';
@@ -45,6 +49,10 @@ export const getChannelForInstrument = (inst: string): string => {
       return 'kick';
     case 'snare':
     case 'tom_high':
+    case 'caja':
+    case 'palmas':
+    case 'candombe_chico':
+    case 'candombe_repique':
       return 'snare';
     case 'hihat':
     case 'hihat_foot':
@@ -80,6 +88,11 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
   // Track panning drag states
   const [activeDrag, setActiveDrag] = useState<{ channelId: string; startY: number; startPan: number } | null>(null);
 
+  // Trigger single previews or test click hits
+  const triggerPeak = useCallback((channelId: string, level: number) => {
+    peakRefs.current[channelId] = Math.min(1.0, Math.max(peakRefs.current[channelId], level));
+  }, []);
+
   // Trigger peak flashes on steps
   useEffect(() => {
     if (isPlaying && pattern) {
@@ -96,12 +109,7 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
         triggerPeak('synth', 0.7);
       }
     }
-  }, [currentStep, pattern, isPlaying]);
-
-  // Trigger single previews or test click hits
-  const triggerPeak = (channelId: string, level: number) => {
-    peakRefs.current[channelId] = Math.min(1.0, Math.max(peakRefs.current[channelId], level));
-  };
+  }, [currentStep, pattern, isPlaying, triggerPeak]);
 
   // VU Meter smooth decay animation loop (runs on requestAnimationFrame)
   useEffect(() => {
@@ -142,6 +150,7 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
       onPanChange(ch.id, ch.pan);
       onMuteChange(ch.id, ch.isMuted);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleVolumeSliderChange = (channelId: string, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -213,20 +222,17 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [activeDrag]);
-
-  // Helper to draw random angles for physical chassis screws
-  const screwAngles = useRef<number[]>([12, 45, 87, 34, 115, 78, 62, 95]);
+  }, [activeDrag, onPanChange]);
 
   return (
     <div className="mixer-console-rack brass-trim">
       {/* Physical wood chassis boundaries and rack mount details */}
       <div className="mixer-header">
-        <div className="analog-rack-screw" style={{ transform: `rotate(${screwAngles.current[0]}deg)` }}></div>
+        <div className="analog-rack-screw" style={{ transform: `rotate(${SCREW_ANGLES[0]}deg)` }}></div>
         <div className="vfd-screen-amber mixer-title-screen">
           <div className="vfd-glow">STUDIO MULTI-CHANNEL CONSOLE MIXER</div>
         </div>
-        <div className="analog-rack-screw" style={{ transform: `rotate(${screwAngles.current[1]}deg)` }}></div>
+        <div className="analog-rack-screw" style={{ transform: `rotate(${SCREW_ANGLES[1]}deg)` }}></div>
       </div>
 
       <div className="mixer-channels-container">
@@ -296,7 +302,7 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
                       value={ch.volume}
                       onChange={(e) => handleVolumeSliderChange(ch.id, e)}
                       className="fader-input"
-                      {...{ orient: "vertical" } as any}
+                      {...({ orient: "vertical" } as Record<string, string>)}
                     />
                     {/* Visual 3D brushed slider cap over the slider thumb */}
                     <div 
@@ -317,6 +323,7 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
                   className={`mute-button ${ch.isMuted ? 'active' : ''}`}
                   onClick={() => handleMuteToggle(ch.id)}
                   title="Mute Channel"
+                  aria-pressed={ch.isMuted}
                 >
                   MUTE
                 </button>
@@ -336,9 +343,9 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
       </div>
 
       <div className="mixer-footer">
-        <div className="analog-rack-screw" style={{ transform: `rotate(${screwAngles.current[2]}deg)` }}></div>
+        <div className="analog-rack-screw" style={{ transform: `rotate(${SCREW_ANGLES[2]}deg)` }}></div>
         <div className="brass-brand">ANALOGUE CLASS A SEQUENCER DRUMS</div>
-        <div className="analog-rack-screw" style={{ transform: `rotate(${screwAngles.current[3]}deg)` }}></div>
+        <div className="analog-rack-screw" style={{ transform: `rotate(${SCREW_ANGLES[3]}deg)` }}></div>
       </div>
     </div>
   );
