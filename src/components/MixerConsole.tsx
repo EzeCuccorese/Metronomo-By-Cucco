@@ -143,6 +143,19 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
     return () => cancelAnimationFrame(animId);
   }, [peaks]);
 
+  // Auto-mute/unmute click based on selected pattern (only click metronome defaults to unmuted click)
+  useEffect(() => {
+    const nextMuted = pattern.id !== 'metronomo';
+    setChannels(prev => prev.map(ch => {
+      if (ch.id === 'click' && ch.isMuted !== nextMuted) {
+        onMuteChange('click', nextMuted);
+        onVolumeChange('click', nextMuted ? 0 : ch.volume);
+        return { ...ch, isMuted: nextMuted };
+      }
+      return ch;
+    }));
+  }, [pattern.id, onMuteChange, onVolumeChange]);
+
   // Initialize panning and volume to audio manager on start
   useEffect(() => {
     channels.forEach(ch => {
