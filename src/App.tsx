@@ -19,8 +19,7 @@ import {
   DialogTitle,
   DialogContent,
   Grid,
-  IconButton,
-  Tooltip
+  IconButton
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
@@ -905,7 +904,7 @@ function App() {
             {PRESET_PATTERNS.filter(p => p.id !== 'metronome_4_4').map((p) => {
               const isSelected = selectedPatternId === p.id;
               return (
-                <Grid item xs={12} sm={6} md={4} key={p.id}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={p.id}>
                   <Box
                     onClick={() => {
                       loadPreset(p.id);
