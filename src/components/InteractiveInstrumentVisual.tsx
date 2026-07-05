@@ -38,6 +38,30 @@ export default function InteractiveInstrumentVisual({
     const canvasSizeRef = useRef<{ width: number; height: number }>({ width: 380, height: 175 });
     const particlesRef = useRef<SparkParticle[]>([]);
     const lastStepRef = useRef<number>(-1);
+    const imagesRef = useRef<Record<string, HTMLImageElement>>({});
+
+    // Precargar imágenes reales de instrumentos
+    useEffect(() => {
+        const instrumentImages: Record<string, string> = {
+            clave: '/instruments/claves.jpg',
+            caja: '/instruments/tom.jpg',
+            bombo: '/instruments/bombo_leguero.jpg',
+            candombe_chico: '/instruments/tom.jpg',
+            candombe_repique: '/instruments/tom.jpg',
+            candombe_piano: '/instruments/tom.jpg',
+            cajon: '/instruments/tom.jpg',
+            hihat: '/instruments/hihat.jpg',
+            snare: '/instruments/snare.jpg',
+            kick: '/instruments/kick.jpg',
+            shaker: '/instruments/shaker.jpg'
+        };
+
+        Object.entries(instrumentImages).forEach(([key, src]) => {
+            const img = new Image();
+            img.src = src;
+            imagesRef.current[key] = img;
+        });
+    }, []);
 
     // Spring scaling values for organic bounce physics
     const scalesRef = useRef<Record<string, number>>({
@@ -291,115 +315,150 @@ export default function InteractiveInstrumentVisual({
 
             // --- D. FOLKLORE NORTEÑO PANEL ---
             // 1. CLAVES (x: 45, y: 40)
-            ctx.save();
-            const clScale = scalesRef.current.clave;
-            ctx.translate(45, 40);
-            ctx.scale(clScale, clScale);
-            ctx.rotate(-Math.PI / 8);
-            
-            // Draw crossed mahogany sticks
-            ctx.fillStyle = '#5d4037';
-            ctx.beginPath();
-            ctx.roundRect(-15, -2.5, 30, 5, 2);
-            ctx.fill();
-            
-            ctx.rotate(Math.PI / 4);
-            ctx.fillStyle = '#8d6e63';
-            ctx.beginPath();
-            ctx.roundRect(-15, -2.5, 30, 5, 2);
-            ctx.fill();
-            ctx.restore();
+            const imgClave = imagesRef.current.clave;
+            if (imgClave && imgClave.complete) {
+                ctx.save();
+                const clScale = scalesRef.current.clave;
+                ctx.translate(45, 40);
+                ctx.scale(clScale * 0.75, clScale * 0.75);
+                ctx.globalCompositeOperation = 'screen';
+                ctx.drawImage(imgClave, -20, -20, 40, 40);
+                ctx.restore();
+            } else {
+                ctx.save();
+                const clScale = scalesRef.current.clave;
+                ctx.translate(45, 40);
+                ctx.scale(clScale, clScale);
+                ctx.rotate(-Math.PI / 8);
+                
+                // Draw crossed mahogany sticks
+                ctx.fillStyle = '#5d4037';
+                ctx.beginPath();
+                ctx.roundRect(-15, -2.5, 30, 5, 2);
+                ctx.fill();
+                
+                ctx.rotate(Math.PI / 4);
+                ctx.fillStyle = '#8d6e63';
+                ctx.beginPath();
+                ctx.roundRect(-15, -2.5, 30, 5, 2);
+                ctx.fill();
+                ctx.restore();
+            }
 
             // 2. CAJA COPLERA (x: 105, y: 40)
-            ctx.save();
-            const cjScale = scalesRef.current.caja;
-            ctx.translate(105, 40);
-            ctx.scale(cjScale, cjScale);
-            
-            // Wooden frame rim
-            ctx.beginPath();
-            ctx.arc(0, 0, 16, 0, Math.PI * 2);
-            ctx.fillStyle = '#6d4c41';
-            ctx.fill();
-            ctx.strokeStyle = '#3e2723';
-            ctx.lineWidth = 1.8;
-            ctx.stroke();
-            
-            // Sheepskin head
-            ctx.beginPath();
-            ctx.arc(0, 0, 14, 0, Math.PI * 2);
-            ctx.fillStyle = '#f5f1e6';
-            ctx.fill();
-            
-            // Buzzing string (chirlera)
-            ctx.strokeStyle = '#8d6e63';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(-14, -3);
-            ctx.lineTo(14, 3);
-            ctx.stroke();
-            ctx.restore();
+            const imgCaja = imagesRef.current.caja;
+            if (imgCaja && imgCaja.complete) {
+                ctx.save();
+                const cjScale = scalesRef.current.caja;
+                ctx.translate(105, 40);
+                ctx.scale(cjScale * 0.75, cjScale * 0.75);
+                ctx.globalCompositeOperation = 'screen';
+                ctx.drawImage(imgCaja, -20, -20, 40, 40);
+                ctx.restore();
+            } else {
+                ctx.save();
+                const cjScale = scalesRef.current.caja;
+                ctx.translate(105, 40);
+                ctx.scale(cjScale, cjScale);
+                
+                // Wooden frame rim
+                ctx.beginPath();
+                ctx.arc(0, 0, 16, 0, Math.PI * 2);
+                ctx.fillStyle = '#6d4c41';
+                ctx.fill();
+                ctx.strokeStyle = '#3e2723';
+                ctx.lineWidth = 1.8;
+                ctx.stroke();
+                
+                // Sheepskin head
+                ctx.beginPath();
+                ctx.arc(0, 0, 14, 0, Math.PI * 2);
+                ctx.fillStyle = '#f5f1e6';
+                ctx.fill();
+                
+                // Buzzing string (chirlera)
+                ctx.strokeStyle = '#8d6e63';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(-14, -3);
+                ctx.lineTo(14, 3);
+                ctx.stroke();
+                ctx.restore();
+            }
 
             // 3. BOMBO LEGÜERO (x: 75, y: 115)
             const bomboX = 75;
             const bomboY = 115;
             const bWidth = 44;
             const bHeight = 52;
-            ctx.save();
-            ctx.translate(bomboX, bomboY);
-            
-            const bpScale = scalesRef.current.bombo_parche;
-            const baScale = scalesRef.current.bombo_aro;
-            ctx.scale(bpScale, bpScale);
+            const imgBombo = imagesRef.current.bombo;
+            if (imgBombo && imgBombo.complete) {
+                ctx.save();
+                const bpScale = scalesRef.current.bombo_parche;
+                const baScale = scalesRef.current.bombo_aro;
+                const currentScale = Math.max(bpScale, baScale);
+                ctx.translate(bomboX, bomboY);
+                ctx.scale(currentScale * 0.85, currentScale * 0.85);
+                ctx.globalCompositeOperation = 'screen';
+                ctx.drawImage(imgBombo, -25, -28, 50, 56);
+                ctx.restore();
+            } else {
+                ctx.save();
+                ctx.translate(bomboX, bomboY);
+                
+                const bpScale = scalesRef.current.bombo_parche;
+                const baScale = scalesRef.current.bombo_aro;
+                ctx.scale(bpScale, bpScale);
 
-            // Wood hollow barrel
-            const woodGrad = ctx.createLinearGradient(-bWidth/2, -bHeight/2, bWidth/2, -bHeight/2);
-            woodGrad.addColorStop(0, '#3e2723');
-            woodGrad.addColorStop(0.5, '#795548');
-            woodGrad.addColorStop(1, '#2d1510');
-            ctx.fillStyle = woodGrad;
-            ctx.beginPath();
-            ctx.moveTo(-bWidth/2, -bHeight/2);
-            ctx.lineTo(-bWidth/2, bHeight/2 - 4);
-            ctx.quadraticCurveTo(0, bHeight/2 + 4, bWidth/2, bHeight/2 - 4);
-            ctx.lineTo(bWidth/2, -bHeight/2);
-            ctx.closePath();
-            ctx.fill();
+                // Wood hollow barrel
+                const woodGrad = ctx.createLinearGradient(-bWidth/2, -bHeight/2, bWidth/2, -bHeight/2);
+                woodGrad.addColorStop(0, '#3e2723');
+                woodGrad.addColorStop(0.5, '#795548');
+                woodGrad.addColorStop(1, '#2d1510');
+                ctx.fillStyle = woodGrad;
+                ctx.beginPath();
+                ctx.moveTo(-bWidth/2, -bHeight/2);
+                ctx.lineTo(-bWidth/2, bHeight/2 - 4);
+                ctx.quadraticCurveTo(0, bHeight/2 + 4, bWidth/2, bHeight/2 - 4);
+                ctx.lineTo(bWidth/2, -bHeight/2);
+                ctx.closePath();
+                ctx.fill();
 
-            // Ropes
-            ctx.strokeStyle = '#efe5d9';
-            ctx.lineWidth = 1.2;
-            ctx.beginPath();
-            ctx.moveTo(-bWidth/2 + 4, -bHeight/2 + 2);
-            ctx.lineTo(-bWidth/3, bHeight/2 - 2);
-            ctx.lineTo(-bWidth/8, -bHeight/2 + 2);
-            ctx.lineTo(0, bHeight/2 - 2);
-            ctx.lineTo(bWidth/8, -bHeight/2 + 2);
-            ctx.lineTo(bWidth/3, bHeight/2 - 2);
-            ctx.lineTo(bWidth/2 - 4, -bHeight/2 + 2);
-            ctx.stroke();
-            ctx.restore();
+                // Ropes
+                ctx.strokeStyle = '#efe5d9';
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo(-bWidth/2 + 4, -bHeight/2 + 2);
+                ctx.lineTo(-bWidth/3, bHeight/2 - 2);
+                ctx.lineTo(-bWidth/8, -bHeight/2 + 2);
+                ctx.lineTo(0, bHeight/2 - 2);
+                ctx.lineTo(bWidth/8, -bHeight/2 + 2);
+                ctx.lineTo(bWidth/3, bHeight/2 - 2);
+                ctx.lineTo(bWidth/2 - 4, -bHeight/2 + 2);
+                ctx.stroke();
+                ctx.restore();
 
-            // Bombo Rim & Leather Ellipse Top
-            ctx.save();
-            ctx.translate(bomboX, bomboY - bHeight/2);
-            ctx.scale(baScale, baScale);
-            
-            // Rim ring
-            ctx.beginPath();
-            ctx.ellipse(0, 0, bWidth/2, 9, 0, 0, Math.PI * 2);
-            ctx.fillStyle = '#4e342e';
-            ctx.fill();
-            ctx.strokeStyle = '#27120f';
-            ctx.lineWidth = 2;
-            ctx.stroke();
+                // Bombo Rim & Leather Ellipse Top
+                ctx.save();
+                ctx.translate(bomboX, bomboY - bHeight/2);
+                ctx.scale(baScale, baScale);
+                
+                // Rim ring
+                ctx.beginPath();
+                ctx.ellipse(0, 0, bWidth/2, 9, 0, 0, Math.PI * 2);
+                ctx.fillStyle = '#4e342e';
+                ctx.fill();
+                ctx.strokeStyle = '#27120f';
+                ctx.lineWidth = 2;
+                ctx.stroke();
 
-            // Patch skin
-            ctx.beginPath();
-            ctx.ellipse(0, 0, bWidth/2 - 3, 7, 0, 0, Math.PI * 2);
-            ctx.fillStyle = '#f8f4e8';
-            ctx.fill();
-            ctx.restore();
+                // Patch skin
+                ctx.beginPath();
+                ctx.ellipse(0, 0, bWidth/2 - 3, 7, 0, 0, Math.PI * 2);
+                ctx.fillStyle = '#f8f4e8';
+                ctx.fill();
+                ctx.restore();
+            }
 
             // --- E. RIOPLATENSE & LITORAL PANEL ---
             // 1. CANDOMBE ENSEMBLE (x: 195, y: 45)
@@ -407,84 +466,127 @@ export default function InteractiveInstrumentVisual({
             ctx.translate(195, 45);
             
             // Chico Drum (x: -16)
-            ctx.save();
-            ctx.translate(-16, 0);
-            const ccScale = scalesRef.current.candombe_chico;
-            ctx.scale(ccScale, ccScale);
-            ctx.fillStyle = '#795548';
-            ctx.beginPath();
-            ctx.moveTo(-4, -10);
-            ctx.lineTo(-3, 10);
-            ctx.quadraticCurveTo(0, 11, 3, 10);
-            ctx.lineTo(4, -10);
-            ctx.closePath();
-            ctx.fill();
-            ctx.fillStyle = '#efe5d9';
-            ctx.beginPath();
-            ctx.ellipse(0, -10, 4, 1.8, 0, 0, Math.PI*2);
-            ctx.fill();
-            ctx.restore();
+            const imgChico = imagesRef.current.candombe_chico;
+            if (imgChico && imgChico.complete) {
+                ctx.save();
+                ctx.translate(-16, 0);
+                const ccScale = scalesRef.current.candombe_chico;
+                ctx.scale(ccScale * 0.45, ccScale * 0.45);
+                ctx.globalCompositeOperation = 'screen';
+                ctx.drawImage(imgChico, -15, -15, 30, 30);
+                ctx.restore();
+            } else {
+                ctx.save();
+                ctx.translate(-16, 0);
+                const ccScale = scalesRef.current.candombe_chico;
+                ctx.scale(ccScale, ccScale);
+                ctx.fillStyle = '#795548';
+                ctx.beginPath();
+                ctx.moveTo(-4, -10);
+                ctx.lineTo(-3, 10);
+                ctx.quadraticCurveTo(0, 11, 3, 10);
+                ctx.lineTo(4, -10);
+                ctx.closePath();
+                ctx.fill();
+                ctx.fillStyle = '#efe5d9';
+                ctx.beginPath();
+                ctx.ellipse(0, -10, 4, 1.8, 0, 0, Math.PI*2);
+                ctx.fill();
+                ctx.restore();
+            }
 
             // Repique Drum (x: 0)
-            ctx.save();
-            const crScale = scalesRef.current.candombe_repique;
-            ctx.scale(crScale, crScale);
-            ctx.fillStyle = '#6d4c41';
-            ctx.beginPath();
-            ctx.moveTo(-5, -11);
-            ctx.lineTo(-4, 11);
-            ctx.quadraticCurveTo(0, 12, 4, 11);
-            ctx.lineTo(5, -11);
-            ctx.closePath();
-            ctx.fill();
-            ctx.fillStyle = '#efe5d9';
-            ctx.beginPath();
-            ctx.ellipse(0, -11, 5, 2, 0, 0, Math.PI*2);
-            ctx.fill();
-            ctx.restore();
+            const imgRepique = imagesRef.current.candombe_repique;
+            if (imgRepique && imgRepique.complete) {
+                ctx.save();
+                const crScale = scalesRef.current.candombe_repique;
+                ctx.scale(crScale * 0.5, crScale * 0.5);
+                ctx.globalCompositeOperation = 'screen';
+                ctx.drawImage(imgRepique, -15, -15, 30, 30);
+                ctx.restore();
+            } else {
+                ctx.save();
+                const crScale = scalesRef.current.candombe_repique;
+                ctx.scale(crScale, crScale);
+                ctx.fillStyle = '#6d4c41';
+                ctx.beginPath();
+                ctx.moveTo(-5, -11);
+                ctx.lineTo(-4, 11);
+                ctx.quadraticCurveTo(0, 12, 4, 11);
+                ctx.lineTo(5, -11);
+                ctx.closePath();
+                ctx.fill();
+                ctx.fillStyle = '#efe5d9';
+                ctx.beginPath();
+                ctx.ellipse(0, -11, 5, 2, 0, 0, Math.PI*2);
+                ctx.fill();
+                ctx.restore();
+            }
 
             // Piano Drum (x: 16)
-            ctx.save();
-            ctx.translate(16, 0);
-            const cpScale = scalesRef.current.candombe_piano;
-            ctx.scale(cpScale, cpScale);
-            ctx.fillStyle = '#4e342e';
-            ctx.beginPath();
-            ctx.moveTo(-7, -12);
-            ctx.lineTo(-5, 12);
-            ctx.quadraticCurveTo(0, 13, 5, 12);
-            ctx.lineTo(7, -12);
-            ctx.closePath();
-            ctx.fill();
-            ctx.fillStyle = '#efe5d9';
-            ctx.beginPath();
-            ctx.ellipse(0, -12, 7, 2.2, 0, 0, Math.PI*2);
-            ctx.fill();
-            ctx.restore();
+            const imgPiano = imagesRef.current.candombe_piano;
+            if (imgPiano && imgPiano.complete) {
+                ctx.save();
+                ctx.translate(16, 0);
+                const cpScale = scalesRef.current.candombe_piano;
+                ctx.scale(cpScale * 0.55, cpScale * 0.55);
+                ctx.globalCompositeOperation = 'screen';
+                ctx.drawImage(imgPiano, -15, -15, 30, 30);
+                ctx.restore();
+            } else {
+                ctx.save();
+                ctx.translate(16, 0);
+                const cpScale = scalesRef.current.candombe_piano;
+                ctx.scale(cpScale, cpScale);
+                ctx.fillStyle = '#4e342e';
+                ctx.beginPath();
+                ctx.moveTo(-7, -12);
+                ctx.lineTo(-5, 12);
+                ctx.quadraticCurveTo(0, 13, 5, 12);
+                ctx.lineTo(7, -12);
+                ctx.closePath();
+                ctx.fill();
+                ctx.fillStyle = '#efe5d9';
+                ctx.beginPath();
+                ctx.ellipse(0, -12, 7, 2.2, 0, 0, Math.PI*2);
+                ctx.fill();
+                ctx.restore();
+            }
             ctx.restore();
 
             // 2. CAJÓN PERUANO (x: 180, y: 115)
-            ctx.save();
-            const cjnScale = scalesRef.current.cajon;
-            ctx.translate(180, 115);
-            ctx.scale(cjnScale, cjnScale);
-            
-            // Wooden box body
-            ctx.fillStyle = '#8d6e63';
-            ctx.beginPath();
-            ctx.roundRect(-11, -19, 22, 38, 2);
-            ctx.fill();
-            ctx.strokeStyle = '#5d4037';
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-            
-            // Small screws indicators
-            ctx.fillStyle = 'rgba(0,0,0,0.35)';
-            ctx.fillRect(-9, -17, 1.2, 1.2);
-            ctx.fillRect(8, -17, 1.2, 1.2);
-            ctx.fillRect(-9, 15, 1.2, 1.2);
-            ctx.fillRect(8, 15, 1.2, 1.2);
-            ctx.restore();
+            const imgCajon = imagesRef.current.cajon;
+            if (imgCajon && imgCajon.complete) {
+                ctx.save();
+                const cjnScale = scalesRef.current.cajon;
+                ctx.translate(180, 115);
+                ctx.scale(cjnScale * 0.7, cjnScale * 0.7);
+                ctx.globalCompositeOperation = 'screen';
+                ctx.drawImage(imgCajon, -16, -20, 32, 40);
+                ctx.restore();
+            } else {
+                ctx.save();
+                const cjnScale = scalesRef.current.cajon;
+                ctx.translate(180, 115);
+                ctx.scale(cjnScale, cjnScale);
+                
+                // Wooden box body
+                ctx.fillStyle = '#8d6e63';
+                ctx.beginPath();
+                ctx.roundRect(-11, -19, 22, 38, 2);
+                ctx.fill();
+                ctx.strokeStyle = '#5d4037';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                
+                // Small screws indicators
+                ctx.fillStyle = 'rgba(0,0,0,0.35)';
+                ctx.fillRect(-9, -17, 1.2, 1.2);
+                ctx.fillRect(8, -17, 1.2, 1.2);
+                ctx.fillRect(-9, 15, 1.2, 1.2);
+                ctx.fillRect(8, 15, 1.2, 1.2);
+                ctx.restore();
+            }
 
             // 3. PALMAS (x: 235, y: 115)
             ctx.save();
@@ -515,109 +617,160 @@ export default function InteractiveInstrumentVisual({
 
             // --- F. MODERN RHYTHM PANEL ---
             // 1. HI-HAT (x: 290, y: 40)
-            ctx.save();
-            const hhScale = scalesRef.current.hihat;
-            ctx.translate(290, 40);
-            ctx.scale(hhScale, hhScale);
-            
-            // Gold bronze cymbal
-            const hhGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 14);
-            hhGrad.addColorStop(0, '#ffd54f');
-            hhGrad.addColorStop(0.7, '#e5a95f');
-            hhGrad.addColorStop(1, '#8c602d');
-            ctx.fillStyle = hhGrad;
-            ctx.beginPath();
-            ctx.arc(0, 0, 14, 0, Math.PI*2);
-            ctx.fill();
-            
-            // Center bell
-            ctx.fillStyle = '#ffca28';
-            ctx.beginPath();
-            ctx.arc(0, 0, 3, 0, Math.PI*2);
-            ctx.fill();
-            ctx.stroke();
-            ctx.restore();
+            const imgHihat = imagesRef.current.hihat;
+            if (imgHihat && imgHihat.complete) {
+                ctx.save();
+                const hhScale = scalesRef.current.hihat;
+                ctx.translate(290, 40);
+                ctx.scale(hhScale * 0.75, hhScale * 0.75);
+                ctx.globalCompositeOperation = 'screen';
+                ctx.drawImage(imgHihat, -20, -20, 40, 40);
+                ctx.restore();
+            } else {
+                ctx.save();
+                const hhScale = scalesRef.current.hihat;
+                ctx.translate(290, 40);
+                ctx.scale(hhScale, hhScale);
+                
+                // Gold bronze cymbal
+                const hhGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 14);
+                hhGrad.addColorStop(0, '#ffd54f');
+                hhGrad.addColorStop(0.7, '#e5a95f');
+                hhGrad.addColorStop(1, '#8c602d');
+                ctx.fillStyle = hhGrad;
+                ctx.beginPath();
+                ctx.arc(0, 0, 14, 0, Math.PI*2);
+                ctx.fill();
+                
+                // Center bell
+                ctx.fillStyle = '#ffca28';
+                ctx.beginPath();
+                ctx.arc(0, 0, 3, 0, Math.PI*2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+            }
 
             // 2. SNARE (x: 345, y: 40)
-            ctx.save();
-            const snScale = scalesRef.current.snare;
-            ctx.translate(345, 40);
-            ctx.scale(snScale, snScale);
-            
-            // Silver chrome body
-            const snGrad = ctx.createLinearGradient(-15, 0, 15, 0);
-            snGrad.addColorStop(0, '#90a4ae');
-            snGrad.addColorStop(0.5, '#eceff1');
-            snGrad.addColorStop(1, '#455a64');
-            ctx.fillStyle = snGrad;
-            ctx.beginPath();
-            ctx.arc(0, 0, 15, 0, Math.PI*2);
-            ctx.fill();
-            ctx.strokeStyle = '#37474f';
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-            
-            // White head
-            ctx.fillStyle = '#fcfdfe';
-            ctx.beginPath();
-            ctx.arc(0, 0, 13, 0, Math.PI*2);
-            ctx.fill();
-            ctx.restore();
+            const imgSnare = imagesRef.current.snare;
+            if (imgSnare && imgSnare.complete) {
+                ctx.save();
+                const snScale = scalesRef.current.snare;
+                ctx.translate(345, 40);
+                ctx.scale(snScale * 0.75, snScale * 0.75);
+                ctx.globalCompositeOperation = 'screen';
+                ctx.drawImage(imgSnare, -20, -20, 40, 40);
+                ctx.restore();
+            } else {
+                ctx.save();
+                const snScale = scalesRef.current.snare;
+                ctx.translate(345, 40);
+                ctx.scale(snScale, snScale);
+                
+                // Silver chrome body
+                const snGrad = ctx.createLinearGradient(-15, 0, 15, 0);
+                snGrad.addColorStop(0, '#90a4ae');
+                snGrad.addColorStop(0.5, '#eceff1');
+                snGrad.addColorStop(1, '#455a64');
+                ctx.fillStyle = snGrad;
+                ctx.beginPath();
+                ctx.arc(0, 0, 15, 0, Math.PI*2);
+                ctx.fill();
+                ctx.strokeStyle = '#37474f';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                
+                // White head
+                ctx.fillStyle = '#fcfdfe';
+                ctx.beginPath();
+                ctx.arc(0, 0, 13, 0, Math.PI*2);
+                ctx.fill();
+                ctx.restore();
+            }
 
             // 3. BASS KICK (x: 300, y: 115)
-            ctx.save();
-            const kScale = scalesRef.current.kick;
-            ctx.translate(300, 115);
-            ctx.scale(kScale, kScale);
-            
-            // Copper outer ring
-            ctx.fillStyle = '#d84315';
-            ctx.beginPath();
-            ctx.arc(0, 0, 24, 0, Math.PI*2);
-            ctx.fill();
-            ctx.strokeStyle = '#ffe082';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            
-            // Dark head
-            ctx.fillStyle = '#212121';
-            ctx.beginPath();
-            ctx.arc(0, 0, 20, 0, Math.PI*2);
-            ctx.fill();
-            
-            // Hole
-            ctx.fillStyle = '#050505';
-            ctx.beginPath();
-            ctx.arc(7, 5, 5, 0, Math.PI*2);
-            ctx.fill();
-            ctx.restore();
+            const imgKick = imagesRef.current.kick;
+            if (imgKick && imgKick.complete) {
+                ctx.save();
+                const kScale = scalesRef.current.kick;
+                ctx.translate(300, 115);
+                ctx.scale(kScale * 0.85, kScale * 0.85);
+                ctx.globalCompositeOperation = 'screen';
+                ctx.drawImage(imgKick, -25, -25, 50, 50);
+                ctx.restore();
+            } else {
+                ctx.save();
+                const kScale = scalesRef.current.kick;
+                ctx.translate(300, 115);
+                ctx.scale(kScale, kScale);
+                
+                // Copper outer ring
+                ctx.fillStyle = '#d84315';
+                ctx.beginPath();
+                ctx.arc(0, 0, 24, 0, Math.PI*2);
+                ctx.fill();
+                ctx.strokeStyle = '#ffe082';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Dark head
+                ctx.fillStyle = '#212121';
+                ctx.beginPath();
+                ctx.arc(0, 0, 20, 0, Math.PI*2);
+                ctx.fill();
+                
+                // Hole
+                ctx.fillStyle = '#050505';
+                ctx.beginPath();
+                ctx.arc(7, 5, 5, 0, Math.PI*2);
+                ctx.fill();
+                ctx.restore();
+            }
 
             // 4. SHAKER (x: 345, y: 115)
-            ctx.save();
-            const shScale = scalesRef.current.shaker;
-            let shMoveX = 0;
-            let shMoveY = 0;
-            if (shScale > 1.05) {
-                shMoveX = Math.sin(performance.now() * 0.07) * 5 * (shScale - 1.0);
-                shMoveY = Math.cos(performance.now() * 0.05) * 3 * (shScale - 1.0);
+            const imgShaker = imagesRef.current.shaker;
+            if (imgShaker && imgShaker.complete) {
+                ctx.save();
+                const shScale = scalesRef.current.shaker;
+                let shMoveX = 0;
+                let shMoveY = 0;
+                if (shScale > 1.05) {
+                    shMoveX = Math.sin(performance.now() * 0.07) * 5 * (shScale - 1.0);
+                    shMoveY = Math.cos(performance.now() * 0.05) * 3 * (shScale - 1.0);
+                }
+                ctx.translate(345 + shMoveX, 115 + shMoveY);
+                ctx.scale(shScale * 0.7, shScale * 0.7);
+                ctx.rotate(Math.PI / 10);
+                ctx.globalCompositeOperation = 'screen';
+                ctx.drawImage(imgShaker, -20, -20, 40, 40);
+                ctx.restore();
+            } else {
+                ctx.save();
+                const shScale = scalesRef.current.shaker;
+                let shMoveX = 0;
+                let shMoveY = 0;
+                if (shScale > 1.05) {
+                    shMoveX = Math.sin(performance.now() * 0.07) * 5 * (shScale - 1.0);
+                    shMoveY = Math.cos(performance.now() * 0.05) * 3 * (shScale - 1.0);
+                }
+                ctx.translate(345 + shMoveX, 115 + shMoveY);
+                ctx.scale(shScale, shScale);
+                ctx.rotate(Math.PI / 10);
+                
+                // Brushed steel cylinder
+                const shGrad = ctx.createLinearGradient(-7, 0, 7, 0);
+                shGrad.addColorStop(0, '#78909c');
+                shGrad.addColorStop(0.5, '#ffffff');
+                shGrad.addColorStop(1, '#37474f');
+                ctx.fillStyle = shGrad;
+                ctx.beginPath();
+                ctx.roundRect(-7, -15, 14, 30, 2);
+                ctx.fill();
+                ctx.strokeStyle = '#455a64';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.restore();
             }
-            ctx.translate(345 + shMoveX, 115 + shMoveY);
-            ctx.scale(shScale, shScale);
-            ctx.rotate(Math.PI / 10);
-            
-            // Brushed steel cylinder
-            const shGrad = ctx.createLinearGradient(-7, 0, 7, 0);
-            shGrad.addColorStop(0, '#78909c');
-            shGrad.addColorStop(0.5, '#ffffff');
-            shGrad.addColorStop(1, '#37474f');
-            ctx.fillStyle = shGrad;
-            ctx.beginPath();
-            ctx.roundRect(-7, -15, 14, 30, 2);
-            ctx.fill();
-            ctx.strokeStyle = '#455a64';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-            ctx.restore();
 
             ctx.restore();
 

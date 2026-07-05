@@ -9,7 +9,8 @@ import {
     ToggleButtonGroup,
     IconButton,
     Tooltip,
-    Divider
+    Divider,
+    Avatar
 } from '@mui/material';
 import { Eraser, Pen, Circle, Trash2 } from 'lucide-react';
 
@@ -46,6 +47,30 @@ const INSTRUMENTS_DISPLAY: { type: InstrumentType; label: string; group: string 
     { type: 'tom_floor', label: 'Floor', group: 'drums' },
     { type: 'click', label: 'Click', group: 'metronome' },
 ];
+
+const INSTRUMENT_IMAGES: Record<InstrumentType, string> = {
+    bombo_leguero: '/instruments/bombo_leguero.jpg',
+    caja: '/instruments/tom.jpg',
+    cajon: '/instruments/tom.jpg',
+    palmas: '/instruments/claves.jpg',
+    candombe_chico: '/instruments/tom.jpg',
+    candombe_repique: '/instruments/tom.jpg',
+    candombe_piano: '/instruments/tom.jpg',
+    surdo: '/instruments/kick.jpg',
+    rim: '/instruments/bombo_leguero.jpg',
+    clave: '/instruments/claves.jpg',
+    shaker: '/instruments/shaker.jpg',
+    kick: '/instruments/kick.jpg',
+    snare: '/instruments/snare.jpg',
+    hihat: '/instruments/hihat.jpg',
+    hihat_foot: '/instruments/hihat.jpg',
+    ride: '/instruments/hihat.jpg',
+    crash: '/instruments/hihat.jpg',
+    tom_high: '/instruments/tom.jpg',
+    tom_low: '/instruments/tom.jpg',
+    tom_floor: '/instruments/tom.jpg',
+    click: '/instruments/click.jpg'
+};
 
 const TIME_SIGNATURES = [
     { label: '4/4', beats: 4, accum: 4 },
@@ -322,7 +347,20 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                         return (
                             <React.Fragment key={inst.type}>
                                 <Stack direction="row" alignItems="center" spacing={1} sx={{ p: 1, bgcolor: 'rgba(255,255,255,0.02)', borderRight: '1px solid #333' }}>
-                                    {Icon && <Icon size={16} strokeWidth={1.5} color="#888" />}
+                                    {INSTRUMENT_IMAGES[inst.type] ? (
+                                        <Avatar 
+                                            src={INSTRUMENT_IMAGES[inst.type]} 
+                                            alt={inst.label} 
+                                            sx={{ 
+                                                width: 18, 
+                                                height: 18, 
+                                                border: '1px solid rgba(229, 169, 95, 0.4)',
+                                                boxShadow: '0 0 4px rgba(229, 169, 95, 0.2)'
+                                            }} 
+                                        />
+                                    ) : (
+                                        Icon && <Icon size={16} strokeWidth={1.5} color="#888" />
+                                    )}
                                     <Typography variant="body2" noWrap sx={{ fontSize: '0.8rem', color: '#ccc' }}>{inst.label}</Typography>
                                 </Stack>
 

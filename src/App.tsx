@@ -14,12 +14,20 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  Grid,
+  IconButton,
+  Tooltip
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import SpeedIcon from '@mui/icons-material/Speed';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
+import LibraryMusicIcon from '@mui/icons-material/LibraryMusic';
+import CloseIcon from '@mui/icons-material/Close';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import './App.css';
@@ -91,6 +99,7 @@ function App() {
   const [bpm, setBpm] = useState(120);
   const [selectedPatternId, setSelectedPatternId] = useState('rock_basic'); // Default to a groove for demo
   const [queuedPatternId, setQueuedPatternId] = useState<string | null>(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   // Visualization State
   const [currentStep, setCurrentStep] = useState(0);
@@ -738,6 +747,23 @@ function App() {
                 >
                   <Chip
                     size="small"
+                    icon={<LibraryMusicIcon style={{ fontSize: '0.9rem', color: '#181512' }} />}
+                    label="Explorar Biblioteca"
+                    onClick={() => setLibraryOpen(true)}
+                    clickable
+                    color="primary"
+                    sx={{
+                      fontFamily: '"Outfit", sans-serif',
+                      fontWeight: 'bold',
+                      fontSize: '0.7rem',
+                      px: 0.5,
+                      bgcolor: '#e5a95f',
+                      color: '#181512',
+                      '& .MuiChip-icon': { color: '#181512' }
+                    }}
+                  />
+                  <Chip
+                    size="small"
                     label="Metrónomo"
                     onClick={() => loadPreset('metronome')}
                     clickable
@@ -845,6 +871,131 @@ function App() {
         </Box>
 
       </Box>
+
+      {/* DIÁLOGO MODAL: BIBLIOTECA RÍTMICA PREMIUM */}
+      <Dialog
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            bgcolor: '#141210',
+            borderRadius: 4,
+            border: '1.5px solid rgba(229, 169, 95, 0.2)',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.8)',
+            backgroundImage: 'none'
+          }
+        }}
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1.5, borderBottom: '1px solid rgba(229,169,95,0.1)' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <LibraryMusicIcon sx={{ color: 'primary.main' }} />
+            <Typography variant="h6" sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 'bold', color: 'primary.main' }}>
+              Biblioteca Rítmica de la EMPA
+            </Typography>
+          </Box>
+          <IconButton onClick={() => setLibraryOpen(false)} sx={{ color: 'text.secondary', ml: 'auto' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 3, mt: 1.5 }}>
+          <Grid container spacing={2.5}>
+            {PRESET_PATTERNS.filter(p => p.id !== 'metronome_4_4').map((p) => {
+              const isSelected = selectedPatternId === p.id;
+              return (
+                <Grid item xs={12} sm={6} md={4} key={p.id}>
+                  <Box
+                    onClick={() => {
+                      loadPreset(p.id);
+                      setLibraryOpen(false);
+                    }}
+                    sx={{
+                      position: 'relative',
+                      height: 180,
+                      borderRadius: 3,
+                      overflow: 'hidden',
+                      cursor: 'pointer',
+                      border: isSelected ? '2px solid #e5a95f' : '1px solid rgba(215,204,200,0.1)',
+                      boxShadow: isSelected ? '0 0 15px rgba(229,169,95,0.3)' : '0 4px 12px rgba(0,0,0,0.4)',
+                      transition: 'all 0.2s ease-in-out',
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        borderColor: 'primary.main',
+                        boxShadow: '0 8px 24px rgba(229,169,95,0.25)'
+                      }
+                    }}
+                  >
+                    {/* Imagen de Portada de Fondo */}
+                    <Box
+                      component="img"
+                      src={p.coverImage || '/genres/genre_rock.jpg'}
+                      alt={p.name}
+                      sx={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        zIndex: 0
+                      }}
+                    />
+                    {/* Degradado oscuro para legibilidad del texto */}
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        background: 'linear-gradient(to top, rgba(12,11,10,0.95) 20%, rgba(12,11,10,0.4) 70%, rgba(12,11,10,0.1) 100%)',
+                        zIndex: 1
+                      }}
+                    />
+
+                    {/* Contenido de la Tarjeta */}
+                    <Box
+                      sx={{
+                        position: 'relative',
+                        zIndex: 2,
+                        height: '100%',
+                        p: 2,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'end'
+                      }}
+                    >
+                      <Typography variant="subtitle1" sx={{ fontFamily: '"Outfit", sans-serif', fontWeight: 'bold', color: 'primary.main', mb: 0.2, lineHeight: 1.2 }}>
+                        {p.name}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', mb: 1, fontSize: '0.68rem', lineHeight: 1.3 }}>
+                        {p.description}
+                      </Typography>
+                      
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Chip
+                          size="small"
+                          label={`${p.timeSignature[0]}/${p.timeSignature[1]}`}
+                          sx={{ height: 16, fontSize: '0.6rem', bgcolor: 'rgba(255,255,255,0.08)', color: 'text.primary', border: '1px solid rgba(255,255,255,0.15)' }}
+                        />
+                        {p.recommendedTempo && (
+                          <Chip
+                            size="small"
+                            label={`${p.recommendedTempo} BPM`}
+                            sx={{ height: 16, fontSize: '0.6rem', bgcolor: 'rgba(229,169,95,0.12)', color: 'primary.main', border: '1px solid rgba(229,169,95,0.2)' }}
+                          />
+                        )}
+                      </Stack>
+                    </Box>
+                  </Box>
+                </Grid>
+              );
+            })}
+          </Grid>
+        </DialogContent>
+      </Dialog>
     </ThemeProvider>
   );
 }

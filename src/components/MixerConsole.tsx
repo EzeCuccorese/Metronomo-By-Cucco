@@ -66,6 +66,17 @@ const getChannelForInstrument = (inst: string): string => {
   }
 };
 
+const CHANNEL_IMAGES: Record<string, string> = {
+  bombo: '/instruments/bombo_leguero.jpg',
+  clave: '/instruments/claves.jpg',
+  shaker: '/instruments/shaker.jpg',
+  kick: '/instruments/kick.jpg',
+  snare: '/instruments/snare.jpg',
+  hihat: '/instruments/hihat.jpg',
+  click: '/instruments/click.jpg',
+  synth: '/instruments/keyboard.jpg',
+};
+
 export const MixerConsole: React.FC<MixerConsoleProps> = ({
   pattern,
   currentStep,
@@ -251,6 +262,7 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
       <div className="mixer-channels-container">
         {channels.map((ch) => {
           const peak = peaks[ch.id] || 0;
+          const channelImg = CHANNEL_IMAGES[ch.id];
           
           // Generate 10 VU segments (Green, Yellow, Red)
           const segments = Array.from({ length: 10 }).map((_, idx) => {
@@ -269,6 +281,33 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
           return (
             <div key={ch.id} className={`mixer-channel-strip ${ch.isMuted ? 'muted' : ''}`}>
               
+              {/* Instrument Icon Avatar */}
+              {channelImg && (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginBottom: '10px',
+                  marginTop: '4px',
+                  position: 'relative'
+                }}>
+                  <img 
+                    src={channelImg} 
+                    alt={ch.name} 
+                    style={{
+                      width: '26px',
+                      height: '26px',
+                      borderRadius: '50%',
+                      border: `1.5px solid ${peak > 0.15 ? '#e5a95f' : 'rgba(215, 204, 200, 0.25)'}`,
+                      boxShadow: peak > 0.15 ? '0 0 10px rgba(229, 169, 95, 0.65)' : 'none',
+                      transition: 'all 0.08s ease-out',
+                      objectFit: 'cover',
+                      backgroundColor: '#110f0e'
+                    }}
+                  />
+                </div>
+              )}
+
               {/* 1. PANNING KNOB Area */}
               <div className="channel-pan-section">
                 <span className="channel-param-label">PAN</span>
