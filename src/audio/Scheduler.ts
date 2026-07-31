@@ -545,7 +545,7 @@ class Scheduler {
                 this.currentFormTotalBars++;
                 
                 const currentSec = this.formSections[this.currentSectionIdx];
-                if (this.currentFormBar >= currentSec.bars) {
+                if (currentSec && this.currentFormBar >= currentSec.bars) {
                     this.currentSectionIdx++;
                     this.currentFormBar = 0;
                     
@@ -564,7 +564,7 @@ class Scheduler {
                         return;
                     } else {
                         const newSec = this.formSections[this.currentSectionIdx];
-                        if (newSec.name.includes('(2da)')) {
+                        if (newSec && newSec.name.includes('(2da)')) {
                             this.currentFormPart = 2;
                         }
                     }
