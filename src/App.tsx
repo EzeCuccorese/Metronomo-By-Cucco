@@ -3,8 +3,8 @@ import {
   Box,
   useMediaQuery,
   useTheme,
+  Grid
 } from '@mui/material';
-import Grid from '@mui/material/Grid';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import './App.css';
@@ -252,8 +252,8 @@ function App() {
           />
 
           {/* MAIN DASHBOARD CONTENT */}
-          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5, minHeight: 0 }}>
-            <Grid container spacing={1.5} sx={{ flex: isDesktop ? 1 : 'none', minHeight: 0 }}>
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5, minHeight: 0, width: '100%' }}>
+            <Grid container spacing={1.5} sx={{ flex: isDesktop ? 1 : 'none', minHeight: 0, width: '100%' }}>
               
               {/* LEFT COLUMN: Visualizer & Mixer */}
               <Grid size={{ xs: 12, lg: 7 }} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, height: isDesktop ? '100%' : 'auto' }}>
