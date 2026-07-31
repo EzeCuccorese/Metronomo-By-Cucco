@@ -66,16 +66,8 @@ const getChannelForInstrument = (inst: string): string => {
   }
 };
 
-const CHANNEL_IMAGES: Record<string, string> = {
-  bombo: '/instruments/bombo_leguero.jpg',
-  clave: '/instruments/claves.jpg',
-  shaker: '/instruments/shaker.jpg',
-  kick: '/instruments/kick.jpg',
-  snare: '/instruments/snare.jpg',
-  hihat: '/instruments/hihat.jpg',
-  click: '/instruments/click.jpg',
-  synth: '/instruments/keyboard.jpg',
-};
+import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
+const CHANNEL_IMAGES = INSTRUMENT_IMAGES;
 
 export const MixerConsole: React.FC<MixerConsoleProps> = ({
   pattern,

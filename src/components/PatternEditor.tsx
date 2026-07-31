@@ -48,29 +48,7 @@ const INSTRUMENTS_DISPLAY: { type: InstrumentType; label: string; group: string 
     { type: 'click', label: 'Click', group: 'metronome' },
 ];
 
-const INSTRUMENT_IMAGES: Record<InstrumentType, string> = {
-    bombo_leguero: '/instruments/bombo_leguero.jpg',
-    caja: '/instruments/tom.jpg',
-    cajon: '/instruments/tom.jpg',
-    palmas: '/instruments/claves.jpg',
-    candombe_chico: '/instruments/tom.jpg',
-    candombe_repique: '/instruments/tom.jpg',
-    candombe_piano: '/instruments/tom.jpg',
-    surdo: '/instruments/kick.jpg',
-    rim: '/instruments/bombo_leguero.jpg',
-    clave: '/instruments/claves.jpg',
-    shaker: '/instruments/shaker.jpg',
-    kick: '/instruments/kick.jpg',
-    snare: '/instruments/snare.jpg',
-    hihat: '/instruments/hihat.jpg',
-    hihat_foot: '/instruments/hihat.jpg',
-    ride: '/instruments/hihat.jpg',
-    crash: '/instruments/hihat.jpg',
-    tom_high: '/instruments/tom.jpg',
-    tom_low: '/instruments/tom.jpg',
-    tom_floor: '/instruments/tom.jpg',
-    click: '/instruments/click.jpg'
-};
+import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
 
 const TIME_SIGNATURES = [
     { label: '4/4', beats: 4, accum: 4 },

@@ -1,10 +1,11 @@
 import { Box, Typography } from '@mui/material';
 import { useEffect, useRef, useCallback } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
+import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
 
 interface InteractiveInstrumentVisualProps {
     pattern: RhythmPattern;
-    currentStepIndex: number;
+    currentStepIndex?: number;
     onPreviewInstrument: (instrument: string) => void;
 }
 
@@ -31,7 +32,7 @@ interface SparkParticle {
 
 export default function InteractiveInstrumentVisual({
     pattern,
-    currentStepIndex,
+    currentStepIndex = -1,
     onPreviewInstrument
 }: InteractiveInstrumentVisualProps) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -42,21 +43,7 @@ export default function InteractiveInstrumentVisual({
 
     // Precargar imágenes reales de instrumentos
     useEffect(() => {
-        const instrumentImages: Record<string, string> = {
-            clave: '/instruments/claves.jpg',
-            caja: '/instruments/tom.jpg',
-            bombo: '/instruments/bombo_leguero.jpg',
-            candombe_chico: '/instruments/tom.jpg',
-            candombe_repique: '/instruments/tom.jpg',
-            candombe_piano: '/instruments/tom.jpg',
-            cajon: '/instruments/tom.jpg',
-            hihat: '/instruments/hihat.jpg',
-            snare: '/instruments/snare.jpg',
-            kick: '/instruments/kick.jpg',
-            shaker: '/instruments/shaker.jpg'
-        };
-
-        Object.entries(instrumentImages).forEach(([key, src]) => {
+        Object.entries(INSTRUMENT_IMAGES).forEach(([key, src]) => {
             const img = new Image();
             img.src = src;
             imagesRef.current[key] = img;
