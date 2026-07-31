@@ -17,7 +17,7 @@ class DrumSynthesizer {
     public loadPromise: Promise<void> | null = null;
 
     // Multi-channel mixer strips
-    private channels: Record<string, { gain: GainNode; panner: StereoPannerNode | null; originalVolume: number; isMuted: boolean }> = {};
+    private channels: Record<string, { gain: GainNode; panner: StereoPannerNode; originalVolume: number; isMuted: boolean }> = {};
 
     // Node Pools
     private gainPool: GainNode[] = [];
@@ -68,18 +68,12 @@ class DrumSynthesizer {
             const gainNode = this.context.createGain();
             gainNode.gain.value = 1.0;
 
-            const pannerNode = this.context.createStereoPanner ? this.context.createStereoPanner() : null;
-            if (pannerNode) {
-                pannerNode.pan.value = 0.0;
-            }
+            const pannerNode = this.context.createStereoPanner();
+            pannerNode.pan.value = 0.0;
 
             // Route: gainNode -> pannerNode -> masterGain
-            if (pannerNode) {
-                gainNode.connect(pannerNode);
-                pannerNode.connect(this.masterGain);
-            } else {
-                gainNode.connect(this.masterGain);
-            }
+            gainNode.connect(pannerNode);
+            pannerNode.connect(this.masterGain);
 
             this.channels[name] = {
                 gain: gainNode,
@@ -116,7 +110,7 @@ class DrumSynthesizer {
 
     public setChannelPan(name: string, pan: number) {
         const chan = this.channels[name];
-        if (chan && chan.panner) {
+        if (chan) {
             chan.panner.pan.setValueAtTime(pan, this.context.currentTime);
         }
     }
@@ -163,7 +157,9 @@ class DrumSynthesizer {
 
     private async loadAsset(name: string, url: string) {
         try {
-            const response = await fetch(url);
+            const baseUrl = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'http://localhost';
+            const resolvedUrl = new URL(url, baseUrl).href;
+            const response = await fetch(resolvedUrl);
             const arrayBuffer = await response.arrayBuffer();
             const audioBuffer = await this.context.decodeAudioData(arrayBuffer);
             this.audioBuffers.set(name, audioBuffer);

@@ -51,7 +51,7 @@ const mockAudioContext = {
         connect: vi.fn(),
         disconnect: vi.fn(),
     })),
-    createBufferSource: vi.fn((..._args: any[]) => {
+    createBufferSource: vi.fn((..._args: unknown[]) => {
         const src = {
             buffer: null,
             playbackRate: mockAudioParam(),
@@ -68,14 +68,14 @@ const mockAudioContext = {
         numberOfChannels: channels,
         length,
         sampleRate,
-        getChannelData: vi.fn((..._args: any[]) => new Float32Array(length)),
+        getChannelData: vi.fn((_channel?: number) => new Float32Array(length)),
     })),
-    decodeAudioData: vi.fn(async (..._args: any[]) => {
+    decodeAudioData: vi.fn(async (_data?: unknown) => {
         return {
             numberOfChannels: 1,
             length: 44100,
             sampleRate: 44100,
-            getChannelData: vi.fn(() => new Float32Array(44100)),
+            getChannelData: vi.fn((_channel?: number) => new Float32Array(44100)),
         };
     }),
     destination: {},
@@ -89,7 +89,7 @@ class MockAudioContext {
     createOscillator() { return mockAudioContext.createOscillator(); }
     createWaveShaper() { return mockAudioContext.createWaveShaper(); }
     createStereoPanner() { return mockAudioContext.createStereoPanner(); }
-    createBufferSource(..._args: any[]) { return mockAudioContext.createBufferSource(); }
+    createBufferSource(...args: unknown[]) { return mockAudioContext.createBufferSource(...args); }
     createBuffer(c: any, l: any, s: any) { return mockAudioContext.createBuffer(c, l, s); }
     decodeAudioData(d: any) { return mockAudioContext.decodeAudioData(d); }
     destination = mockAudioContext.destination;

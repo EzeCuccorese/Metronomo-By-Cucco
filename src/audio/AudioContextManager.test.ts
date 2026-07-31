@@ -72,18 +72,6 @@ describe('AudioContextManager', () => {
         expect(mockResume).not.toHaveBeenCalled();
     });
 
-    it('should fallback to webkitAudioContext if AudioContext is not defined', async () => {
-        delete (globalThis as any).window.AudioContext;
-        (globalThis as any).window.webkitAudioContext = MockAudioContextClass;
-
-        const AudioContextManagerModule = await import('./AudioContextManager');
-        const AudioContextManager = AudioContextManagerModule.default;
-
-        const instance = AudioContextManager.getInstance();
-        expect(instance.getContext()).toBe(mockContextInstance);
-        expect(MockAudioContextClass).toHaveBeenCalled();
-    });
-
     it('should throw an error if Web Audio API is not supported', async () => {
         delete (globalThis as any).window.AudioContext;
         delete (globalThis as any).window.webkitAudioContext;

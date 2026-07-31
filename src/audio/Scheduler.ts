@@ -3,7 +3,7 @@ import DrumSynthesizer from './DrumSynthesizer';
 import type { RhythmPattern, RhythmStep } from '../rhythms/RhythmPatterns';
 import { PolyphonicSynth } from './PolyphonicSynth';
 import type { AccompanimentStyle } from './PolyphonicSynth';
-import ClockWorker from './clock.worker?worker&inline'; // Vite Worker Import
+import ClockWorker from './clock.worker?worker'; // Vite Worker Import
 
 export interface FormSection {
     name: string;

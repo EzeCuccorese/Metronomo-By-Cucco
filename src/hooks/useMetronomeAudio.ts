@@ -18,22 +18,40 @@ export function useMetronomeAudio(pattern: RhythmPattern, options?: UseMetronome
   const [currentStep, setCurrentStep] = useState(0);
   const schedulerRef = useRef<Scheduler | null>(null);
 
+  const optionsRef = useRef(options);
+  const patternRef = useRef(pattern);
+  const bpmRef = useRef(bpm);
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
+
+  useEffect(() => {
+    patternRef.current = pattern;
+  }, [pattern]);
+
+  useEffect(() => {
+    bpmRef.current = bpm;
+  }, [bpm]);
+
   useEffect(() => {
     const scheduler = new Scheduler();
-    scheduler.setPattern(pattern);
-    scheduler.setTempo(bpm);
+    scheduler.setPattern(patternRef.current);
+    scheduler.setTempo(bpmRef.current);
     scheduler.setOnPlaybackUpdate((step, newBpm, _barCount, _totalBars, _activePattern, formUpdate) => {
       setCurrentStep(step);
-      options?.onStepChange?.(step);
-      if (newBpm !== bpm) {
-        setBpm(newBpm);
-        options?.onBpmChangeByTrainer?.(newBpm);
-      }
+      optionsRef.current?.onStepChange?.(step);
+      setBpm(prevBpm => {
+        if (newBpm !== prevBpm) {
+          optionsRef.current?.onBpmChangeByTrainer?.(newBpm);
+        }
+        return newBpm;
+      });
       if (formUpdate) {
-        options?.onFormStateChange?.(formUpdate);
+        optionsRef.current?.onFormStateChange?.(formUpdate);
       }
       if (step === 0) {
-        options?.onBarComplete?.();
+        optionsRef.current?.onBarComplete?.();
       }
     });
 
@@ -92,11 +110,14 @@ export function useMetronomeAudio(pattern: RhythmPattern, options?: UseMetronome
     schedulerRef.current?.setChannelPan(channel, pan);
   }, []);
 
-  const setChannelSolo = useCallback((_channel: string, _solo: boolean) => {
+  const setChannelSolo = useCallback((_channel?: string, _solo?: boolean) => {
+    void _channel;
+    void _solo;
     // Solo is handled via mute on other channels
   }, []);
 
-  const setPitchShift = useCallback((_semitones: number) => {
+  const setPitchShift = useCallback((_pitch?: number) => {
+    void _pitch;
     // Pitch shift not directly supported in Scheduler
   }, []);
 

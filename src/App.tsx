@@ -3,8 +3,8 @@ import {
   Box,
   useMediaQuery,
   useTheme,
-  Grid
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import './App.css';
