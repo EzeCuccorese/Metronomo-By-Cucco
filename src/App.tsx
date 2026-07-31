@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
-  useMediaQuery,
-  useTheme,
   Grid
 } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
@@ -26,9 +24,6 @@ import { HeaderToolbar } from './components/HeaderToolbar';
 import { GenreSelectorModal } from './components/GenreSelectorModal';
 
 function App() {
-  const theme = useTheme();
-  const isDesktop = useMediaQuery(theme.breakpoints.up('lg'));
-
   const [isPlaying, setIsPlaying] = useState(false);
   const [bpm, setBpm] = useState(120);
   const [selectedPatternId, setSelectedPatternId] = useState('rock_basic');
@@ -233,9 +228,9 @@ function App() {
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
-      <Box sx={{ height: isDesktop ? '100vh' : 'auto', minHeight: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', p: 1, bgcolor: '#070605', overflowY: isDesktop ? 'hidden' : 'auto', overflowX: 'hidden', justifyContent: 'center', alignItems: 'center' }}>
+      <Box sx={{ minHeight: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', p: { xs: 1, md: 2 }, bgcolor: '#070605', overflowY: 'auto', overflowX: 'hidden', alignItems: 'center' }}>
         
-        <Box className="studio-chassis console-wood-edge" sx={{ width: '100%', height: isDesktop ? '100%' : 'auto', minHeight: isDesktop ? 'none' : '100%', maxWidth: '1440px', display: 'flex', flexDirection: 'column', p: 1.5, boxSizing: 'border-box' }}>
+        <Box className="studio-chassis console-wood-edge" sx={{ width: '100%', maxWidth: '1440px', display: 'flex', flexDirection: 'column', p: 1.5, boxSizing: 'border-box' }}>
           
           {/* HEADER & GLOBAL CONTROLS */}
           <HeaderToolbar
@@ -253,17 +248,17 @@ function App() {
 
           {/* MAIN DASHBOARD CONTENT */}
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5, minHeight: 0, width: '100%' }}>
-            <Grid container spacing={1.5} sx={{ flex: isDesktop ? 1 : 'none', minHeight: 0, width: '100%' }}>
+            <Grid container spacing={1.5} sx={{ width: '100%' }}>
               
               {/* LEFT COLUMN: Visualizer & Mixer */}
-              <Grid size={{ xs: 12, lg: 7 }} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, height: isDesktop ? '100%' : 'auto' }}>
+              <Grid size={{ xs: 12, lg: 7 }} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                 <InteractiveInstrumentVisual 
                   pattern={currentPattern}
                   currentStepIndex={isPlaying ? currentStep : undefined}
                   onPreviewInstrument={handlePreviewSound}
                 />
                 
-                <Box sx={{ flex: 1, minHeight: isDesktop ? 0 : 320 }}>
+                <Box sx={{ flex: 1, minHeight: 320 }}>
                   <MixerConsole 
                     pattern={currentPattern}
                     currentStep={currentStep}
@@ -276,7 +271,7 @@ function App() {
               </Grid>
 
               {/* RIGHT COLUMN: Sequencer & Practice Tools */}
-              <Grid size={{ xs: 12, lg: 5 }} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, height: isDesktop ? '100%' : 'auto' }}>
+              <Grid size={{ xs: 12, lg: 5 }} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                 <Box sx={{ flex: 1, minHeight: 280 }}>
                   <PatternEditor 
                     pattern={currentPattern}
@@ -286,7 +281,7 @@ function App() {
                 </Box>
 
                 <Box sx={{ display: 'flex', gap: 1.5, flexDirection: { xs: 'column', sm: 'row' } }}>
-                  <Box sx={{ flex: 1 }}>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
                     <ConductorVisual 
                       pattern={currentPattern}
                       currentStepIndex={currentStep}
@@ -297,7 +292,7 @@ function App() {
                     />
                   </Box>
 
-                  <Box sx={{ flex: 1 }}>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
                     <HarmonyBuilder 
                       onUpdateProgression={handleUpdateProgression}
                       onVolumeChange={handleHarmonyVolumeChange}
