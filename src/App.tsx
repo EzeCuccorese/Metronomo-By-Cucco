@@ -272,32 +272,33 @@ function App() {
 
               {/* RIGHT COLUMN: Sequencer & Practice Tools */}
               <Grid size={{ xs: 12, lg: 5 }} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                <Box sx={{ flex: 1, minHeight: 280 }}>
-                  <PatternEditor 
-                    pattern={currentPattern}
-                    onPatternUpdate={setCurrentPattern}
-                    currentStepIndex={isPlaying ? currentStep : undefined}
-                  />
-                </Box>
+                
+                {/* 1. Visual Conductor Metronome */}
+                <ConductorVisual 
+                  pattern={currentPattern}
+                  currentStepIndex={currentStep}
+                  trainerActive={trainerActive}
+                  currentBarProgress={currentBarProgress}
+                  totalBarsInterval={trainerBars}
+                  bpm={bpm}
+                />
 
-                <Box sx={{ display: 'flex', gap: 1.5, flexDirection: 'column' }}>
-                  <ConductorVisual 
-                    pattern={currentPattern}
-                    currentStepIndex={currentStep}
-                    trainerActive={trainerActive}
-                    currentBarProgress={currentBarProgress}
-                    totalBarsInterval={trainerBars}
-                    bpm={bpm}
-                  />
+                {/* 2. Pattern Sequencer Editor */}
+                <PatternEditor 
+                  pattern={currentPattern}
+                  onPatternUpdate={setCurrentPattern}
+                  currentStepIndex={isPlaying ? currentStep : undefined}
+                />
 
-                  <HarmonyBuilder 
-                    onUpdateProgression={handleUpdateProgression}
-                    onVolumeChange={handleHarmonyVolumeChange}
-                    onStyleChange={handleAccompanimentStyleChange}
-                    activeHalfBarIndex={activeHarmonyIndex}
-                  />
-                </Box>
+                {/* 3. Harmony Sequencer Builder */}
+                <HarmonyBuilder 
+                  onUpdateProgression={handleUpdateProgression}
+                  onVolumeChange={handleHarmonyVolumeChange}
+                  onStyleChange={handleAccompanimentStyleChange}
+                  activeHalfBarIndex={activeHarmonyIndex}
+                />
 
+                {/* 4. Study Tools & Tracker */}
                 <StudyTools 
                   totalBarsPracticed={totalBarsPracticed}
                 />
