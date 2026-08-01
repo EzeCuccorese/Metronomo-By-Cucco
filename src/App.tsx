@@ -280,26 +280,22 @@ function App() {
                   />
                 </Box>
 
-                <Box sx={{ display: 'flex', gap: 1.5, flexDirection: { xs: 'column', sm: 'row' } }}>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <ConductorVisual 
-                      pattern={currentPattern}
-                      currentStepIndex={currentStep}
-                      trainerActive={trainerActive}
-                      currentBarProgress={currentBarProgress}
-                      totalBarsInterval={trainerBars}
-                      bpm={bpm}
-                    />
-                  </Box>
+                <Box sx={{ display: 'flex', gap: 1.5, flexDirection: 'column' }}>
+                  <ConductorVisual 
+                    pattern={currentPattern}
+                    currentStepIndex={currentStep}
+                    trainerActive={trainerActive}
+                    currentBarProgress={currentBarProgress}
+                    totalBarsInterval={trainerBars}
+                    bpm={bpm}
+                  />
 
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <HarmonyBuilder 
-                      onUpdateProgression={handleUpdateProgression}
-                      onVolumeChange={handleHarmonyVolumeChange}
-                      onStyleChange={handleAccompanimentStyleChange}
-                      activeHalfBarIndex={activeHarmonyIndex}
-                    />
-                  </Box>
+                  <HarmonyBuilder 
+                    onUpdateProgression={handleUpdateProgression}
+                    onVolumeChange={handleHarmonyVolumeChange}
+                    onStyleChange={handleAccompanimentStyleChange}
+                    activeHalfBarIndex={activeHarmonyIndex}
+                  />
                 </Box>
 
                 <StudyTools 
