@@ -1,0 +1,20 @@
+name: Gemini PR Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    uses: EzeCuccorese/ia-spec-ops-engine/.github/workflows/reusable-gemini-review.yml@main
+    secrets:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    with:
+      language: "Spanish"
+      exclude: "*.lock,package-lock.json,dist/*,build/*,public/audio/*"
+      standards: "SOLID, Clean Code, Resource Safety, Web Audio Timing Accuracy, React Performance"
+      model: "gemini-flash-latest"
