@@ -109,3 +109,5 @@ La imagen sirve el build con nginx:
 - **Content-Types correctos** para los samples de audio.
 
 La CI de GitHub Actions corre lint, typecheck, tests con cobertura, build, E2E y valida la configuración de nginx.
+
+La review automática de Gemini corre una sola vez al abrir el PR (o al marcarlo como listo). Para pedir otra, agregá el label `gemini-review`; el workflow lo quita solo al terminar.
