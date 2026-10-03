@@ -40,8 +40,18 @@ class FakeScheduler {
     setSilenceMode(...a: unknown[]) { this.record('setSilenceMode', a); }
     configureFormas(...a: unknown[]) { this.record('configureFormas', a); }
     playOneShot(...a: unknown[]) { this.record('playOneShot', a); }
+    setMelody(...a: unknown[]) { this.record('setMelody', a); }
+    setOnMelodyRecorded() {}
+    getPianoStatus() { return 'idle' as const; }
+    onPianoStatusChange() { return () => {}; }
+    preloadPiano() { this.record('preloadPiano', []); return Promise.resolve(true); }
+    pianoNoteOn(...a: unknown[]) { this.record('pianoNoteOn', a); }
+    pianoNoteOff(...a: unknown[]) { this.record('pianoNoteOff', a); }
+    releaseAllPianoKeys() {}
+    armMelodyRecording(...a: unknown[]) { this.record('armMelodyRecording', a); }
+    cancelMelodyRecording() {}
     emit(partial: Partial<PlaybackEvent>) {
-        this.onUpdate?.({ step: 0, bpm: 120, trainerBar: 0, totalBars: 0, pattern: this.pattern!, formState: null, chordIndex: -1, queuedPatternId: this.getQueuedPatternId(), ...partial });
+        this.onUpdate?.({ step: 0, bpm: 120, trainerBar: 0, totalBars: 0, pattern: this.pattern!, formState: null, chordIndex: -1, queuedPatternId: this.getQueuedPatternId(), melodyState: 'idle', recordingBar: 0, ...partial });
     }
 }
     return { FakeScheduler };

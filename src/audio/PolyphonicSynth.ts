@@ -1,6 +1,7 @@
 
 import AudioContextManager from './AudioContextManager';
 import { VoiceTracker } from './VoiceTracker';
+import type { PianoStyle } from './piano/pianoAccompaniment';
 
 // Basic frequency map for Octave 4 (Middle C)
 const BASE_FREQUENCIES: Record<string, number> = {
@@ -26,7 +27,8 @@ const getFrequency = (noteStr: string): number => {
     return base * Math.pow(2, octave - 4);
 };
 
-export type AccompanimentStyle = 'pad' | 'quarters' | 'offbeats' | 'arpeggio_8' | 'zamba_base';
+/** Synth styles are played here; piano styles are routed by the Scheduler to the PianoSampler. */
+export type AccompanimentStyle = 'pad' | 'quarters' | 'offbeats' | 'arpeggio_8' | 'zamba_base' | PianoStyle;
 
 export class PolyphonicSynth {
     private context: AudioContext;
@@ -93,6 +95,9 @@ export class PolyphonicSynth {
             case 'zamba_base':
                 this.playZambaBase(optimizedNotes, time, onBeats, beat);
                 break;
+            default:
+                // Piano styles reach this synth only as a fallback: a plain sustained chord.
+                this.playPad(optimizedNotes, duration, time);
         }
 
         return optimizedNotes; // Return for next cycle state
@@ -140,6 +145,14 @@ export class PolyphonicSynth {
         this.playVoice(bass, beat * 0.9, time, 'short');
         const chordTimes = onBeats.length > 1 ? onBeats.slice(1) : [beat / 2];
         chordTimes.forEach(t => upper.forEach(n => this.playVoice(n, beat * 0.8, time + t, 'short')));
+    }
+
+    /**
+     * One plucked note (used as the piano's fallback voice while its samples are missing).
+     * Short notes get the pluck envelope, longer ones the sustained one.
+     */
+    public playNote(note: string, duration: number, time: number) {
+        this.playVoice(note, Math.max(0.25, duration), time, duration < 0.35 ? 'pluck' : 'long');
     }
 
     private playVoice(note: string, duration: number, time: number, type: 'long' | 'short' | 'pluck' = 'long') {

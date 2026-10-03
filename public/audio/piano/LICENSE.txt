@@ -1,0 +1,17 @@
+Piano samples in this folder
+============================
+
+Source:   Salamander Grand Piano V3 (Yamaha C5), recorded by Alexander Holm
+          https://archive.org/details/SalamanderGrandPianoV3
+          Files taken from the tone.js audio repository (https://tonejs.github.io/audio/salamander/)
+License:  Creative Commons Attribution 3.0 Unported (CC-BY 3.0)
+          https://creativecommons.org/licenses/by/3.0/
+
+Changes made for this app:
+- Only 17 notes are used: C, D#, F# and A from octave 2 to 5, plus C6.
+- Each note was trimmed to 2.8 s (leading silence removed, 0.8 s fade-out at the end).
+- Re-encoded to Ogg Opus (56 kb/s, 48 kHz, stereo).
+- In the app, notes between samples are transposed from the nearest one by changing the playback rate.
+
+Muestras de piano (ES): Salamander Grand Piano de Alexander Holm, licencia CC-BY 3.0.
+Se recortaron y recodificaron las notas como se detalla arriba.

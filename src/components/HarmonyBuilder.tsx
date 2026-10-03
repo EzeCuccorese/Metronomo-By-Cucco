@@ -24,6 +24,8 @@ const STYLES: { id: AccompanimentStyle; label: string }[] = [
     { id: 'offbeats', label: 'Contratiempos (Reggae/Ska)' },
     { id: 'arpeggio_8', label: 'Arpegio (8 corcheas)' },
     { id: 'zamba_base', label: 'Base Zamba' },
+    { id: 'piano', label: 'Piano (bajo + acordes)' },
+    { id: 'piano_arpeggio', label: 'Piano (arpegio)' },
 ];
 
 const KEYS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];

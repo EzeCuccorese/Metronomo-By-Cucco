@@ -51,6 +51,15 @@ function installAudioProbe() {
         }
         return (originalStart as (...a: unknown[]) => void).call(this, when, ...rest);
     } as typeof AudioScheduledSourceNode.prototype.start;
+
+    // AudioBufferSourceNode overrides start(), so the hook above never sees sampled voices.
+    const originalBufferStart = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function (this: AudioBufferSourceNode, when?: number, ...rest: number[]) {
+        if (this.context instanceof AudioContext) {
+            probe.starts.push({ when: when ?? 0, at: this.context.currentTime, kind: this.constructor.name });
+        }
+        return (originalBufferStart as (...a: unknown[]) => void).call(this, when, ...rest);
+    } as typeof AudioBufferSourceNode.prototype.start;
 }
 
 export class AudioProbe {

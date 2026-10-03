@@ -25,6 +25,7 @@ import HarmonyBuilder from './components/HarmonyBuilder';
 import InteractiveInstrumentVisual from './components/InteractiveInstrumentVisual';
 import { MixerConsole } from './components/MixerConsole';
 import { PracticeModes } from './components/PracticeModes';
+import PianoPanel from './components/PianoPanel';
 import type { FormasSettings, SilenceSettings } from './components/PracticeModes';
 import { darkTheme } from './theme/darkTheme';
 import { HeaderToolbar } from './components/HeaderToolbar';
@@ -243,7 +244,10 @@ function App() {
                 </Fill>
               </Grid>
 
-              {/* Row 5, piano panel slot: the upcoming PianoPanel goes here as <Grid size={{ xs: 12 }}><PianoPanel /></Grid>. Intentionally empty (renders nothing) until then. */}
+              {/* Row 5: piano (harmony, playable keyboard, melody looper) */}
+              <Grid size={12}>
+                <PianoPanel engine={engine} isPlaying={isPlaying} />
+              </Grid>
 
             </Grid>
           </Box>

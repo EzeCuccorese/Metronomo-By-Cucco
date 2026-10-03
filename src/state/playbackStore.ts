@@ -1,4 +1,4 @@
-import type { FormState } from '../audio/Scheduler';
+import type { FormState, MelodyRecordState } from '../audio/Scheduler';
 
 /**
  * High-frequency playback state (changes on every step).
@@ -13,6 +13,8 @@ export interface PlaybackSnapshot {
     totalBars: number;
     formState: FormState | null;
     queuedPatternId: string | null;
+    melodyState: MelodyRecordState;
+    recordingBar: number;
 }
 
 export interface PlaybackStore {
@@ -28,6 +30,8 @@ export const INITIAL_PLAYBACK: PlaybackSnapshot = {
     totalBars: 0,
     formState: null,
     queuedPatternId: null,
+    melodyState: 'idle',
+    recordingBar: 0,
 };
 
 const sameFormState = (a: FormState | null, b: FormState | null): boolean => {

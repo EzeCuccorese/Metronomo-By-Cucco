@@ -182,4 +182,15 @@ describe('PolyphonicSynth', () => {
         synth.playChord(['C4', 'E4', 'G4'], 1.5, 0, 'quarters', [], 3);
         expect(startTimesOf()).toEqual([0, 0.5, 1]);
     });
+
+    it('plays single notes for the piano fallback (pluck when short, sustained when long)', () => {
+        synth.playNote('C4', 0.2, 1);
+        synth.playNote('E4', 1.5, 2);
+        expect(startTimesOf()).toEqual([1, 2]);
+    });
+
+    it('plays a piano style as a sustained chord if it ever reaches the synth', () => {
+        expect(synth.playChord(['C4', 'E4', 'G4'], 2, 0, 'piano')).toEqual(['C4', 'E4', 'G4']);
+        expect(startTimesOf()).toEqual([0]);
+    });
 });

@@ -39,6 +39,7 @@ const INITIAL_CHANNELS: ChannelState[] = [
   { id: 'hihat', name: 'HI-HAT', volume: 0.85, pan: 0.2, isMuted: false },
   { id: 'click', name: 'CLICK', volume: 0.9, pan: 0.05, isMuted: false },
   { id: 'synth', name: 'TECLADO', volume: 0.7, pan: -0.3, isMuted: false },
+  { id: 'piano', name: 'PIANO', volume: 0.9, pan: 0.1, isMuted: false },
 ];
 
 const INITIAL_MIXER: MixerState = { channels: INITIAL_CHANNELS, clickRulePatternId: null };
@@ -47,9 +48,19 @@ const isChannelState = (v: unknown): v is ChannelState =>
   isPlainObject(v) && isString(v.id) && (CHANNEL_IDS as readonly string[]).includes(v.id) && isString(v.name) &&
   isNumber(v.volume) && v.volume >= 0 && v.volume <= 1.5 && isNumber(v.pan) && v.pan >= -1 && v.pan <= 1 && isBoolean(v.isMuted);
 
-const isMixerState = (v: unknown): v is MixerState =>
-  isPlainObject(v) && Array.isArray(v.channels) && v.channels.length === CHANNEL_IDS.length &&
-  v.channels.every(isChannelState) && (v.clickRulePatternId === null || isString(v.clickRulePatternId));
+/**
+ * Keeps every valid stored channel and adds the ones this version introduced
+ * (e.g. PIANO), so an upgrade never resets the user's mix.
+ */
+const sanitizeMixerState = (v: unknown): MixerState | undefined => {
+  if (!isPlainObject(v) || !Array.isArray(v.channels)) return undefined;
+  if (!(v.clickRulePatternId === null || isString(v.clickRulePatternId))) return undefined;
+  const stored = new Map<string, ChannelState>();
+  v.channels.forEach(ch => { if (isChannelState(ch) && !stored.has(ch.id)) stored.set(ch.id, ch); });
+  if (stored.size === 0) return undefined;
+  const channels = INITIAL_CHANNELS.map(def => stored.get(def.id) ?? def);
+  return { channels, clickRulePatternId: v.clickRulePatternId };
+};
 
 /** Rhythm presets bring their own groove, so the guide click starts muted there. */
 const shouldMuteClick = (pattern: RhythmPattern) =>
@@ -71,7 +82,7 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
   onPanChange,
   onMuteChange,
 }) => {
-  const [mixer, setMixer] = usePersistentState<MixerState>('mixer', INITIAL_MIXER, isMixerState);
+  const [mixer, setMixer] = usePersistentState<MixerState>('mixer', INITIAL_MIXER, { sanitize: sanitizeMixerState });
   const channels = mixer.channels;
   const store = usePlaybackStore();
 

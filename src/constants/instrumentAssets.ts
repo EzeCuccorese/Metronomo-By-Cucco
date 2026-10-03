@@ -21,7 +21,8 @@ export const INSTRUMENT_IMAGES: Record<string, string> = {
     tom_low: '/instruments/tom.webp',
     tom_floor: '/instruments/tom.webp',
     click: '/instruments/click.webp',
-    synth: '/instruments/keyboard.webp'
+    synth: '/instruments/keyboard.webp',
+    piano: '/instruments/keyboard.webp'
 };
 
 export const getInstrumentImage = (type: string): string => {

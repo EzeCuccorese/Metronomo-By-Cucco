@@ -11,7 +11,11 @@ Metrónomo profesional y entrenador rítmico para músicos, con foco en ritmos f
   - Los ritmos editados se pueden restaurar al original.
 - **Compases compuestos.** El BPM siempre se refiere a la negra (♩). En 6/8 y 12/8 se muestra además el pulso con puntillo (♩.) y el click acentúa los grupos.
 - **Mixer.** Volumen, paneo (mouse, touch o teclado), mute por canal y vúmetros.
-- **Constructor armónico.** Progresiones por grados con acompañamiento (pad, negras, contratiempos, arpegio, base de zamba).
+- **Constructor armónico.** Progresiones por grados con acompañamiento (pad, negras, contratiempos, arpegio, base de zamba, **piano**: bajo + acordes o arpegio, con conducción de voces).
+- **Piano.** Piano de cola sampleado (Salamander Grand Piano) con canal propio en el mixer.
+  - Teclado en pantalla de 2 octavas (mouse, touch multitáctil y glissando), con los nombres de las notas en español.
+  - Resalta en vivo las notas del acorde que está sonando y, si querés, la escala del tono.
+  - *Modo melodía*: grabás de 1 a 4 compases sobre el metrónomo (con precuenta), quedan cuantizados a la subdivisión y suenan en loop sincronizados con el compás. Se pueden deshacer y borrar, y se guardan.
 - **Modos de práctica.**
   - *Entrenador de velocidad*: sube (o baja) el BPM cada N compases. Tiene modo lineal y modo resistencia.
   - *Compases en silencio*: silencia compases al azar para que sostengas el tempo solo.
@@ -27,6 +31,17 @@ Metrónomo profesional y entrenador rítmico para músicos, con foco en ritmos f
 | `T` | Tap tempo |
 | `↑` / `↓` | ±1 BPM (`Shift`: ±5) |
 
+**Piano** (con el foco en el piano, o en toda la página si activás *Teclado PC*):
+
+| Tecla | Acción |
+| --- | --- |
+| `A` `W` `S` `E` `D` `F` `T` `G` `Y` `H` `U` `J` `K` | Do, Do♯, Re, Re♯, Mi, Fa, Fa♯, Sol, Sol♯, La, La♯, Si, Do |
+| `O` `L` `P` `Ñ` | Do♯, Re, Re♯, Mi de la octava siguiente |
+| `Z` / `X` | Bajar / subir octava |
+| `Enter` | Toca la tecla del piano que tiene el foco (`←` / `→` cambian de tecla) |
+
+Mientras el piano toca, `T` es Fa♯ y no tap tempo. `Espacio` y las flechas `↑` / `↓` siguen siendo del metrónomo.
+
 ## Arquitectura
 
 ```
@@ -35,6 +50,7 @@ src/
 │   ├── Scheduler.ts         Agendado lookahead, cola visual, trainer, silencios, formas
 │   ├── DrumSynthesizer.ts   Samples (Opus/OGG) + síntesis de respaldo, mixer por canales
 │   ├── PolyphonicSynth.ts   Acompañamiento armónico
+│   ├── piano/               Piano sampleado, patrones de acompañamiento, grabación y loop de melodías
 │   ├── VoiceTracker.ts      Corte inmediato de voces agendadas al detener
 │   └── instrumentChannels.ts  Ruteo instrumento → canal (fuente única de verdad)
 ├── hooks/
@@ -52,6 +68,8 @@ src/
 - Detener corta en unos 12 ms todas las voces ya agendadas y la armonía sostenida.
 - El click guía va por un bus limpio, sin saturación ni EQ.
 - Los datos guardados en `localStorage` se validan estructuralmente antes de usarse. Un valor corrupto nunca rompe la app.
+- Las notas de la melodía grabada se agendan en el mismo *lookahead* que la batería (nada de `setTimeout`), así el loop no se corre del compás.
+- El piano se descarga recién cuando lo usás. Cada nota está en Ogg Opus (los navegadores actuales lo decodifican todos). Si no carga ninguna, suena con el sintetizador.
 
 ## Compatibilidad
 
@@ -79,6 +97,10 @@ La app requiere un contexto seguro (`crypto.randomUUID`, Web Audio, service work
 
 - **Unitarios e integración (Vitest).** Cubren el Scheduler (timing, cambios de patrón, trainer, silencios y formas), los sintetizadores (ruteo, corte de voces), los hooks, la persistencia y la app completa con un motor simulado.
 - **End-to-end (Playwright).** Corren sobre el bundle de producción servido con los mismos headers de seguridad que nginx. Una sonda intercepta la salida del `AudioContext` y mide el audio que realmente se escucha. Así se verifica, por ejemplo, que el preset Metrónomo marca cada tiempo, que una edición de la grilla suena en el compás siguiente y que detener deja el audio en silencio. También se prueban el teclado, la persistencia, la PWA y la accesibilidad (axe).
+
+## Créditos
+
+Piano: [Salamander Grand Piano](https://archive.org/details/SalamanderGrandPianoV3) de Alexander Holm, licencia [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/). Se usan 17 notas (Do2 a Do6, cada tercera menor), recortadas a 2,8 s y recodificadas. Detalle en [`public/audio/piano/LICENSE.txt`](public/audio/piano/LICENSE.txt).
 
 ## Despliegue
 
