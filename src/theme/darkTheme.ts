@@ -26,9 +26,13 @@ export const darkTheme = createTheme({
     h3: { fontSize: '3rem', fontWeight: 800, fontFamily: '"Share Tech Mono", monospace' },
     h5: { fontSize: '1.5rem', fontWeight: 900, letterSpacing: '0.05em' },
     subtitle2: { fontWeight: 700 },
+    overline: { fontWeight: 800, letterSpacing: '0.14em', lineHeight: 1.6 },
+    caption: { lineHeight: 1.4 },
   },
+  // MUI multiplies numeric `borderRadius` props by this value (`borderRadius: 4` = 16px).
+  // The previous value of 20 turned every `borderRadius: 3/4` into 60/80px pills.
   shape: {
-    borderRadius: 20,
+    borderRadius: 4,
   },
   components: {
     MuiPaper: {
@@ -37,10 +41,22 @@ export const darkTheme = createTheme({
           backgroundImage: 'none',
           backgroundColor: '#161412',
           border: '1px solid rgba(215, 204, 200, 0.06)',
-          backdropFilter: 'blur(16px)',
-          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+          boxShadow: '0 6px 20px rgba(0, 0, 0, 0.35)',
         },
       },
+    },
+    // Comfortable touch targets on coarse pointers (phones/tablets).
+    MuiToggleButton: {
+      styleOverrides: { root: { '@media (pointer: coarse)': { minHeight: 40, minWidth: 40 } } },
+    },
+    MuiIconButton: {
+      styleOverrides: { root: { '@media (pointer: coarse)': { minHeight: 40, minWidth: 40 } } },
+    },
+    MuiButton: {
+      styleOverrides: { root: { '@media (pointer: coarse)': { minHeight: 40 } } },
+    },
+    MuiOutlinedInput: {
+      styleOverrides: { root: { '@media (pointer: coarse)': { minHeight: 44 } } },
     },
   },
 });

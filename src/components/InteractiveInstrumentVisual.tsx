@@ -1,4 +1,5 @@
 import { Box, Typography } from '@mui/material';
+import type { SxProps, Theme } from '@mui/material/styles';
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
@@ -36,6 +37,8 @@ interface InteractiveInstrumentVisualProps {
     pattern: RhythmPattern;
     isPlaying: boolean;
     onPreviewInstrument: (instrument: string, modifier?: string) => void;
+    /** Extra styles for the outer card (e.g. to match the surrounding panels). */
+    sx?: SxProps<Theme>;
 }
 
 /** Keyboard / screen-reader alternative to the clickable canvas. */
@@ -265,7 +268,8 @@ function useLazyRef<T extends object>(init: () => T): React.MutableRefObject<T> 
 export default function InteractiveInstrumentVisual({
     pattern,
     isPlaying,
-    onPreviewInstrument
+    onPreviewInstrument,
+    sx
 }: InteractiveInstrumentVisualProps) {
     const store = usePlaybackStore();
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -530,7 +534,7 @@ export default function InteractiveInstrumentVisual({
     };
 
     return (
-        <Box sx={{
+        <Box sx={[{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -541,7 +545,7 @@ export default function InteractiveInstrumentVisual({
             borderRadius: 4,
             border: '1px solid rgba(229, 169, 95, 0.08)',
             boxShadow: 'inset 0 0 25px rgba(0,0,0,0.6)'
-        }}>
+        }, ...(Array.isArray(sx) ? sx : [sx])]}>
             <Typography
                 variant="overline"
                 sx={{

@@ -65,7 +65,7 @@ const NumberField: React.FC<{
             if (Number.isFinite(n) && e.target.value !== '') onChange(Math.min(max, Math.max(min, Math.round(n))));
         }}
         slotProps={{ htmlInput: { min, max } }}
-        sx={{ width: 110 }}
+        sx={{ flex: '1 1 132px', minWidth: 132 }}
     />
 );
 
@@ -135,7 +135,7 @@ export const PracticeModes: React.FC<PracticeModesProps> = ({
                     <Stack spacing={2.5}>
                         {/* SPEED TRAINER */}
                         <Box>
-                            <FormControlLabel
+                            <FormControlLabel sx={{ ml: 0 }}
                                 control={<Switch checked={trainer.active} onChange={(e) => updateTrainer({ active: e.target.checked })} />}
                                 label={<Typography sx={{
                                     fontWeight: 700
@@ -174,7 +174,7 @@ export const PracticeModes: React.FC<PracticeModesProps> = ({
 
                         {/* SILENCE MODE */}
                         <Box>
-                            <FormControlLabel
+                            <FormControlLabel sx={{ ml: 0 }}
                                 control={<Switch checked={silence.active} onChange={(e) => onSilenceChange({ ...silence, active: e.target.checked })} />}
                                 label={<Typography sx={{
                                     fontWeight: 700
@@ -208,7 +208,7 @@ export const PracticeModes: React.FC<PracticeModesProps> = ({
 
                         {/* FOLK FORMS */}
                         <Box>
-                            <FormControlLabel
+                            <FormControlLabel sx={{ ml: 0 }}
                                 control={<Switch checked={formas.enabled} disabled={isPlaying} onChange={(e) => onFormasChange({ ...formas, enabled: e.target.checked })} />}
                                 label={<Typography sx={{
                                     fontWeight: 700
@@ -222,7 +222,7 @@ export const PracticeModes: React.FC<PracticeModesProps> = ({
                                     flexWrap: "wrap",
                                     mt: 1
                                 }}>
-                                <FormControl size="small" sx={{ minWidth: 180 }}>
+                                <FormControl size="small" sx={{ flex: '1 1 200px', minWidth: 200 }}>
                                     <InputLabel id="formas-genre-label">Forma</InputLabel>
                                     <Select
                                         labelId="formas-genre-label"
