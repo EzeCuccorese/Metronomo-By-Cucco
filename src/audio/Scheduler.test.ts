@@ -157,6 +157,21 @@ describe('Scheduler', () => {
             });
         });
 
+        it('keeps harmony voice leading on the progression across a stall', () => {
+            scheduler.setHarmonyProgression([['C4'], ['D4'], ['E4'], ['F4']]);
+            scheduler.setPattern(makePattern({ subdivision: 4, steps: [] }));
+            scheduler.setTempo(120);
+            scheduler.start();
+            run(scheduler, 0.5); // C4 sounds at 0.05 s
+
+            stall(1.0); // the D4 half bar (1.05 s) is missed
+            run(scheduler, 0.6);
+
+            const played = poly.playChord.mock.calls.map(c => ({ chord: c[0], previous: c[4] }));
+            expect(played.map(p => p.chord)).toEqual([['C4'], ['E4']]);
+            expect(played[1].previous).toEqual(['D4']);
+        });
+
         it('still plays a note that is only slightly late', () => {
             scheduler.setPattern(makePattern({ subdivision: 4, steps: [] }));
             scheduler.setTempo(120);

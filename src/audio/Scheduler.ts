@@ -495,7 +495,10 @@ class Scheduler {
                 const chord = this.harmonyProgression[chordIndex];
                 const segmentDuration = getBarDurationSeconds(this.tempo, ts) / segments;
 
-                if (!silent && chord && chord.length > 0 && !(this.silenceModeActive && this.isMutedBar)) {
+                if (silent) {
+                    // Missed during a stall: keep voice leading anchored to the progression.
+                    if (chord && chord.length > 0) this.lastChord = chord;
+                } else if (chord && chord.length > 0 && !(this.silenceModeActive && this.isMutedBar)) {
                     this.polySynth.playChord(chord, segmentDuration, time, this.accompanimentStyle, this.lastChord, groups / segments);
                     this.lastChord = chord;
                 }
