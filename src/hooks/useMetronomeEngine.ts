@@ -3,6 +3,8 @@ import Scheduler from '../audio/Scheduler';
 import AudioContextManager from '../audio/AudioContextManager';
 import type { FormGenre, PlaybackEvent, TrainerConfig } from '../audio/Scheduler';
 import type { AccompanimentStyle } from '../audio/PolyphonicSynth';
+import type { PianoStatus } from '../audio/piano/PianoSampler';
+import type { Melody } from '../audio/piano/melody';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 import { createPlaybackStore } from '../state/playbackStore';
 
@@ -36,6 +38,7 @@ interface EngineSettings {
     trainer: TrainerConfig | null;
     silence: { active: boolean; chance: number } | null;
     formas: { enabled: boolean; genre: FormGenre; introBars: number } | null;
+    melody: Melody | null;
 }
 
 /**
@@ -52,8 +55,11 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
     const startingRef = useRef(false);
 
     const settingsRef = useRef<EngineSettings>({
-        channels: {}, harmony: [], harmonyVolume: null, accompaniment: null, trainer: null, silence: null, formas: null
+        channels: {}, harmony: [], harmonyVolume: null, accompaniment: null, trainer: null, silence: null, formas: null, melody: null
     });
+    const [harmonyProgression, setHarmonyState] = useState<string[][]>([]);
+    const [pianoStatus, setPianoStatus] = useState<PianoStatus>('idle');
+    const melodyListenersRef = useRef(new Set<(melody: Melody, isLateUpdate: boolean) => void>());
     const callbacksRef = useRef({ onBpmChange, onPatternChange });
     const patternRef = useRef(pattern);
     const bpmRef = useRef(bpm);
@@ -86,6 +92,12 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
         if (s.trainer) scheduler.configureTrainer(s.trainer);
         if (s.silence) scheduler.setSilenceMode(s.silence.active, s.silence.chance);
         if (s.formas) scheduler.configureFormas(s.formas.enabled, s.formas.genre, s.formas.introBars);
+        scheduler.setMelody(s.melody);
+        const unsubscribePiano = scheduler.onPianoStatusChange(setPianoStatus);
+        scheduler.setOnMelodyRecorded((melody, isLateUpdate) => {
+            settingsRef.current.melody = melody;
+            melodyListenersRef.current.forEach(l => l(melody, isLateUpdate));
+        });
         scheduler.setPattern(patternRef.current);
         scheduler.setTempo(bpmRef.current);
         lastEngineBpmRef.current = bpmRef.current;
@@ -98,6 +110,8 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
                 totalBars: event.totalBars,
                 formState: event.formState,
                 queuedPatternId: event.queuedPatternId,
+                melodyState: event.melodyState,
+                recordingBar: event.recordingBar,
             });
             // Compare by id: queued events may still carry the pre-edit object of the same pattern.
             if (event.pattern.id !== patternRef.current.id) {
@@ -111,11 +125,13 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
         });
         scheduler.setOnStopped(() => {
             setPlaying(false);
-            store.update({ chordIndex: -1, queuedPatternId: null });
+            store.update({ chordIndex: -1, queuedPatternId: null, melodyState: 'idle' });
         });
 
         schedulerRef.current = scheduler;
         return () => {
+            unsubscribePiano();
+            setPianoStatus('idle'); // the next scheduler starts with its own sampler
             scheduler.dispose();
             if (schedulerRef.current === scheduler) schedulerRef.current = null;
             isPlayingRef.current = false;
@@ -182,7 +198,7 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
         if (!scheduler || !isPlayingRef.current) return;
         scheduler.stop();
         setPlaying(false);
-        store.update({ chordIndex: -1, queuedPatternId: null });
+        store.update({ chordIndex: -1, queuedPatternId: null, melodyState: 'idle' });
 
         // A switch requested during playback that never reached its bar line is applied now.
         const pending = pendingPatternRef.current;
@@ -236,6 +252,7 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
     const setHarmonyProgression = useCallback((chords: string[][]) => {
         settingsRef.current.harmony = chords;
         schedulerRef.current?.setHarmonyProgression(chords);
+        setHarmonyState(prev => JSON.stringify(prev) === JSON.stringify(chords) ? prev : chords);
     }, []);
 
     const setHarmonyVolume = useCallback((volume: number) => {
@@ -263,6 +280,57 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
         schedulerRef.current?.configureFormas(enabled, genre, introBars);
     }, []);
 
+    // --- Piano ---
+    const pianoNoteOn = useCallback((midi: number, velocity: number) => {
+        // Not awaited: the note is scheduled now and sounds as soon as the context runs.
+        void AudioContextManager.getInstance().resume().catch(() => undefined);
+        schedulerRef.current?.pianoNoteOn(midi, velocity);
+    }, []);
+
+    const pianoNoteOff = useCallback((midi: number) => {
+        schedulerRef.current?.pianoNoteOff(midi);
+    }, []);
+
+    const releaseAllPianoKeys = useCallback(() => {
+        schedulerRef.current?.releaseAllPianoKeys();
+    }, []);
+
+    const preloadPiano = useCallback(() => {
+        void schedulerRef.current?.preloadPiano();
+    }, []);
+
+    const setMelody = useCallback((melody: Melody | null) => {
+        settingsRef.current.melody = melody;
+        schedulerRef.current?.setMelody(melody);
+    }, []);
+
+    /** Called with every take the recorder finishes. Returns the unsubscribe function. */
+    const subscribeMelodyRecorded = useCallback((listener: (melody: Melody, isLateUpdate: boolean) => void) => {
+        melodyListenersRef.current.add(listener);
+        return () => { melodyListenersRef.current.delete(listener); };
+    }, []);
+
+    /**
+     * Records a take of `bars` bars. Stopped: starts the transport with one bar of count-in.
+     * Playing: recording starts at the next bar line.
+     */
+    const recordMelody = useCallback(async (bars: number) => {
+        if (isPlayingRef.current) {
+            schedulerRef.current?.armMelodyRecording(bars, 0);
+            store.update({ melodyState: 'armed' });
+            return;
+        }
+        await start();
+        if (!isPlayingRef.current) return;
+        schedulerRef.current?.armMelodyRecording(bars, 1);
+        store.update({ melodyState: 'armed' });
+    }, [start, store]);
+
+    const cancelMelodyRecording = useCallback(() => {
+        schedulerRef.current?.cancelMelodyRecording();
+        store.update({ melodyState: 'idle' });
+    }, [store]);
+
     return {
         store,
         isPlaying,
@@ -280,6 +348,16 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
         configureTrainer,
         setSilenceMode,
         configureFormas,
+        harmonyProgression,
+        pianoStatus,
+        pianoNoteOn,
+        pianoNoteOff,
+        releaseAllPianoKeys,
+        preloadPiano,
+        setMelody,
+        subscribeMelodyRecorded,
+        recordMelody,
+        cancelMelodyRecording,
     };
 }
 

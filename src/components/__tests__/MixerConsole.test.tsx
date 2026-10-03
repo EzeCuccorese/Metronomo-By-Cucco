@@ -68,4 +68,39 @@ describe('MixerConsole', () => {
         fireEvent.change(screen.getByLabelText('Volumen KICK'), { target: { value: '0.5' } });
         expect(onVolumeChange).toHaveBeenLastCalledWith('kick', 0.5);
     });
+
+    it('has a PIANO strip', () => {
+        const { onVolumeChange } = renderMixer();
+        expect(screen.getByTestId('mixer-channel-piano')).toHaveTextContent('PIANO');
+        expect(onVolumeChange).toHaveBeenCalledWith('piano', 0.9);
+    });
+
+    it('keeps a mix saved before the PIANO strip existed, adding the new strip', () => {
+        const old = {
+            clickRulePatternId: METRONOME_PATTERN_ID,
+            channels: [
+                { id: 'bombo', name: 'BOMBO', volume: 0.4, pan: 0, isMuted: true },
+                { id: 'synth', name: 'TECLADO', volume: 0.2, pan: -0.3, isMuted: false },
+                { id: 'ghost', name: 'X', volume: 1, pan: 0, isMuted: false },
+            ],
+        };
+        localStorage.setItem('metronomo:v1:mixer', JSON.stringify(old));
+        const { onVolumeChange, onMuteChange } = renderMixer();
+        expect(onVolumeChange).toHaveBeenCalledWith('bombo', 0.4);
+        expect(onMuteChange).toHaveBeenCalledWith('bombo', true);
+        expect(onVolumeChange).toHaveBeenCalledWith('synth', 0.2);
+        expect(onVolumeChange).toHaveBeenCalledWith('piano', 0.9);
+        expect(screen.getByTestId('mute-piano')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it.each([
+        ['not an object', 'x'],
+        ['no valid channel', { clickRulePatternId: null, channels: [{ id: 'ghost' }] }],
+        ['bad click rule', { clickRulePatternId: 3, channels: [] }],
+        ['channels missing', { clickRulePatternId: null }],
+    ])('falls back to the default mix when the stored one is %s', (_, value) => {
+        localStorage.setItem('metronomo:v1:mixer', JSON.stringify(value));
+        const { onVolumeChange } = renderMixer();
+        expect(onVolumeChange).toHaveBeenCalledWith('bombo', 1);
+    });
 });
