@@ -385,6 +385,36 @@ describe('Scheduler', () => {
             expect(calls[0][3]).toBe('quarters');
             expect(calls[1][0]).toEqual(['F4', 'A4', 'C5']);
             expect(calls[1][4]).toEqual(['C4', 'E4', 'G4']);
+            expect(calls[0][5]).toBe(2); // two quarter-note beats per half bar of 4/4
+        });
+
+        it('in 3/4 changes chord once per bar, on the downbeat, with a 3-beat grid (zamba)', () => {
+            scheduler.setHarmonyProgression([['C4'], ['C4'], ['G3'], ['G3']]); // two 1-bar chords
+            scheduler.setAccompanimentStyle('zamba_base');
+            scheduler.setPattern(makePattern({ timeSignature: [3, 4], subdivision: 12 }));
+            scheduler.setTempo(120); // 1.5 s per bar
+            scheduler.start();
+            run(scheduler, 2.9);
+
+            const calls = poly.playChord.mock.calls;
+            expect(calls).toHaveLength(2);
+            expect(calls[0][0]).toEqual(['C4']);
+            expect(calls[1][0]).toEqual(['G3']);
+            expect(calls[1][2] - calls[0][2]).toBeCloseTo(1.5, 6); // one bar apart: never on the "and" of 2
+            expect(calls[0][1]).toBeCloseTo(1.5, 6);
+            expect(calls[0][5]).toBe(3);
+        });
+
+        it('splits 6/8 into its two dotted-quarter halves', () => {
+            scheduler.setHarmonyProgression([['C4'], ['F4']]);
+            scheduler.setPattern(makePattern({ timeSignature: [6, 8], subdivision: 12 }));
+            scheduler.setTempo(120);
+            scheduler.start();
+            run(scheduler, 1.4);
+            const calls = poly.playChord.mock.calls;
+            expect(calls).toHaveLength(2);
+            expect(calls[1][2] - calls[0][2]).toBeCloseTo(0.75, 6);
+            expect(calls[0][5]).toBe(1);
         });
 
         it('restarts the progression when it changes', () => {

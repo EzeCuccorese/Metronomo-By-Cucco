@@ -30,6 +30,8 @@ class MockScheduler {
     setSilenceMode = vi.fn();
     configureFormas = vi.fn();
     playOneShot = vi.fn();
+    ready: Promise<void> = Promise.resolve();
+    whenReady = () => this.ready;
     constructor() { instances.push(this); }
 }
 
@@ -132,5 +134,35 @@ describe('useMetronomeEngine', () => {
         rerender({ pattern: next, bpm: 140 });
         expect(scheduler().setPattern).toHaveBeenLastCalledWith(next);
         expect(scheduler().setTempo).toHaveBeenLastCalledWith(140);
+    });
+
+    it('waits for the samples, and a stop pressed meanwhile cancels the start', async () => {
+        const { result, scheduler } = setup();
+        let release!: () => void;
+        scheduler().ready = new Promise<void>(r => { release = r; });
+
+        let starting!: Promise<void>;
+        act(() => { starting = result.current.start(); });
+        await act(async () => { await Promise.resolve(); });
+        expect(scheduler().start).not.toHaveBeenCalled(); // still waiting for samples
+
+        act(() => result.current.toggle()); // user changes their mind
+        await act(async () => { release(); await starting; });
+        expect(scheduler().start).not.toHaveBeenCalled();
+        expect(result.current.isPlaying).toBe(false);
+    });
+
+    it('stays stopped and reports the error when the audio context cannot resume', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        resume.mockRejectedValueOnce(new Error('interrupted'));
+        const { result, scheduler } = setup();
+        await act(async () => { await result.current.start(); });
+        expect(scheduler().start).not.toHaveBeenCalled();
+        expect(result.current.isPlaying).toBe(false);
+        expect(error).toHaveBeenCalled();
+        error.mockRestore();
+
+        await act(async () => { await result.current.start(); }); // next attempt works
+        expect(scheduler().start).toHaveBeenCalledTimes(1);
     });
 });

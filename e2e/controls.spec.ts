@@ -43,6 +43,23 @@ test.describe('controls', () => {
         await expect(page.getByTestId('play-toggle')).toHaveText(/INICIAR/);
     });
 
+    test('Space plays/stops even right after painting a grid cell with the mouse', async ({ page }) => {
+        await openApp(page);
+        await selectPreset(page, 'Patrón Personalizado (Editor)');
+        const cell = page.getByTestId('cell-kick-1');
+        await cell.click();
+        await expect(cell).toHaveAttribute('aria-pressed', 'true');
+        await cell.focus(); // focus stays on the cell button, as after a real click
+
+        await page.keyboard.press('Space');
+        await expect(page.getByTestId('play-toggle')).toHaveText(/DETENER/);
+        await expect(cell).toHaveAttribute('aria-pressed', 'true'); // not toggled off by Space
+        await page.keyboard.press('ArrowUp');
+        await page.keyboard.press('Space');
+        await expect(page.getByTestId('play-toggle')).toHaveText(/INICIAR/);
+        await expect(cell).toHaveAttribute('aria-pressed', 'true');
+    });
+
     test('settings survive a reload', async ({ page }) => {
         await openApp(page);
         await selectPreset(page, 'Zamba');
