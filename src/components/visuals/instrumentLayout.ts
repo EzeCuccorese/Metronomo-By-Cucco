@@ -48,6 +48,7 @@ export function toCanvasCoords(
     clientY: number,
     rect: { left: number; top: number; width: number; height: number },
 ): { x: number; y: number } {
+    if (!rect.width || !rect.height) return { x: 0, y: 0 };
     return {
         x: (clientX - rect.left) * (CANVAS_W / rect.width),
         y: (clientY - rect.top) * (CANVAS_H / rect.height),

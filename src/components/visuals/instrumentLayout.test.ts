@@ -28,6 +28,10 @@ describe('toCanvasCoords', () => {
         expect(toCanvasCoords(770, 370, rect)).toEqual({ x: CANVAS_W, y: CANVAS_H });
         expect(toCanvasCoords(390, 195, rect)).toEqual({ x: 190, y: 87.5 });
     });
+
+    it('returns the origin for a collapsed (zero-size) canvas', () => {
+        expect(toCanvasCoords(5, 5, { left: 0, top: 0, width: 0, height: 0 })).toEqual({ x: 0, y: 0 });
+    });
 });
 
 describe('initial state', () => {
