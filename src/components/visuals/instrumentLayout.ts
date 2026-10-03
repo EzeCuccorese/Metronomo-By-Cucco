@@ -411,3 +411,10 @@ export function advanceAndPrune<T>(items: T[], advance: (item: T) => boolean): T
     }
     return items;
 }
+
+/** Largest font size (stepping down from `start` to `min`) whose measured text width fits `maxW`. */
+export function fitFontSize(measure: (fontSize: number) => number, start: number, maxW: number, min = 8, step = 0.5): number {
+    let fs = start;
+    while (fs > min && measure(fs) > maxW) fs -= step;
+    return fs;
+}

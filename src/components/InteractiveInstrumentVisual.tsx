@@ -9,6 +9,7 @@ import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 import {
     CLICK_BOOST,
     advanceAndPrune,
+    fitFontSize,
     advanceParticle,
     advanceRipple,
     createParticle,
@@ -268,6 +269,7 @@ export default function InteractiveInstrumentVisual({
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const wrapRef = useRef<HTMLDivElement | null>(null);
     const layoutRef = useRef<InstrumentLayout>(computeLayout(380));
+    const nameFontsRef = useRef<{ layout: InstrumentLayout | null; sizes: Map<string, number> }>({ layout: null, sizes: new Map() });
     const [canvasHeight, setCanvasHeight] = useState(() => computeLayout(380).height);
     const contentBoxesRef = useRef<Record<string, ContentBox>>({});
     const particlesRef = useRef<SparkParticle[]>([]);
@@ -345,7 +347,16 @@ export default function InteractiveInstrumentVisual({
         const resizeObserver = new ResizeObserver(applySize);
         resizeObserver.observe(wrap);
         applySize();
-        return () => resizeObserver.disconnect();
+        // Web fonts change text metrics: drop cached name sizes once they finish loading.
+        const fonts = document.fonts;
+        const invalidateNames = () => {
+            nameFontsRef.current = { layout: null, sizes: new Map() };
+        };
+        fonts?.addEventListener?.('loadingdone', invalidateNames);
+        return () => {
+            resizeObserver.disconnect();
+            fonts?.removeEventListener?.('loadingdone', invalidateNames);
+        };
     }, [applySize]);
 
     // Dynamic scale trigger on sequencer ticks (subscribed to the store: no React re-render per step)
@@ -437,13 +448,20 @@ export default function InteractiveInstrumentVisual({
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
             ctx.fillStyle = 'rgba(240, 222, 196, 0.82)';
+            // Name font sizes depend only on the layout (and loaded fonts): measure once, not every frame.
+            if (nameFontsRef.current.layout !== layout) nameFontsRef.current = { layout, sizes: new Map() };
+            const nameFonts = nameFontsRef.current.sizes;
+            const baseFs = layout.mode === 'stack' ? 12 : 11;
             layout.items.forEach(it => {
-                let fs = layout.mode === 'stack' ? 12 : 11;
-                ctx.font = `small-caps 600 ${fs}px Outfit, sans-serif`;
-                while (fs > 8 && ctx.measureText(it.name).width > it.nameMaxW) {
-                    fs -= 0.5;
-                    ctx.font = `small-caps 600 ${fs}px Outfit, sans-serif`;
+                let fs = nameFonts.get(it.key);
+                if (fs === undefined) {
+                    fs = fitFontSize(size => {
+                        ctx.font = `small-caps 600 ${size}px Outfit, sans-serif`;
+                        return ctx.measureText(it.name).width;
+                    }, baseFs, it.nameMaxW);
+                    nameFonts.set(it.key, fs);
                 }
+                ctx.font = `small-caps 600 ${fs}px Outfit, sans-serif`;
                 ctx.fillText(it.name, it.nameX, it.nameY);
             });
             ctx.restore();
@@ -502,7 +520,8 @@ export default function InteractiveInstrumentVisual({
     const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
         const pt = pointerToLayout(e);
         if (!pt || !canvasRef.current) return;
-        canvasRef.current.style.cursor = hitTestInstrument(pt.layout, pt.x, pt.y) ? 'pointer' : 'default';
+        const nextCursor = hitTestInstrument(pt.layout, pt.x, pt.y) ? 'pointer' : 'default';
+        if (canvasRef.current.style.cursor !== nextCursor) canvasRef.current.style.cursor = nextCursor;
     };
 
     return (

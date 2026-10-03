@@ -5,6 +5,7 @@ import {
     STACK_BREAKPOINT,
     computeLayout,
     contentBox,
+    fitFontSize,
     fitImageToPad,
     itemByKey,
     padKey,
@@ -330,5 +331,19 @@ describe('advanceAndPrune', () => {
     it('keeps survivor order and handles empty lists', () => {
         expect(advanceAndPrune([1, 2, 3, 4], n => n % 2 === 0)).toEqual([2, 4]);
         expect(advanceAndPrune([], () => true)).toEqual([]);
+    });
+});
+
+describe('fitFontSize', () => {
+    const measure = (fs: number) => fs * 10;
+    it('keeps the start size when it fits', () => {
+        expect(fitFontSize(measure, 12, 200)).toBe(12);
+    });
+    it('shrinks in 0.5 steps until the text fits', () => {
+        expect(fitFontSize(measure, 12, 100)).toBe(10);
+        expect(fitFontSize(measure, 12, 107)).toBe(10.5);
+    });
+    it('never goes below the minimum', () => {
+        expect(fitFontSize(measure, 12, 1)).toBe(8);
     });
 });
