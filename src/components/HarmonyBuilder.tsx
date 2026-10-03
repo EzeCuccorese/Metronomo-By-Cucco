@@ -199,7 +199,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
             </Stack>
 
             {/* Global Settings */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 1 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 0.7fr) minmax(0, 1.3fr)', gap: 1, mb: 1 }}>
                 <FormControl size="small">
                     <InputLabel id="harmony-key-label">Tono</InputLabel>
                     <Select value={rootKey} labelId="harmony-key-label" label="Tono" onChange={(e) => setRootKey(e.target.value)}>
@@ -215,7 +215,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
                 </FormControl>
             </Box>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: 1, mb: 2 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 76px', gap: 1, mb: 2 }}>
                 <FormControl size="small">
                     <InputLabel id="harmony-style-label">Estilo</InputLabel>
                     <Select value={style} labelId="harmony-style-label" label="Estilo" onChange={(e) => handleStyleChange(e.target.value as AccompanimentStyle)}>
