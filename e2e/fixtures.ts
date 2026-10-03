@@ -51,6 +51,15 @@ function installAudioProbe() {
         }
         return (originalStart as (...a: unknown[]) => void).call(this, when, ...rest);
     } as typeof AudioScheduledSourceNode.prototype.start;
+
+    // AudioBufferSourceNode overrides start(), so the hook above never sees sampled voices.
+    const originalBufferStart = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function (this: AudioBufferSourceNode, when?: number, ...rest: number[]) {
+        if (this.context instanceof AudioContext) {
+            probe.starts.push({ when: when ?? 0, at: this.context.currentTime, kind: this.constructor.name });
+        }
+        return (originalBufferStart as (...a: unknown[]) => void).call(this, when, ...rest);
+    } as typeof AudioBufferSourceNode.prototype.start;
 }
 
 export class AudioProbe {
@@ -78,6 +87,15 @@ export class AudioProbe {
             { timeout: (seconds + 10) * 1000 }
         );
         return this.peakBetween(start, start + seconds);
+    }
+
+    /** Distinct scheduled start times (audio clock) of sources of a given node type. */
+    async startTimes(kind: string, from: number, to: number): Promise<number[]> {
+        return this.page.evaluate(([k, a, b]) => {
+            const starts = (window as unknown as { __probe: { starts: { when: number; kind: string }[] } }).__probe.starts;
+            const times = starts.filter(s => s.kind === k && s.when >= a && s.when <= b).map(s => s.when);
+            return [...new Set(times.map(t => Math.round(t * 1e6) / 1e6))].sort((x, y) => x - y);
+        }, [kind, from, to] as const);
     }
 
     /** Peaks per audio-time window, useful to see *when* sound appears. */

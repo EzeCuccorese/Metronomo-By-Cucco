@@ -48,8 +48,8 @@ export function usePianoComputerKeyboard(options: Options) {
 
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
-            const target = e.target instanceof HTMLElement ? e.target : null;
-            if (target && (isTextEditing(target) || target.closest(OWNS_LETTERS))) return;
+            const target = e.target instanceof Element ? e.target : null; // SVG icons are Elements, not HTMLElements
+            if (target && ((target instanceof HTMLElement && isTextEditing(target)) || target.closest(OWNS_LETTERS))) return;
             if (!isActive()) return;
 
             const shift = OCTAVE_KEYS[e.code];

@@ -307,8 +307,12 @@ describe('PianoSampler', () => {
         await ready();
         const ids = Array.from({ length: MAX_VOICES }, () => sampler.noteOn(60, 0, 0.8));
         ids.forEach(id => sampler.noteOff(id, 0));
+        const oldestEnv = ctx.gains[ctx.gains.length - MAX_VOICES];
+        const before = oldestEnv.gain.setTargetAtTime.mock.calls.length;
         sampler.noteOn(62, 0, 0.8);
         expect(sampler.activeVoiceCount).toBe(MAX_VOICES);
+        // The forced fast fade is applied even though a release was already scheduled.
+        expect(oldestEnv.gain.setTargetAtTime.mock.calls.length).toBe(before + 1);
     });
 
     it('silence() cuts only the requested buses', async () => {

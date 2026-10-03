@@ -300,6 +300,7 @@ export class PianoSampler {
         }
         victim ??= this.voices.values().next().value;
         if (!victim) return;
+        victim.released = false; // force the fast fade even if a release was already scheduled
         this.noteOff(victim.id, time, STEAL_TAU);
         this.voices.delete(victim.id);
     }

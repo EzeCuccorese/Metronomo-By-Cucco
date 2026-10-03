@@ -80,6 +80,13 @@ describe('usePianoComputerKeyboard', () => {
         menu.appendChild(item);
         container.appendChild(menu);
         key('keydown', 'KeyS', {}, item);
+        // An SVG icon inside a dialog is an Element but not an HTMLElement.
+        const dialog = document.createElement('div');
+        dialog.setAttribute('role', 'dialog');
+        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        dialog.appendChild(icon);
+        document.body.appendChild(dialog);
+        key('keydown', 'KeyD', {}, icon as unknown as HTMLElement);
         expect(onNoteOn).not.toHaveBeenCalled();
     });
 

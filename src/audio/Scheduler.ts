@@ -709,7 +709,8 @@ class Scheduler {
             this.melodyBarPlayed = allowed;
         }
 
-        const recording = this.take !== null && !this.take.isFinished;
+        // An armed take (count-in) also silences the old loop: it is about to be replaced.
+        const recording = (this.take !== null && !this.take.isFinished) || this.pendingTake !== null;
         // Missed steps (stall) still move the recorder and the loop position, but nothing sounds.
         if (silent || !this.melody || recording || !allowed || (this.silenceModeActive && this.isMutedBar)) return;
         const loopBar = this.melodyBar % this.melody.bars;

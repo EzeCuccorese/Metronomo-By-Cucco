@@ -812,6 +812,15 @@ describe('Scheduler', () => {
             expect(melodyPlays().filter(p => p.midi === 72)).toEqual([]);
         });
 
+        it('does not play the old melody over the count-in of an armed take', () => {
+            scheduler.setMelody({ bars: 1, subdivision: 4, notes: [{ step: 0, midi: 72, velocity: 1, length: 1 }] });
+            scheduler.start();
+            scheduler.armMelodyRecording(1, 2);
+            run(scheduler, 2 * BAR - 0.2);
+            expect(scheduler.getMelodyState()).toBe('armed');
+            expect(melodyPlays()).toEqual([]);
+        });
+
         it('drops a take if the meter changes under it, and cancel/stop clear the recorder', () => {
             const recorded = vi.fn();
             scheduler.setOnMelodyRecorded(recorded);

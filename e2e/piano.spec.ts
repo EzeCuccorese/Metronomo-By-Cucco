@@ -99,10 +99,11 @@ test.describe('piano', () => {
         const t0 = await probe.now();
         await probe.listen(2.2);
         // A piano note fluctuates while it rings: onsets closer than 0.3 s belong to the same note.
-        const onsets = (await probe.onsetsAbove(AUDIBLE, t0, t0 + 2.2))
-            .reduce<number[]>((kept, t) => (kept.length === 0 || t - kept[kept.length - 1] > 0.3 ? [...kept, t] : kept), []);
-        expect(onsets.length).toBeGreaterThanOrEqual(2);
-        const gaps = onsets.slice(1).map((t, i) => t - onsets[i]);
-        gaps.forEach(g => expect(Math.abs(g - 1)).toBeLessThan(0.08)); // once per 1 s bar
+        // (a) The loop is audible: presence only, sampled peaks are too coarse for timing.
+        expect(await probe.peakBetween(t0, t0 + 2.2)).toBeGreaterThan(AUDIBLE);
+        // (b) Exact periodicity comes from the scheduled start times of the sample voices.
+        const starts = await probe.startTimes('AudioBufferSourceNode', t0, t0 + 3);
+        expect(starts.length).toBeGreaterThanOrEqual(2);
+        starts.slice(1).forEach((t, i) => expect(t - starts[i]).toBeCloseTo(1, 3)); // once per 1 s bar
     });
 });
