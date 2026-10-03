@@ -15,7 +15,9 @@ function subscribe(callback: () => void): () => void {
     return () => mql.removeEventListener('change', callback);
 }
 
+const getServerSnapshot = (): boolean => false;
+
 /** Tracks `prefers-reduced-motion: reduce`, updating when the OS setting changes. */
 export function usePrefersReducedMotion(): boolean {
-    return useSyncExternalStore(subscribe, getPrefersReducedMotion, () => false);
+    return useSyncExternalStore(subscribe, getPrefersReducedMotion, getServerSnapshot);
 }
