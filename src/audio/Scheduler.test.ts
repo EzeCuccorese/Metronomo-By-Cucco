@@ -127,6 +127,72 @@ describe('Scheduler', () => {
         });
     });
 
+    describe('main-thread stalls', () => {
+        /** Freezes the scheduler for `seconds` while the audio clock keeps running. */
+        const stall = (seconds: number) => {
+            ctx.currentTime = Math.round((ctx.currentTime + seconds) * 1e6) / 1e6;
+        };
+
+        it('skips the steps missed during a short stall and stays on the original grid', () => {
+            scheduler.setPattern(makePattern({ subdivision: 4, steps: [] }));
+            scheduler.setTempo(120);
+            scheduler.start();
+            run(scheduler, 0.5);
+            const before = playsOf('click');
+            const gridStart = before[0].time;
+
+            // Longer than the lookahead window: the beat at 1.05 s is missed.
+            stall(0.9);
+            const resumedAt = ctx.currentTime;
+            run(scheduler, 1.5);
+
+            const clicks = playsOf('click');
+            const after = clicks.slice(before.length);
+            // No burst: the missed beat is dropped, not played late.
+            expect(after[0].time).toBeGreaterThan(resumedAt);
+            // Phase is kept: every click lies on the grid that started before the stall.
+            clicks.forEach(c => {
+                const beats = (c.time - gridStart) / 0.5;
+                expect(beats).toBeCloseTo(Math.round(beats), 9);
+            });
+        });
+
+        it('still plays a note that is only slightly late', () => {
+            scheduler.setPattern(makePattern({ subdivision: 4, steps: [] }));
+            scheduler.setTempo(120);
+            scheduler.start();
+            run(scheduler, 0.5);
+            const count = playsOf('click').length;
+
+            // Beats at 0.05 and 0.55 s are already queued; the next one (1.05 s) is
+            // reached by a scheduler that wakes up 10 ms after it.
+            stall(1.05 + 0.01 - ctx.currentTime);
+            (scheduler as unknown as { scheduler: () => void }).scheduler();
+            const late = playsOf('click')[count];
+            expect(late.time).toBeCloseTo(ctx.currentTime, 9);
+        });
+
+        it('restarts the grid from now after a long stall instead of fast-forwarding', () => {
+            const events: PlaybackEvent[] = [];
+            scheduler.setOnPlaybackUpdate(e => events.push(e));
+            scheduler.setPattern(makePattern({ subdivision: 4, steps: [] }));
+            scheduler.setTempo(120);
+            scheduler.start();
+            run(scheduler, 0.5);
+            const count = playsOf('click').length;
+
+            stall(5);
+            run(scheduler, 0.025);
+            const resumeAt = ctx.currentTime;
+            run(scheduler, 0.1);
+
+            const next = playsOf('click')[count];
+            expect(next.time).toBeCloseTo(resumeAt, 9);
+            // ~10 bars of silence did not count as practised bars.
+            expect(Math.max(...events.map(e => e.totalBars))).toBeLessThanOrEqual(1);
+        });
+    });
+
     describe('pattern changes', () => {
         it('hot-swaps edits of the playing pattern on the next step (C2/C3 regression)', () => {
             const original = makePattern({ subdivision: 4 });
