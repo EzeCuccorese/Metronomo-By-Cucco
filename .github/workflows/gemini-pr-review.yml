@@ -8,6 +8,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# A reusable workflow can't get more token permissions than its caller grants:
+# without this block the nested job (which needs pull-requests: write to post
+# the review) fails at startup when the repository default token is read-only.
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   review:
     uses: EzeCuccorese/ia-spec-ops-engine/.github/workflows/reusable-gemini-review.yml@main
