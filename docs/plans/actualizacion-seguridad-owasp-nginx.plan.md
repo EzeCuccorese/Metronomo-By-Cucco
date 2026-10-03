@@ -1,3 +1,5 @@
+> **Estado:** Completado (2026-10). Commit `36d5f1d` (cabeceras OWASP en nginx), refinado en `b413173`. Las cabeceras viven hoy en `deploy/security-headers.conf` (incluido desde `nginx.conf`), no inline. `X-XSS-Protection` se eliminó a propósito por estar deprecado, y ya existe un workflow de CI (`.github/workflows/ci.yml`) pese a la exclusión de workflows de este plan.
+
 # Plan de Auditoría e Implementación de Cabeceras HTTP OWASP en Nginx
 
 Este plan define las acciones para auditar e integrar todas las cabeceras de seguridad HTTP recomendadas por OWASP en la configuración de Nginx (`nginx.conf`).

@@ -1,3 +1,5 @@
+> **Estado:** Completado (2026-10). Commits `db17280`, `3c500a6`, `d2cd039`, `400fbe9`. Se resolvió con la segunda opción del plan: `Grid` de MUI v7 con `container` y `size={{ xs: 12, lg: 7 | 5 }}` en `src/App.tsx` (no `<Grid item>`).
+
 # Plan de Trabajo: Corrección de Grid y Layout Gráfico
 
 ## Causa Raíz Identificada
