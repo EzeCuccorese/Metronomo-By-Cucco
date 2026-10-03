@@ -250,14 +250,14 @@ function App() {
                 </Fill>
               </Grid>
 
-              {/* Row 4: study tools + piano slot */}
-              <Grid size={{ xs: 12, md: 6, lg: 4 }}>
+              {/* Row 4: study tools, full width (laid out horizontally inside) */}
+              <Grid size={12}>
                 <Fill>
                   <StudyTools onStopRequest={engine.stop} />
                 </Fill>
               </Grid>
 
-              {/* Piano panel slot: the upcoming PianoPanel goes here as <Grid size={{ xs: 12, md: 6, lg: 8 }}>. Intentionally empty (renders nothing) until then. */}
+              {/* Row 5, piano panel slot: the upcoming PianoPanel goes here as <Grid size={{ xs: 12 }}><PianoPanel /></Grid>. Intentionally empty (renders nothing) until then. */}
 
             </Grid>
           </Box>
