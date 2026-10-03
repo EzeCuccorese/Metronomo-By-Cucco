@@ -53,9 +53,13 @@ src/
 - El click guía va por un bus limpio, sin saturación ni EQ.
 - Los datos guardados en `localStorage` se validan estructuralmente antes de usarse. Un valor corrupto nunca rompe la app.
 
-## Desarrollo
+## Compatibilidad
 
-Requiere Node 22.12+ (CI y Docker usan Node 24 LTS).
+Solo se soportan los navegadores más recientes: Safari (iOS y macOS) y Chrome en su última versión. No hay transpilación ni polyfills para navegadores antiguos (`build.target: esnext`).
+
+Requiere Node 26 (CI y Docker usan Node 26; ver `.nvmrc`). El typecheck corre con TypeScript 7 y ESLint usa TypeScript 6 (ver notas en el PR: typescript-eslint aún no soporta la API de TS 7).
+
+## Desarrollo
 
 ```bash
 npm install
