@@ -187,14 +187,12 @@ class Scheduler {
         // Connect Polyphonic Synth to the multi-channel mixer strip
         this.polySynth.connect(this.synthesizer.getChannelNode('synth'));
 
-        if (typeof Worker !== 'undefined') {
-            this.clockWorker = new ClockWorker();
-            this.clockWorker.onmessage = (e) => {
-                if (e.data === 'tick') {
-                    this.scheduler();
-                }
-            };
-        }
+        this.clockWorker = new ClockWorker();
+        this.clockWorker.onmessage = (e) => {
+            if (e.data === 'tick') {
+                this.scheduler();
+            }
+        };
     }
 
     // --- Mixer passthrough ---

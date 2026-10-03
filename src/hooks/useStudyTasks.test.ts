@@ -24,18 +24,16 @@ describe('useStudyTasks', () => {
         expect(result.current.activeTaskId).toBeNull();
     });
 
-    it('adds a task with parsed subtasks and clamped estimate (timestamp ids without randomUUID)', () => {
-        vi.stubGlobal('crypto', {});
+    it('adds a task with parsed subtasks and clamped estimate', () => {
         const { result } = renderHook(() => useStudyTasks());
         let ok = false;
         act(() => { ok = result.current.addTask('Escalas', 0, 'Mayores\n\n  Arpegios  \n   '); });
-        vi.unstubAllGlobals();
         expect(ok).toBe(true);
         expect(result.current.tasks).toEqual([{
-            id: expect.stringMatching(/^1700000000000-\d+-t$/), title: 'Escalas', estimatedPomodoros: 1, completedPomodoros: 0, isCompleted: false,
+            id: expect.any(String), title: 'Escalas', estimatedPomodoros: 1, completedPomodoros: 0, isCompleted: false,
             subtasks: [
-                { id: expect.stringMatching(/^1700000000000-\d+-0$/), title: 'Mayores', completed: false },
-                { id: expect.stringMatching(/^1700000000000-\d+-1$/), title: 'Arpegios', completed: false },
+                { id: expect.any(String), title: 'Mayores', completed: false },
+                { id: expect.any(String), title: 'Arpegios', completed: false },
             ],
         }]);
     });
