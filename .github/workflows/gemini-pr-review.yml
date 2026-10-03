@@ -2,11 +2,12 @@ name: Gemini PR Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, reopened, ready_for_review, labeled]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Don't cancel: an unrelated label event must not abort a review in progress.
+  cancel-in-progress: false
 
 # A reusable workflow can't get more token permissions than its caller grants:
 # without this block the nested job (which needs pull-requests: write to post
@@ -17,6 +18,10 @@ permissions:
 
 jobs:
   review:
+    # Once per PR (not on every push); re-run on demand with the `gemini-review` label.
+    if: >-
+      github.event.pull_request.draft == false &&
+      (github.event.action != 'labeled' || github.event.label.name == 'gemini-review')
     # Pinned to a commit: this job gets pull-requests: write and the Gemini key, so a
     # push to the engine's main branch must not change what runs here. Bump both SHAs
     # together on purpose (Dependabot only proposes it when the engine publishes tags).
@@ -30,3 +35,16 @@ jobs:
       model: "gemini-flash-latest"
       # The reusable workflow downloads its review script separately: pin that too.
       engine-ref: "0e429590f98b7e24cb427f52e0909a699d518cc7"
+
+  clear-label:
+    needs: review
+    if: always() && github.event.action == 'labeled' && github.event.label.name == 'gemini-review'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Remove the trigger label so it can be added again
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh pr edit "${{ github.event.pull_request.number }}" --remove-label gemini-review

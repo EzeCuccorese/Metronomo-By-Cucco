@@ -80,6 +80,15 @@ export class AudioProbe {
         return this.peakBetween(start, start + seconds);
     }
 
+    /** Distinct scheduled start times (audio clock) of sources of a given node type. */
+    async startTimes(kind: string, from: number, to: number): Promise<number[]> {
+        return this.page.evaluate(([k, a, b]) => {
+            const starts = (window as unknown as { __probe: { starts: { when: number; kind: string }[] } }).__probe.starts;
+            const times = starts.filter(s => s.kind === k && s.when >= a && s.when <= b).map(s => s.when);
+            return [...new Set(times.map(t => Math.round(t * 1e6) / 1e6))].sort((x, y) => x - y);
+        }, [kind, from, to] as const);
+    }
+
     /** Peaks per audio-time window, useful to see *when* sound appears. */
     async onsetsAbove(threshold: number, from: number, to: number): Promise<number[]> {
         return this.page.evaluate(([th, a, b]) => {
