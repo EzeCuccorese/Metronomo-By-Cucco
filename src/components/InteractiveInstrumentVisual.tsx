@@ -283,7 +283,8 @@ export default function InteractiveInstrumentVisual({
         Object.entries(INSTRUMENT_IMAGES).forEach(([key, src]) => {
             const img = new Image();
             img.onload = () => {
-                contentBoxesRef.current[key] = measureContent(img);
+                // Skip when the synchronous cached-image path below already measured it.
+                if (!contentBoxesRef.current[key]) contentBoxesRef.current[key] = measureContent(img);
             };
             img.src = src;
             // Cached images may already be decoded (onload can be skipped or delayed).
@@ -348,8 +349,8 @@ export default function InteractiveInstrumentVisual({
     useEffect(() => {
         const wrap = wrapRef.current;
         if (!wrap) return;
-        const resizeObserver = new ResizeObserver(applySize);
-        resizeObserver.observe(wrap);
+        const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(applySize);
+        resizeObserver?.observe(wrap);
         applySize();
         // Web fonts change text metrics: drop cached name sizes once they finish loading.
         const fonts = document.fonts;
@@ -358,7 +359,7 @@ export default function InteractiveInstrumentVisual({
         };
         fonts.addEventListener('loadingdone', invalidateNames);
         return () => {
-            resizeObserver.disconnect();
+            resizeObserver?.disconnect();
             fonts.removeEventListener('loadingdone', invalidateNames);
         };
     }, [applySize]);
@@ -560,6 +561,9 @@ export default function InteractiveInstrumentVisual({
                     ref={canvasRef}
                     onClick={handleCanvasClick}
                     onPointerMove={handlePointerMove}
+                    onPointerLeave={() => {
+                        if (canvasRef.current) canvasRef.current.style.cursor = 'default';
+                    }}
                     aria-hidden="true"
                     style={{
                         width: '100%',

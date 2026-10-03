@@ -133,6 +133,10 @@ describe('computeLayout', () => {
 
     it('survives degenerate widths', () => {
         expect(computeLayout(0).items).toHaveLength(12);
+        // Collapsed containers must never produce a non-positive pad radius (ctx.arc would throw).
+        for (const w of [0, 1, 10, 16, 40, 100]) {
+            computeLayout(w).items.forEach(it => expect(it.r).toBeGreaterThan(0));
+        }
         expect(computeLayout(-5, 0).width).toBe(1);
     });
 });

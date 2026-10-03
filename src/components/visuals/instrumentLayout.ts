@@ -96,6 +96,8 @@ const FIXED_H = TOP_PAD + LABEL_H + LABEL_GAP + NAME_GAP + NAME_H + BOTTOM_PAD;
 const PAD_FILL = 0.86; // pad diameter relative to its slot
 const MAX_PAD_ROW = 96;
 const MAX_PAD_STACK = 72;
+/** Lower bound so a collapsed/tiny container never yields a non-positive pad radius (ctx.arc would throw). */
+const MIN_PAD = 12;
 
 export interface Rect { x: number; y: number; w: number; h: number }
 
@@ -154,7 +156,7 @@ export function computeLayout(width: number, dpr: number = 1): InstrumentLayout 
 
     if (mode === 'row') {
         const slot = (w - 2 * SEC_PAD_X * SECTION_DEFS.length - SEC_GAP * (SECTION_DEFS.length - 1)) / totalCount;
-        padD = Math.min(MAX_PAD_ROW, slot * PAD_FILL);
+        padD = Math.max(MIN_PAD, Math.min(MAX_PAD_ROW, slot * PAD_FILL));
         height = padD + FIXED_H;
         let x = 0;
         counts.forEach((c, i) => {
@@ -164,7 +166,7 @@ export function computeLayout(width: number, dpr: number = 1): InstrumentLayout 
         });
     } else {
         const slot = (w - 2 * SEC_PAD_X) / maxCount;
-        padD = Math.min(MAX_PAD_STACK, slot * PAD_FILL);
+        padD = Math.max(MIN_PAD, Math.min(MAX_PAD_STACK, slot * PAD_FILL));
         const sh = padD + FIXED_H;
         counts.forEach((_, i) => sectionRects.push({ x: 0, y: i * (sh + STACK_GAP), w, h: sh }));
         height = sh * counts.length + STACK_GAP * (counts.length - 1);
