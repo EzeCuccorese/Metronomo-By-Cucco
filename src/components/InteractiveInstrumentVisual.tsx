@@ -280,10 +280,11 @@ export default function InteractiveInstrumentVisual({
             const stiffness = 0.20;
             const damping = 0.78;
 
+            const frameNow = performance.now();
             Object.keys(scalesRef.current).forEach(key => {
                 if (reduceMotionRef.current) {
                     velocitiesRef.current[key] = 0;
-                    scalesRef.current[key] = isHighlighted(highlightUntilRef.current, key, performance.now()) ? 1.12 : 1.0;
+                    scalesRef.current[key] = isHighlighted(highlightUntilRef.current, key, frameNow) ? 1.12 : 1.0;
                     return;
                 }
                 const force = (1.0 - scalesRef.current[key]) * stiffness;

@@ -407,13 +407,16 @@ export default function ConductorVisual({
                 const p2Y = centerY + Math.sin(angle) * radiusY;
 
                 // Update Trails
-                if (reduceMotionRef.current) trail3Ref.current.length = 0;
-                trail3Ref.current.push({ x: p3X, y: p3Y, alpha: 1.0 });
-                if (trail3Ref.current.length > 25) trail3Ref.current.shift();
+                if (reduceMotionRef.current) {
+                    trail3Ref.current.length = 0;
+                    trail2Ref.current.length = 0;
+                } else {
+                    trail3Ref.current.push({ x: p3X, y: p3Y, alpha: 1.0 });
+                    if (trail3Ref.current.length > 25) trail3Ref.current.shift();
 
-                if (reduceMotionRef.current) trail2Ref.current.length = 0;
-                trail2Ref.current.push({ x: p2X, y: p2Y, alpha: 1.0 });
-                if (trail2Ref.current.length > 25) trail2Ref.current.shift();
+                    trail2Ref.current.push({ x: p2X, y: p2Y, alpha: 1.0 });
+                    if (trail2Ref.current.length > 25) trail2Ref.current.shift();
+                }
 
                 // Draw Trails
                 trail3Ref.current.forEach((t, idx) => {
@@ -511,10 +514,13 @@ export default function ConductorVisual({
                 const particleY = currentPoint.y + (nextPoint.y - currentPoint.y) * easedT;
 
                 // Add particle to trail
-                if (reduceMotionRef.current) trailRef.current.length = 0;
-                trailRef.current.push({ x: particleX, y: particleY, alpha: 1.0 });
-                if (trailRef.current.length > 25) {
-                    trailRef.current.shift();
+                if (reduceMotionRef.current) {
+                    trailRef.current.length = 0;
+                } else {
+                    trailRef.current.push({ x: particleX, y: particleY, alpha: 1.0 });
+                    if (trailRef.current.length > 25) {
+                        trailRef.current.shift();
+                    }
                 }
 
                 // Draw smooth glowing light trail (gradient ribbon)

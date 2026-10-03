@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 const QUERY = '(prefers-reduced-motion: reduce)';
 
@@ -8,17 +8,14 @@ export function getPrefersReducedMotion(): boolean {
     return window.matchMedia(QUERY).matches;
 }
 
+function subscribe(callback: () => void): () => void {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {};
+    const mql = window.matchMedia(QUERY);
+    mql.addEventListener('change', callback);
+    return () => mql.removeEventListener('change', callback);
+}
+
 /** Tracks `prefers-reduced-motion: reduce`, updating when the OS setting changes. */
 export function usePrefersReducedMotion(): boolean {
-    const [reduced, setReduced] = useState(getPrefersReducedMotion);
-
-    useEffect(() => {
-        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-        const mql = window.matchMedia(QUERY);
-        const onChange = (e: MediaQueryListEvent) => setReduced(e.matches);
-        mql.addEventListener('change', onChange);
-        return () => mql.removeEventListener('change', onChange);
-    }, []);
-
-    return reduced;
+    return useSyncExternalStore(subscribe, getPrefersReducedMotion, () => false);
 }

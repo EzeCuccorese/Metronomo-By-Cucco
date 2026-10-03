@@ -14,7 +14,10 @@ function mockMatchMedia(initial: boolean) {
     vi.stubGlobal('matchMedia', vi.fn(() => mql));
     return {
         listeners,
-        emit: (matches: boolean) => listeners.forEach(l => l({ matches } as MediaQueryListEvent)),
+        emit: (matches: boolean) => {
+            mql.matches = matches;
+            listeners.forEach(l => l({ matches } as MediaQueryListEvent));
+        },
     };
 }
 
