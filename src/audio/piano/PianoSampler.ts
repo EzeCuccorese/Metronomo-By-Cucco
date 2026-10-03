@@ -83,7 +83,7 @@ export function preferredFormats(canPlay: CanPlay = defaultCanPlay): PianoFormat
 }
 
 async function fetchAndDecode(context: BaseAudioContext, url: string): Promise<AudioBuffer> {
-    const baseUrl = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'http://localhost';
+    const baseUrl = typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null' ? window.location.origin : 'http://localhost';
     const response = await fetch(new URL(url, baseUrl).href);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return context.decodeAudioData(await response.arrayBuffer());
@@ -110,8 +110,14 @@ export function loadPianoSamples(context: BaseAudioContext, formats: readonly Pi
         pending = Promise.all(PIANO_SAMPLE_FILES.map(f => loadPianoNote(context, f, formats))).then(buffers => {
             const map = new Map<number, AudioBuffer>();
             buffers.forEach((b, i) => { if (b) map.set(fileToMidi(PIANO_SAMPLE_FILES[i]), b); });
-            if (map.size === 0) console.error('Piano samples could not be loaded; using the synthesized fallback');
+            if (map.size === 0) {
+                console.error('Piano samples could not be loaded; using the synthesized fallback');
+                if (cache.get(context) === pending) cache.delete(context); // let a later call retry
+            }
             return map;
+        }, error => {
+            if (cache.get(context) === pending) cache.delete(context);
+            throw error;
         });
         cache.set(context, pending);
     }
@@ -125,6 +131,7 @@ interface Voice {
     source: AudioBufferSourceNode;
     env: GainNode;
     peak: number;
+    start: number;
     released: boolean;
 }
 
@@ -185,10 +192,12 @@ export class PianoSampler {
                     if (this.disposed) return false;
                     this.buffers = map;
                     this.sampleMidis = Array.from(map.keys()).sort((a, b) => a - b);
+                    if (map.size === 0) this.loading = null; // allow a retry later
                     this.setStatus(map.size > 0 ? 'ready' : 'failed');
                     return map.size > 0;
                 },
                 () => {
+                    this.loading = null;
                     this.setStatus('failed');
                     return false;
                 },
@@ -241,10 +250,11 @@ export class PianoSampler {
         env.connect(this.buses[bus]);
 
         const id = this.nextId++;
-        const voice: Voice = { id, midi, bus, source, env, peak, released: false };
+        const voice: Voice = { id, midi, bus, source, env, peak, start, released: false };
         this.voices.set(id, voice);
         source.addEventListener('ended', () => {
             this.voices.delete(id);
+            source.disconnect();
             filter.disconnect();
             env.disconnect();
         }, { once: true });
@@ -264,7 +274,9 @@ export class PianoSampler {
             param.cancelAndHoldAtTime(at);
         } else {
             param.cancelScheduledValues(at);
-            param.setValueAtTime(voice.peak, at);
+            // Hold the level the envelope has reached at `at` (it may still be in the attack).
+            const level = at <= voice.start ? 0 : at >= voice.start + ATTACK ? voice.peak : voice.peak * ((at - voice.start) / ATTACK);
+            param.setValueAtTime(level, at);
         }
         param.setTargetAtTime(0, at, tau);
         try {

@@ -23,6 +23,7 @@ const makeSource = () => {
         playbackRate: param(1),
         connect: vi.fn(),
         start: vi.fn(),
+        disconnect: vi.fn(),
         stop: vi.fn(),
         addEventListener: vi.fn((_: string, cb: () => void) => listeners.push(cb)),
         end: () => listeners.forEach(l => l()),
@@ -132,6 +133,24 @@ describe('loading', () => {
         expect(await loadPianoNote(ctx as unknown as BaseAudioContext, 'C4', ['ogg', 'm4a'])).toBeNull();
     });
 
+    it('does not cache a failed load, so a later call retries', async () => {
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.stubGlobal('fetch', okFetch(() => true));
+        const ctx = new FakeContext() as unknown as BaseAudioContext;
+        expect((await loadPianoSamples(ctx, ['ogg'])).size).toBe(0);
+        vi.stubGlobal('fetch', okFetch());
+        expect((await loadPianoSamples(ctx, ['ogg'])).size).toBe(17);
+        errors.mockRestore();
+    });
+
+    it('survives an opaque "null" origin', async () => {
+        vi.stubGlobal('location', { origin: 'null' });
+        vi.stubGlobal('fetch', okFetch());
+        const ctx = new FakeContext();
+        const buffer = await loadPianoNote(ctx as unknown as BaseAudioContext, 'C4', ['ogg']);
+        expect(buffer).toEqual({ id: 'http://localhost/audio/piano/C4.ogg' });
+    });
+
     it('decodes every note once per context and keys them by MIDI number', async () => {
         const fetchMock = okFetch(url => url.includes('/A5.'));
         vi.stubGlobal('fetch', fetchMock);
@@ -191,6 +210,10 @@ describe('PianoSampler', () => {
         expect(errors).toHaveBeenCalled();
         other.noteOn(60, 0, 1);
         expect(fallback).toHaveBeenCalled();
+        // The failed attempt is not remembered: a later load() retries.
+        vi.stubGlobal('fetch', okFetch());
+        expect(await other.load()).toBe(true);
+        expect(other.status).toBe('ready');
         errors.mockRestore();
     });
 
@@ -210,6 +233,7 @@ describe('PianoSampler', () => {
         expect(ctx.filters.at(-1)).toMatchObject({ disconnect: expect.any(Function) });
         expect((ctx.filters.at(-1) as unknown as { disconnect: ReturnType<typeof vi.fn> }).disconnect).toHaveBeenCalled();
         expect(env.disconnect).toHaveBeenCalled();
+        expect(src.disconnect).toHaveBeenCalled();
     });
 
     it('never schedules the attack in the past', async () => {
@@ -245,6 +269,17 @@ describe('PianoSampler', () => {
         sampler.noteOff(id, 0.5);
         expect(env.gain.cancelScheduledValues).toHaveBeenCalledWith(0.5);
         expect(env.gain.setValueAtTime).toHaveBeenCalledWith(1, 0.5);
+    });
+
+    it('without cancelAndHoldAtTime, holds the partial attack level instead of jumping to the peak', async () => {
+        await ready();
+        const id = sampler.noteOn(60, 0, 1);
+        const env = ctx.gains.at(-1)!;
+        (env.gain as { cancelAndHoldAtTime?: unknown }).cancelAndHoldAtTime = undefined;
+        const [, rampEnd] = env.gain.linearRampToValueAtTime.mock.calls[0] as [number, number];
+        sampler.noteOff(id, rampEnd / 2);
+        const [level] = env.gain.setValueAtTime.mock.calls.at(-1)! as [number, number];
+        expect(level).toBeCloseTo(velocityToGain(1) / 2, 6);
     });
 
     it('schedules whole notes with play()', async () => {
