@@ -5,6 +5,26 @@ import { useEffect, useRef, useState } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 import { usePlayback } from '../state/PlaybackContext';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
+import {
+    conductorPath,
+    getCountingText,
+    hemiolaEllipsePosition,
+    hemiolaLayout,
+    hemiolaTrianglePosition,
+    isBeatStart,
+    nextPendulumAngle,
+    nextPulseIntensity,
+    pathPosition,
+    pendulumLayout,
+    pushTrailPoint,
+    rodEndPoint,
+    rodPointFromPivot,
+    smoothStepPosition,
+    stepDurationMs,
+    swingTargetAngle,
+    trailAlpha,
+    weightPercent,
+} from './visuals/conductorGeometry';
 
 interface ConductorVisualProps {
     pattern: RhythmPattern;
@@ -13,44 +33,6 @@ interface ConductorVisualProps {
     totalBarsInterval: number;
     bpm?: number;
 }
-
-const getCountingText = (stepIndex: number, subdivision: number, mode: RhythmPattern['countingMode'], timeSignature: [number, number]): string => {
-    const beats = timeSignature[0];
-    const stepsPerBeat = subdivision / beats;
-
-    const beatNum = Math.floor(stepIndex / stepsPerBeat) + 1; // 1-based Beat
-    const subIndex = stepIndex % stepsPerBeat; // 0-based sub index within beat
-
-    if (mode === 'numbers') {
-        return subIndex === 0 ? `${beatNum}` : '';
-    }
-
-    if (mode === '1&2&') {
-        if (subIndex === 0) return `${beatNum}`;
-        if (subIndex === 0.5 * stepsPerBeat) return '&';
-        return '';
-    }
-
-    if (mode === '1e&a') {
-        if (subIndex === 0) return `${beatNum}`;
-        if (subIndex === 1) return 'e';
-        if (subIndex === 2) return '&';
-        if (subIndex === 3) return 'a';
-    }
-
-    if (mode === 'triplet_1la2la') {
-        if (subIndex === 0) return `${beatNum}`;
-        if (subIndex === 1) return 'la';
-        if (subIndex === 2) return 'le';
-    }
-
-    if (mode === 'mnemonics_chacarera') {
-        const mapping = ['MA', 'de', 'RA', 'PAR', 'che', 'PAR'];
-        return mapping[stepIndex % 6] || '';
-    }
-
-    return '';
-};
 
 type VisualMode = 'pendulum' | 'orchestra';
 
@@ -109,22 +91,11 @@ export default function ConductorVisual({
 
     // Handle incoming beats to trigger pulses & target angles
     useEffect(() => {
-        // Swing target angle calculation: alternate left/right extremes on beats
-        const maxAngle = 0.45; // Radians (~25 degrees)
-        
-        // Calculate a smooth continuous wave based on step progress
-        // A full bar has "beats" oscillations
-        const isOddBeat = Math.floor(currentStepIndex / stepsPerBeat) % 2 === 1;
-        
-        // Target angle swings left on even beats, right on odd beats
-        const interpolationFactor = (currentStepIndex % stepsPerBeat) / stepsPerBeat;
-        const direction = isOddBeat ? 1 : -1;
-        
-        // Smooth sine wave target for natural pendulum gravity swing
-        targetAngleRef.current = maxAngle * direction * Math.cos(interpolationFactor * Math.PI);
+        // Pendulum target angle (cosine-eased swing, alternating sides per beat)
+        targetAngleRef.current = swingTargetAngle(currentStepIndex, stepsPerBeat);
 
         // Flash background light on beat start
-        if (currentStepIndex % stepsPerBeat === 0) {
+        if (isBeatStart(currentStepIndex, stepsPerBeat)) {
             pulseIntensityRef.current = 1.0;
         }
     }, [currentStepIndex, subdivision, stepsPerBeat]);
@@ -167,13 +138,11 @@ export default function ConductorVisual({
                 gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
                 ctx.fillStyle = gradient;
                 ctx.fillRect(0, 0, width, height);
-                pulseIntensityRef.current -= 0.05; // Decay pulse
+                pulseIntensityRef.current = nextPulseIntensity(pulseIntensityRef.current, reduceMotionRef.current);
             }
 
             // Lerp pendulum angle for super smooth movement
-            angleRef.current = reduceMotionRef.current
-                ? targetAngleRef.current
-                : angleRef.current * 0.82 + targetAngleRef.current * 0.18;
+            angleRef.current = nextPendulumAngle(angleRef.current, targetAngleRef.current, reduceMotionRef.current);
 
             if (visualMode === 'pendulum') {
                 drawPendulum(ctx, width, height, angleRef.current);
@@ -185,12 +154,8 @@ export default function ConductorVisual({
         };
 
         const drawPendulum = (ctx: CanvasRenderingContext2D, w: number, h: number, angle: number) => {
-            const centerX = w / 2;
-            const centerY = h - 25;
-            const baseWidth = w * 0.45;
-            const topWidth = w * 0.12;
-            const bodyHeight = h * 0.75;
-            const apexY = centerY - bodyHeight;
+            const layout = pendulumLayout(w, h);
+            const { centerX, centerY, baseWidth, topWidth, apexY } = layout;
 
             // --- A. Draw Metronome Wooden Body ---
             // Outer Shadow / Ambient shadow
@@ -223,10 +188,7 @@ export default function ConductorVisual({
             ctx.stroke();
 
             // --- B. Draw Inside Metal Plate Face (Scale Ticks) ---
-            const faceWidthBase = baseWidth * 0.65;
-            const faceWidthTop = topWidth * 0.65;
-            const faceHeight = bodyHeight * 0.85;
-            const faceY = centerY - faceHeight - 5;
+            const { faceWidthBase, faceWidthTop, faceHeight, faceY } = layout;
 
             const faceGrad = ctx.createLinearGradient(centerX - faceWidthBase/2, centerY, centerX + faceWidthBase/2, centerY);
             faceGrad.addColorStop(0, '#110f0e');
@@ -262,16 +224,11 @@ export default function ConductorVisual({
             }
 
             // --- C. Draw Metronome Rod & Weight (Swinging part) ---
-            const rodLength = bodyHeight * 0.95;
             const rodAngle = angle; // Radians
-
-            // Calculate current end point of rod
-            const rodEndX = centerX + Math.sin(rodAngle) * rodLength;
-            const rodEndY = centerY - Math.cos(rodAngle) * rodLength;
-
-            // Pivot point is near the bottom
-            const pivotX = centerX;
-            const pivotY = centerY - 10;
+            const rodEnd = rodEndPoint(layout, rodAngle);
+            const rodEndX = rodEnd.x;
+            const rodEndY = rodEnd.y;
+            const { pivotX, pivotY } = layout;
 
             // Draw Steel Rod
             ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
@@ -287,13 +244,9 @@ export default function ConductorVisual({
 
             // Draw Brass Weight sliding on the rod
             // Weight height adjusts with BPM (higher up for slower BPM, like physical metronome!)
-            const minBpm = 40;
-            const maxBpm = 240;
-            const normalizedBpm = Math.max(0, Math.min(1, (liveRef.current.bpm - minBpm) / (maxBpm - minBpm)));
-            // Higher BPM = weight lower down the rod
-            const weightPercent = 0.35 + (1 - normalizedBpm) * 0.45; 
-            const weightX = pivotX + Math.sin(rodAngle) * (rodLength * weightPercent);
-            const weightY = pivotY - Math.cos(rodAngle) * (rodLength * weightPercent);
+            const weightPos = rodPointFromPivot(layout, rodAngle, weightPercent(liveRef.current.bpm));
+            const weightX = weightPos.x;
+            const weightY = weightPos.y;
 
             // Draw trapezoidal weight
             ctx.save();
@@ -338,32 +291,19 @@ export default function ConductorVisual({
         };
 
         const drawOrchestraConductor = (ctx: CanvasRenderingContext2D, w: number, h: number) => {
-            const padding = 45;
-            const bottomY = h - padding;
-            const topY = padding;
-            const leftX = padding;
-            const rightX = w - padding;
-            const centerX = w / 2;
-            const centerY = h / 2;
-
-            // Interpolate smooth step position using elapsed time at current BPM
-            const ts = liveRef.current.pattern.timeSignature;
-            const sub = liveRef.current.pattern.subdivision;
-            const timePerBar = (60.0 / liveRef.current.bpm) * (4.0 / ts[1]) * ts[0];
-            const stepDurationMs = (timePerBar / sub) * 1000;
+            const live = liveRef.current;
+            const durationMs = stepDurationMs(live.bpm, live.pattern.timeSignature, live.pattern.subdivision);
             const elapsedMs = performance.now() - lastStepTimeRef.current;
-            const smoothProgress = reduceMotionRef.current ? 0 : Math.min(0.99, elapsedMs / stepDurationMs);
-            const smoothStep = liveRef.current.currentStepIndex + smoothProgress;
+            const smoothStep = smoothStepPosition(live.currentStepIndex, elapsedMs, durationMs, reduceMotionRef.current);
+            const sub = live.pattern.subdivision;
 
-            if (liveRef.current.pattern.grooveType === 'chacarera_poliritmica') {
+            if (live.pattern.grooveType === 'chacarera_poliritmica') {
                 // --- CHACARERA POLIRITMICA DOUBLE-SPARK VISUALIZER (HEMIOLA) ---
 
                 // 1. 3/4 feel triangle path
-                const points3 = [
-                    { x: centerX, y: bottomY },
-                    { x: rightX - 20, y: centerY + 15 },
-                    { x: centerX, y: topY }
-                ];
+                const hemiola = hemiolaLayout(w, h);
+                const { centerX, centerY, radiusX, radiusY, bottomY } = hemiola;
+                const points3 = hemiola.triangle;
 
                 ctx.strokeStyle = 'rgba(229, 169, 95, 0.14)';
                 ctx.lineWidth = 2.0;
@@ -377,8 +317,6 @@ export default function ConductorVisual({
                 ctx.stroke();
 
                 // 2. 6/8 feel ellipse path
-                const radiusX = w * 0.32;
-                const radiusY = h * 0.22;
                 ctx.strokeStyle = 'rgba(255, 109, 0, 0.16)';
                 ctx.setLineDash([3, 5]);
                 ctx.beginPath();
@@ -395,35 +333,18 @@ export default function ConductorVisual({
                 ctx.fillText('6/8', centerX + radiusX - 25, centerY - 8);
 
                 // Compute Particle 3/4 Position (3 liveRef.current.beats per bar, 4 steps per beat)
-                const smoothBeat3 = smoothStep / 4;
-                const currentBeat3 = Math.floor(smoothBeat3);
-                const stepFraction3 = smoothBeat3 % 1;
-                const easedT3 = 0.5 - 0.5 * Math.cos(stepFraction3 * Math.PI);
-                const pt3_1 = points3[currentBeat3 % 3];
-                const pt3_2 = points3[(currentBeat3 + 1) % 3];
-                const p3X = pt3_1.x + (pt3_2.x - pt3_1.x) * easedT3;
-                const p3Y = pt3_1.y + (pt3_2.y - pt3_1.y) * easedT3;
+                const { x: p3X, y: p3Y } = hemiolaTrianglePosition(hemiola, smoothStep);
 
                 // Compute Particle 6/8 Position (Ellipse rotation)
-                const angle = -Math.PI / 2 + (Math.PI * 2) * (smoothStep / 12);
-                const p2X = centerX + Math.cos(angle) * radiusX;
-                const p2Y = centerY + Math.sin(angle) * radiusY;
+                const { x: p2X, y: p2Y } = hemiolaEllipsePosition(hemiola, smoothStep);
 
                 // Update Trails
-                if (reduceMotionRef.current) {
-                    trail3Ref.current.length = 0;
-                    trail2Ref.current.length = 0;
-                } else {
-                    trail3Ref.current.push({ x: p3X, y: p3Y, alpha: 1.0 });
-                    if (trail3Ref.current.length > 25) trail3Ref.current.shift();
-
-                    trail2Ref.current.push({ x: p2X, y: p2Y, alpha: 1.0 });
-                    if (trail2Ref.current.length > 25) trail2Ref.current.shift();
-                }
+                pushTrailPoint(trail3Ref.current, { x: p3X, y: p3Y }, reduceMotionRef.current);
+                pushTrailPoint(trail2Ref.current, { x: p2X, y: p2Y }, reduceMotionRef.current);
 
                 // Draw Trails
                 trail3Ref.current.forEach((t, idx) => {
-                    t.alpha = idx / trail3Ref.current.length;
+                    t.alpha = trailAlpha(idx, trail3Ref.current.length);
                     ctx.beginPath();
                     ctx.arc(t.x, t.y, 1.5 + t.alpha * 5.0, 0, Math.PI * 2);
                     ctx.fillStyle = `rgba(229, 169, 95, ${t.alpha * 0.45})`;
@@ -431,7 +352,7 @@ export default function ConductorVisual({
                 });
 
                 trail2Ref.current.forEach((t, idx) => {
-                    t.alpha = idx / trail2Ref.current.length;
+                    t.alpha = trailAlpha(idx, trail2Ref.current.length);
                     ctx.beginPath();
                     ctx.arc(t.x, t.y, 1.5 + t.alpha * 5.0, 0, Math.PI * 2);
                     ctx.fillStyle = `rgba(255, 109, 0, ${t.alpha * 0.45})`;
@@ -466,30 +387,7 @@ export default function ConductorVisual({
 
             } else {
                 // --- STANDARD SINGLE-SPARK GEOMETRIC CONDUCTOR PATH ---
-                let points: { x: number; y: number }[];
-
-                if (liveRef.current.beats === 3) {
-                    // 3/4 Pattern: 1 (Down), 2 (Right), 3 (Up-Left return)
-                    points = [
-                        { x: centerX, y: bottomY }, // 1. Down
-                        { x: rightX, y: bottomY - (h - 2*padding) * 0.15 }, // 2. Right
-                        { x: centerX, y: topY } // 3. Up / Return
-                    ];
-                } else if (liveRef.current.beats === 2 || liveRef.current.beats === 6) {
-                    // 2/4 or 6/8 Pattern: 1 (Down), 2 (Up-Arc return)
-                    points = [
-                        { x: centerX - w * 0.15, y: bottomY }, // 1. Down
-                        { x: centerX + w * 0.15, y: topY }  // 2. Up
-                    ];
-                } else {
-                    // Default 4/4: 1 (Down), 2 (Left), 3 (Right), 4 (Up-Arc return)
-                    points = [
-                        { x: centerX, y: bottomY },       // 1. Down
-                        { x: leftX, y: bottomY - (h - 2*padding) * 0.3 },  // 2. Left
-                        { x: rightX, y: bottomY - (h - 2*padding) * 0.3 }, // 3. Right
-                        { x: centerX, y: topY }           // 4. Up / Return
-                    ];
-                }
+                const points = conductorPath(live.beats, w, h);
 
                 // Draw full background geometric path (faint guide lines)
                 ctx.strokeStyle = 'rgba(229, 169, 95, 0.08)';
@@ -504,33 +402,17 @@ export default function ConductorVisual({
                 ctx.stroke();
                 ctx.setLineDash([]); // Reset dash
 
-                const stepsPerBeatLocal = sub / liveRef.current.beats;
-                const smoothBeatIndex = smoothStep / stepsPerBeatLocal;
-                const currentBeatIndex = Math.floor(smoothBeatIndex);
-                const stepFraction = smoothBeatIndex % 1;
-                const easedT = 0.5 - 0.5 * Math.cos(stepFraction * Math.PI);
-
-                const currentPoint = points[currentBeatIndex % points.length];
-                const nextPoint = points[(currentBeatIndex + 1) % points.length];
-
-                const particleX = currentPoint.x + (nextPoint.x - currentPoint.x) * easedT;
-                const particleY = currentPoint.y + (nextPoint.y - currentPoint.y) * easedT;
+                const stepsPerBeatLocal = sub / live.beats;
+                const { x: particleX, y: particleY } = pathPosition(points, smoothStep / stepsPerBeatLocal);
 
                 // Add particle to trail
-                if (reduceMotionRef.current) {
-                    trailRef.current.length = 0;
-                } else {
-                    trailRef.current.push({ x: particleX, y: particleY, alpha: 1.0 });
-                    if (trailRef.current.length > 25) {
-                        trailRef.current.shift();
-                    }
-                }
+                pushTrailPoint(trailRef.current, { x: particleX, y: particleY }, reduceMotionRef.current);
 
                 // Draw smooth glowing light trail (gradient ribbon)
                 ctx.shadowBlur = 0;
                 trailRef.current.forEach((t, idx) => {
-                    t.alpha = idx / trailRef.current.length;
-                    const size = 1.5 + (idx / trailRef.current.length) * 5.5;
+                    t.alpha = trailAlpha(idx, trailRef.current.length);
+                    const size = 1.5 + t.alpha * 5.5;
 
                     ctx.beginPath();
                     ctx.arc(t.x, t.y, size, 0, Math.PI * 2);

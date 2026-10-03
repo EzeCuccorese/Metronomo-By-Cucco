@@ -14,3 +14,20 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
             dispatchEvent: () => false,
         }) as MediaQueryList;
 }
+
+// jsdom lacks ResizeObserver and document.fonts; inert defaults (tests may override via vi.stubGlobal).
+if (typeof window !== 'undefined') {
+    if (!('ResizeObserver' in globalThis)) {
+        globalThis.ResizeObserver = class {
+            observe() {}
+            unobserve() {}
+            disconnect() {}
+        };
+    }
+    if (!document.fonts) {
+        Object.defineProperty(document, 'fonts', {
+            configurable: true,
+            value: { addEventListener: () => {}, removeEventListener: () => {}, ready: Promise.resolve() },
+        });
+    }
+}
