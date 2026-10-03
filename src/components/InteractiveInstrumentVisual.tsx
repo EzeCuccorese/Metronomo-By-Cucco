@@ -6,6 +6,24 @@ import { usePlaybackStore } from '../state/PlaybackContext';
 import { isHighlighted, markHighlight } from './visuals/highlight';
 import type { HighlightMap } from './visuals/highlight';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
+import {
+    CLICK_BOOST,
+    advanceAndPrune,
+    advanceParticle,
+    advanceRipple,
+    createParticle,
+    createRipple,
+    hitTestInstrument,
+    SCALE_KEYS,
+    initialScales,
+    initialVelocities,
+    reducedScale,
+    springStep,
+    stepBoost,
+    stepTrigger,
+    toCanvasCoords,
+} from './visuals/instrumentLayout';
+import type { Ripple, SparkParticle } from './visuals/instrumentLayout';
 
 interface InteractiveInstrumentVisualProps {
     pattern: RhythmPattern;
@@ -30,25 +48,11 @@ const PREVIEW_BUTTONS: { instrument: string; modifier?: string; label: string }[
     { instrument: 'shaker', label: 'Shaker' },
 ];
 
-interface Ripple {
-    x: number;
-    y: number;
-    color: string;
-    radius: number;
-    maxRadius: number;
-    opacity: number;
-    speed: number;
-}
-
-interface SparkParticle {
-    x: number;
-    y: number;
-    vx: number;
-    vy: number;
-    color: string;
-    size: number;
-    alpha: number;
-    decay: number;
+/** useRef whose initial value is computed once (not on every render). */
+function useLazyRef<T extends object>(init: () => T): React.MutableRefObject<T> {
+    const ref = useRef<T | null>(null);
+    if (ref.current === null) ref.current = init();
+    return ref as React.MutableRefObject<T>;
 }
 
 export default function InteractiveInstrumentVisual({
@@ -73,37 +77,8 @@ export default function InteractiveInstrumentVisual({
     }, []);
 
     // Spring scaling values for organic bounce physics
-    const scalesRef = useRef<Record<string, number>>({
-        bombo_parche: 1.0,
-        bombo_aro: 1.0,
-        snare: 1.0,
-        kick: 1.0,
-        hihat: 1.0,
-        clave: 1.0,
-        shaker: 1.0,
-        caja: 1.0,
-        cajon: 1.0,
-        palmas: 1.0,
-        candombe_chico: 1.0,
-        candombe_repique: 1.0,
-        candombe_piano: 1.0
-    });
-
-    const velocitiesRef = useRef<Record<string, number>>({
-        bombo_parche: 0,
-        bombo_aro: 0,
-        snare: 0,
-        kick: 0,
-        hihat: 0,
-        clave: 0,
-        shaker: 0,
-        caja: 0,
-        cajon: 0,
-        palmas: 0,
-        candombe_chico: 0,
-        candombe_repique: 0,
-        candombe_piano: 0
-    });
+    const scalesRef = useLazyRef(initialScales);
+    const velocitiesRef = useLazyRef(initialVelocities);
 
     const ripplesRef = useRef<Ripple[]>([]);
 
@@ -121,36 +96,17 @@ export default function InteractiveInstrumentVisual({
         } else {
             velocitiesRef.current[key] += amount;
         }
-    }, []);
+    }, [velocitiesRef]);
 
     const spawnParticles = useCallback((x: number, y: number, color: string, count: number = 8) => {
         for (let i = 0; i < count; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const speed = 0.8 + Math.random() * 2.8;
-            particlesRef.current.push({
-                x,
-                y,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed,
-                color,
-                size: 1.2 + Math.random() * 2.2,
-                alpha: 1.0,
-                decay: 0.025 + Math.random() * 0.035
-            });
+            particlesRef.current.push(createParticle(x, y, color));
         }
     }, []);
 
     const triggerRipple = useCallback((x: number, y: number, color: string, maxRad: number = 30) => {
         if (reduceMotionRef.current) return;
-        ripplesRef.current.push({
-            x,
-            y,
-            color,
-            radius: 4,
-            maxRadius: maxRad,
-            opacity: 1.0,
-            speed: 1.6
-        });
+        ripplesRef.current.push(createRipple(x, y, color, maxRad));
         spawnParticles(x, y, color, 8);
     }, [spawnParticles]);
 
@@ -189,55 +145,10 @@ export default function InteractiveInstrumentVisual({
         const activeSteps = patternRef.current.steps.filter(s => s.step === (currentStepIndex + 1));
 
         activeSteps.forEach(s => {
-            const inst = s.instrument;
-            const velocity = s.velocity || 1.0;
-            const boost = 0.35 * velocity;
-
-            if (inst === 'bombo_leguero') {
-                if (s.modifier === 'aro') {
-                    bump('bombo_aro', boost);
-                    triggerRipple(75, 85, '#ffe082', 38);
-                } else {
-                    bump('bombo_parche', boost);
-                    triggerRipple(75, 115, '#dfa15b', 45);
-                }
-            } else if (inst === 'rim') {
-                bump('bombo_aro', boost);
-                triggerRipple(75, 85, '#ffe082', 38);
-            } else if (inst === 'caja') {
-                bump('caja', boost);
-                triggerRipple(105, 40, '#ffe082', 35);
-            } else if (inst === 'cajon') {
-                bump('cajon', boost);
-                triggerRipple(180, 115, '#dfa15b', 40);
-            } else if (inst === 'palmas') {
-                bump('palmas', boost);
-                triggerRipple(235, 115, '#ffcc80', 30);
-            } else if (inst === 'candombe_chico') {
-                bump('candombe_chico', boost);
-                triggerRipple(180, 45, '#80cbc4', 25);
-            } else if (inst === 'candombe_repique') {
-                bump('candombe_repique', boost);
-                triggerRipple(195, 45, '#80cbc4', 25);
-            } else if (inst === 'candombe_piano') {
-                bump('candombe_piano', boost);
-                triggerRipple(210, 45, '#80cbc4', 28);
-            } else if (inst === 'kick' || inst === 'surdo') {
-                bump('kick', boost);
-                triggerRipple(300, 115, '#ff7043', 40);
-            } else if (inst === 'snare') {
-                bump('snare', boost);
-                triggerRipple(345, 40, '#b0bec5', 35);
-            } else if (inst === 'hihat' || inst === 'hihat_foot' || inst === 'ride') {
-                bump('hihat', boost);
-                triggerRipple(290, 40, '#ffd54f', 32);
-            } else if (inst === 'clave') {
-                bump('clave', boost);
-                triggerRipple(45, 40, '#ffb300', 30);
-            } else if (inst === 'shaker') {
-                bump('shaker', boost);
-                triggerRipple(345, 115, '#cfd8dc', 25);
-            }
+            const t = stepTrigger(s.instrument, s.modifier);
+            if (!t) return;
+            bump(t.key, stepBoost(s.velocity));
+            triggerRipple(t.x, t.y, t.color, t.maxRadius);
         });
     }, [triggerRipple, bump]);
 
@@ -277,32 +188,21 @@ export default function InteractiveInstrumentVisual({
             ctx.clearRect(0, 0, 380, 175);
 
             // --- A. ELASTIC SPRING PHYSICS ---
-            const stiffness = 0.20;
-            const damping = 0.78;
 
             const frameNow = performance.now();
-            Object.keys(scalesRef.current).forEach(key => {
+            for (const key of SCALE_KEYS) {
                 if (reduceMotionRef.current) {
                     velocitiesRef.current[key] = 0;
-                    scalesRef.current[key] = isHighlighted(highlightUntilRef.current, key, frameNow) ? 1.12 : 1.0;
-                    return;
+                    scalesRef.current[key] = reducedScale(isHighlighted(highlightUntilRef.current, key, frameNow));
+                    continue;
                 }
-                const force = (1.0 - scalesRef.current[key]) * stiffness;
-                velocitiesRef.current[key] += force;
-                velocitiesRef.current[key] *= damping;
-                scalesRef.current[key] += velocitiesRef.current[key];
-            });
+                const next = springStep(scalesRef.current[key], velocitiesRef.current[key]);
+                velocitiesRef.current[key] = next.velocity;
+                scalesRef.current[key] = next.scale;
+            }
 
             // --- B. RENDERING RIPPLES ---
-            ripplesRef.current.forEach((rp, idx) => {
-                rp.radius += rp.speed;
-                rp.opacity = 1.0 - (rp.radius / rp.maxRadius);
-
-                if (rp.opacity <= 0) {
-                    ripplesRef.current.splice(idx, 1);
-                    return;
-                }
-
+            advanceAndPrune(ripplesRef.current, advanceRipple).forEach(rp => {
                 ctx.save();
                 ctx.beginPath();
                 ctx.arc(rp.x, rp.y, rp.radius, 0, Math.PI * 2);
@@ -314,17 +214,7 @@ export default function InteractiveInstrumentVisual({
             });
 
             // --- B2. RENDERING SPARKS (PARTICLES) ---
-            particlesRef.current.forEach((p, idx) => {
-                p.x += p.vx;
-                p.y += p.vy;
-                p.vy += 0.045; // Gravity
-                p.alpha -= p.decay;
-
-                if (p.alpha <= 0) {
-                    particlesRef.current.splice(idx, 1);
-                    return;
-                }
-
+            advanceAndPrune(particlesRef.current, advanceParticle).forEach(p => {
                 ctx.save();
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
@@ -825,137 +715,19 @@ export default function InteractiveInstrumentVisual({
 
         animationFrameId = requestAnimationFrame(render);
         return () => cancelAnimationFrame(animationFrameId);
-    }, []);
+    }, [scalesRef, velocitiesRef]);
 
     // Manual canvas click previews
     const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = 380 / rect.width;
-        const scaleY = 175 / rect.height;
-        const clickX = (e.clientX - rect.left) * scaleX;
-        const clickY = (e.clientY - rect.top) * scaleY;
-
-        // --- COLLISION MATRIX ---
-        // 1. Claves (x: 45, y: 40)
-        if (Math.hypot(clickX - 45, clickY - 40) <= 18) {
-            bump('clave', 0.4);
-            triggerRipple(clickX, clickY, '#ffb300', 30);
-            onPreviewInstrument('clave');
-            return;
-        }
-
-        // 2. Caja Coplera (x: 105, y: 40)
-        if (Math.hypot(clickX - 105, clickY - 40) <= 18) {
-            bump('caja', 0.4);
-            triggerRipple(clickX, clickY, '#ffe082', 30);
-            onPreviewInstrument('caja');
-            return;
-        }
-
-        // 3. Bombo Legüero (x: 75, y: 115)
-        const bomboX = 75;
-        const bomboYTop = 115 - 52/2; // 89
-        const rx = 22;
-        const ry = 9;
-        
-        // Ellipse head click
-        const bomboHeadClick = Math.pow(clickX - bomboX, 2) / Math.pow(rx, 2) + Math.pow(clickY - bomboYTop, 2) / Math.pow(ry, 2);
-        if (bomboHeadClick <= 1.0) {
-            const bomboParcheClick = Math.pow(clickX - bomboX, 2) / Math.pow(rx - 3, 2) + Math.pow(clickY - bomboYTop, 2) / Math.pow(ry - 2, 2);
-            if (bomboParcheClick <= 1.0) {
-                bump('bombo_parche', 0.4);
-                triggerRipple(clickX, clickY, '#dfa15b', 42);
-                onPreviewInstrument('bombo_leguero');
-            } else {
-                bump('bombo_aro', 0.4);
-                triggerRipple(clickX, clickY, '#ffe082', 36);
-                onPreviewInstrument('rim');
-            }
-            return;
-        }
-        
-        // Body click
-        if (Math.abs(clickX - bomboX) < rx && clickY > bomboYTop && clickY < bomboYTop + 52) {
-            bump('bombo_parche', 0.4);
-            triggerRipple(clickX, clickY, '#dfa15b', 42);
-            onPreviewInstrument('bombo_leguero');
-            return;
-        }
-
-        // 4. Candombe Chico (x: 179, y: 45)
-        if (Math.hypot(clickX - 179, clickY - 45) <= 10) {
-            bump('candombe_chico', 0.4);
-            triggerRipple(clickX, clickY, '#80cbc4', 24);
-            onPreviewInstrument('candombe_chico');
-            return;
-        }
-
-        // 5. Candombe Repique (x: 195, y: 45)
-        if (Math.hypot(clickX - 195, clickY - 45) <= 10) {
-            bump('candombe_repique', 0.4);
-            triggerRipple(clickX, clickY, '#80cbc4', 24);
-            onPreviewInstrument('candombe_repique');
-            return;
-        }
-
-        // 6. Candombe Piano (x: 211, y: 45)
-        if (Math.hypot(clickX - 211, clickY - 45) <= 12) {
-            bump('candombe_piano', 0.4);
-            triggerRipple(clickX, clickY, '#80cbc4', 26);
-            onPreviewInstrument('candombe_piano');
-            return;
-        }
-
-        // 7. Cajón Peruano (x: 180, y: 115)
-        if (Math.abs(clickX - 180) < 11 && Math.abs(clickY - 115) < 19) {
-            bump('cajon', 0.4);
-            triggerRipple(clickX, clickY, '#dfa15b', 35);
-            onPreviewInstrument('cajon');
-            return;
-        }
-
-        // 8. Palmas (x: 235, y: 115)
-        if (Math.hypot(clickX - 235, clickY - 115) <= 15) {
-            bump('palmas', 0.4);
-            triggerRipple(clickX, clickY, '#ffcc80', 25);
-            onPreviewInstrument('palmas');
-            return;
-        }
-
-        // 9. Hihat (x: 290, y: 40)
-        if (Math.hypot(clickX - 290, clickY - 40) <= 14) {
-            bump('hihat', 0.4);
-            triggerRipple(clickX, clickY, '#ffd54f', 30);
-            onPreviewInstrument('hihat');
-            return;
-        }
-
-        // 10. Snare (x: 345, y: 40)
-        if (Math.hypot(clickX - 345, clickY - 40) <= 15) {
-            bump('snare', 0.4);
-            triggerRipple(clickX, clickY, '#b0bec5', 30);
-            onPreviewInstrument('snare');
-            return;
-        }
-
-        // 11. Kick Drum (x: 300, y: 115)
-        if (Math.hypot(clickX - 300, clickY - 115) <= 24) {
-            bump('kick', 0.4);
-            triggerRipple(clickX, clickY, '#ff7043', 35);
-            onPreviewInstrument('kick');
-            return;
-        }
-
-        // 12. Shaker (x: 345, y: 115)
-        if (Math.hypot(clickX - 345, clickY - 115) <= 16) {
-            bump('shaker', 0.4);
-            triggerRipple(clickX, clickY, '#cfd8dc', 25);
-            onPreviewInstrument('shaker');
-            return;
-        }
+        const { x: clickX, y: clickY } = toCanvasCoords(e.clientX, e.clientY, canvas.getBoundingClientRect());
+        const found = hitTestInstrument(clickX, clickY);
+        if (!found) return;
+        bump(found.key, CLICK_BOOST);
+        triggerRipple(clickX, clickY, found.color, found.rippleRadius);
+        onPreviewInstrument(found.instrument);
     };
 
     return (
