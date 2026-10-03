@@ -56,31 +56,15 @@ const isFormas = (v: unknown): v is FormasSettings =>
 
 const CARD_BORDER = '1px solid rgba(229, 169, 95, 0.14)';
 
-/** Components that draw their own card get the same chrome as {@link Panel}. */
+/** Chrome shared with {@link Panel}, passed to components that draw their own card. */
 const cardChildSx: SxProps<Theme> = {
-  '& > .MuiBox-root': {
-    bgcolor: '#141210',
-    border: CARD_BORDER,
-    borderRadius: '16px',
-    boxShadow: '0 6px 20px rgba(0, 0, 0, 0.35)',
-  },
+  bgcolor: '#141210',
+  border: CARD_BORDER,
+  borderRadius: '16px',
+  boxShadow: '0 6px 20px rgba(0, 0, 0, 0.35)',
 };
 
-/**
- * The instrument canvas draws in a fixed 380x175 coordinate space and scales X and Y
- * independently, so its box must keep that aspect ratio or the drawing is stretched.
- */
-const instrumentsSx: SxProps<Theme> = [
-  cardChildSx,
-  {
-    '& > .MuiBox-root': { p: { xs: 1.5, md: 2 }, justifyContent: 'center', boxShadow: '0 6px 20px rgba(0, 0, 0, 0.35)' },
-    '& > .MuiBox-root > div:has(> canvas)': {
-      height: 'auto',
-      aspectRatio: '380 / 175',
-      maxWidth: 760,
-    },
-  },
-];
+const instrumentsCardSx: SxProps<Theme> = [cardChildSx, { p: { xs: 1.5, md: 2 }, justifyContent: 'center' }];
 
 function App() {
   const [bpm, setBpmRaw] = usePersistentState('bpm', 120, isBpm);
@@ -195,11 +179,12 @@ function App() {
                 </Panel>
               </Grid>
               <Grid size={{ xs: 12, md: 7 }}>
-                <Fill sx={instrumentsSx}>
+                <Fill>
                   <InteractiveInstrumentVisual
                     pattern={currentPattern}
                     isPlaying={isPlaying}
                     onPreviewInstrument={engine.previewInstrument}
+                    sx={instrumentsCardSx}
                   />
                 </Fill>
               </Grid>
@@ -240,12 +225,13 @@ function App() {
                   onFormasChange={setFormas}
                   isPlaying={isPlaying}
                 />
-                <Fill sx={cardChildSx}>
+                <Fill>
                   <HarmonyBuilder
                     onUpdateProgression={engine.setHarmonyProgression}
                     onVolumeChange={engine.setHarmonyVolume}
                     onStyleChange={engine.setAccompanimentStyle}
                     isPlaying={isPlaying}
+                    sx={cardChildSx}
                   />
                 </Fill>
               </Grid>

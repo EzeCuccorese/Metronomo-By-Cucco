@@ -1,4 +1,5 @@
 import { useEffect, useCallback } from 'react';
+import type { SxProps, Theme } from '@mui/material/styles';
 import { Box, Typography, Select, MenuItem, Stack, Slider, FormControl, InputLabel, Button, Divider, Chip } from '@mui/material';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -13,6 +14,8 @@ interface HarmonyBuilderProps {
     onVolumeChange: (vol: number) => void;
     onStyleChange: (style: AccompanimentStyle) => void;
     isPlaying?: boolean;
+    /** Extra styles for the outer card (e.g. to match the surrounding panels). */
+    sx?: SxProps<Theme>;
 }
 
 const STYLES: { id: AccompanimentStyle; label: string }[] = [
@@ -76,7 +79,7 @@ const isOctave = (v: unknown): v is number => isNumber(v) && OCTAVES.includes(v)
 const isVolume = (v: unknown): v is number => isNumber(v) && v >= 0 && v <= 1;
 const isStyle = (v: unknown): v is AccompanimentStyle => STYLES.some(s => s.id === v);
 
-export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, onStyleChange, isPlaying = false }: HarmonyBuilderProps) {
+export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, onStyleChange, isPlaying = false, sx }: HarmonyBuilderProps) {
     const [rootKey, setRootKey] = usePersistentState('harmony.key', 'C', isKey);
     const [mode, setMode] = usePersistentState<ModeType>('harmony.mode', 'major', isMode);
     const [octave, setOctave] = usePersistentState('harmony.octave', 4, isOctave);
@@ -176,14 +179,14 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
     }
 
     return (
-        <Box sx={{
+        <Box sx={[{
             p: 2,
             borderRadius: 3,
             bgcolor: '#1a1a1a',
             border: '1px solid #333',
             height: '100%',
             overflow: 'auto'
-        }}>
+        }, ...(Array.isArray(sx) ? sx : [sx])]}>
             <Stack
                 direction="row"
                 spacing={1}

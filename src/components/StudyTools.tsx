@@ -3,7 +3,7 @@ import {
     Box, Typography, Button, Stack, Paper, IconButton,
     CircularProgress, List, ListItem, ListItemText,
     TextField, Checkbox, Dialog, DialogTitle,
-    DialogContent, DialogActions, Divider,
+    DialogContent, DialogActions,
     Collapse, Snackbar
 } from '@mui/material';
 import { usePomodoro, formatTime } from '../hooks/usePomodoro';
@@ -178,8 +178,6 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
                     {totalBarsPracticed}
                 </Typography>
             </Paper>
-
-            <Divider sx={{ display: 'none' }} />
 
             {/* TASK LIST HEADER */}
             <Stack direction="row" sx={{ gridArea: 'head', justifyContent: 'space-between', alignItems: 'center', px: 1 }}>

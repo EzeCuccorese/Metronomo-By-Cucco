@@ -1,4 +1,5 @@
 import { Box, Typography } from '@mui/material';
+import type { SxProps, Theme } from '@mui/material/styles';
 import { useEffect, useRef, useCallback } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
@@ -8,6 +9,8 @@ interface InteractiveInstrumentVisualProps {
     pattern: RhythmPattern;
     isPlaying: boolean;
     onPreviewInstrument: (instrument: string, modifier?: string) => void;
+    /** Extra styles for the outer card (e.g. to match the surrounding panels). */
+    sx?: SxProps<Theme>;
 }
 
 /** Keyboard / screen-reader alternative to the clickable canvas. */
@@ -51,7 +54,8 @@ interface SparkParticle {
 export default function InteractiveInstrumentVisual({
     pattern,
     isPlaying,
-    onPreviewInstrument
+    onPreviewInstrument,
+    sx
 }: InteractiveInstrumentVisualProps) {
     const store = usePlaybackStore();
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -933,7 +937,7 @@ export default function InteractiveInstrumentVisual({
     };
 
     return (
-        <Box sx={{
+        <Box sx={[{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -943,7 +947,7 @@ export default function InteractiveInstrumentVisual({
             borderRadius: 4,
             border: '1px solid rgba(229, 169, 95, 0.08)',
             boxShadow: 'inset 0 0 25px rgba(0,0,0,0.6)'
-        }}>
+        }, ...(Array.isArray(sx) ? sx : [sx])]}>
             <Typography
                 variant="overline"
                 sx={{
@@ -956,9 +960,11 @@ export default function InteractiveInstrumentVisual({
                 INSTRUMENTOS RÍTMICOS TÁCTILES (HAZ CLIC PARA PROBAR)
             </Typography>
 
+            {/* The canvas draws in a fixed 380x175 space; keep that aspect ratio so it is not stretched. */}
             <Box sx={{
                 width: '100%',
-                height: 175,
+                maxWidth: 760,
+                aspectRatio: '380 / 175',
                 position: 'relative',
                 overflow: 'hidden'
             }}>

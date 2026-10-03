@@ -197,8 +197,6 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           gridArea: 'lib',
           alignItems: "center",
           minWidth: 0,
-          '& > .MuiFormControl-root': { flex: { sm: 1, lg: 'none' }, width: { xs: '100%', lg: 210 } },
-          '& > .MuiButton-root': { width: { xs: '100%', sm: 'auto' } },
         }}>
         <Button
           variant="outlined"
@@ -213,6 +211,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
             fontWeight: 'bold',
             px: 2,
             flexShrink: 0,
+            width: { xs: '100%', sm: 'auto' },
             whiteSpace: 'nowrap',
             '&:hover': {
               borderColor: '#e5a95f',
@@ -223,7 +222,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           Biblioteca de Ritmos
         </Button>
 
-        <FormControl size="small" sx={{ minWidth: 0 }}>
+        <FormControl size="small" sx={{ minWidth: 0, flex: { sm: 1, lg: 'none' }, width: { xs: '100%', lg: 210 } }}>
           <InputLabel id="preset-select-label" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>Ritmo Predefinido</InputLabel>
           <Select
             labelId="preset-select-label"
