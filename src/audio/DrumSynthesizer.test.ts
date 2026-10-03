@@ -159,8 +159,8 @@ describe('DrumSynthesizer', () => {
 
     afterEach(async () => {
         // Never leave the background sample load pending when the test (and eventually the file) ends.
-        await synth.loadPromise;
-        consoleError.mockRestore();
+        await synth?.loadPromise;
+        consoleError?.mockRestore();
         vi.unstubAllGlobals();
     });
 
