@@ -153,6 +153,11 @@ describe('App (integration with a scripted engine)', () => {
         act(() => scheduler().emit({ trainerBar: 1, bpm: 65 }));
         expect(screen.getByTestId('trainer-status')).toHaveTextContent('Compás 2 de 4');
         expect(bpmInput().value).toBe('65');
+
+        // Keyboard shortcuts can't fight the trainer for the tempo either.
+        fireEvent.keyDown(document.body, { code: 'ArrowUp' });
+        fireEvent.keyDown(document.body, { code: 'KeyT' });
+        expect(bpmInput().value).toBe('65');
     });
 
     it('configures silence mode and folk forms, and shows the form progress', async () => {

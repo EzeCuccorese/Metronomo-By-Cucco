@@ -291,6 +291,20 @@ describe('DrumSynthesizer', () => {
         });
     });
 
+    it('every preset instrument still sounds through synthesis when no sample could be loaded', () => {
+        // No loadAllSamples(): simulates failed downloads or decodes (e.g. constrained mobile browsers).
+        const used = new Set(PRESET_PATTERNS.flatMap(p => p.steps.map(s => s.instrument)));
+        const channelGains = Object.values((synth as any).channels).map((c: any) => c.gain);
+        used.forEach(inst => {
+            createdBufferSources = [];
+            createdOscillators = [];
+            synth.play(inst, 0.1, 0.9);
+            const voices = [...createdBufferSources, ...createdOscillators].filter(n => n.start.mock.calls.length > 0);
+            expect(voices.length, `${inst} should synthesize a fallback voice`).toBeGreaterThan(0);
+            expect(voices.some(v => channelGains.some(g => reaches(v, g))), `${inst} fallback should reach the mixer`).toBe(true);
+        });
+    });
+
     it('does not start sample voices on a muted channel', () => {
         loadAllSamples();
         synth.setChannelMute('snare', true);

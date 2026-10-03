@@ -112,10 +112,16 @@ function App() {
 
   const handleTap = useTapTempo(setBpm);
 
+  // While the speed trainer runs it owns the tempo: the visible controls are disabled,
+  // so the keyboard shortcuts must not change it either.
+  const tempoLocked = trainer.active && isPlaying;
+
   useKeyboardShortcuts({
     onTogglePlay: toggle,
-    onTap: handleTap,
-    onNudgeBpm: useCallback((delta: number) => setBpmRaw(prev => clampBpm(prev + delta)), [setBpmRaw]),
+    onTap: useCallback(() => { if (!tempoLocked) handleTap(); }, [tempoLocked, handleTap]),
+    onNudgeBpm: useCallback((delta: number) => {
+      if (!tempoLocked) setBpmRaw(prev => clampBpm(prev + delta));
+    }, [tempoLocked, setBpmRaw]),
   });
 
   const canRestore = currentPattern.id !== CUSTOM_PATTERN_ID && !!overrides[currentPattern.id];
@@ -139,7 +145,7 @@ function App() {
               selectedPatternId={currentPattern.id}
               availablePresets={PRESET_PATTERNS}
               onSelectPreset={loadPreset}
-              tempoLocked={trainer.active && isPlaying}
+              tempoLocked={tempoLocked}
             />
 
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5, minHeight: 0, width: '100%' }}>
