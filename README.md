@@ -33,7 +33,7 @@ Metrónomo profesional y entrenador rítmico para músicos, con foco en ritmos f
 src/
 ├── audio/            Motor de audio (sin React)
 │   ├── Scheduler.ts         Agendado lookahead, cola visual, trainer, silencios, formas
-│   ├── DrumSynthesizer.ts   Samples (WAV/OGG) + síntesis de respaldo, mixer por canales
+│   ├── DrumSynthesizer.ts   Samples (Opus/OGG o AAC/M4A según el navegador) + síntesis de respaldo, mixer por canales
 │   ├── PolyphonicSynth.ts   Acompañamiento armónico
 │   ├── VoiceTracker.ts      Corte inmediato de voces agendadas al detener
 │   └── instrumentChannels.ts  Ruteo instrumento → canal (fuente única de verdad)

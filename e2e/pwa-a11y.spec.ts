@@ -19,11 +19,10 @@ test.describe('PWA', () => {
         expect((await request.get('/apple-touch-icon.png')).status()).toBe(200);
     });
 
-    test('the service worker precaches the folk samples for offline use', async ({ request }) => {
+    test('the service worker caches audio samples at runtime instead of precaching both formats', async ({ request }) => {
         const sw = await (await request.get('/sw.js')).text();
-        ['audio/bombo_parche.ogg', 'audio/clave.ogg', 'audio/candombe_chico.ogg', 'audio/kick.wav'].forEach(asset => {
-            expect(sw, asset).toContain(asset);
-        });
+        expect(sw).toContain('audio-samples');
+        expect(sw).not.toMatch(/audio\/[\w-]+\.(ogg|m4a|wav)/);
     });
 });
 

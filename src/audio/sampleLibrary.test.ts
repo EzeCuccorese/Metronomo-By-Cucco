@@ -39,7 +39,20 @@ describe('sampleLibrary', () => {
 
     it('skips samples whose download fails instead of decoding an error page', async () => {
         vi.stubGlobal('fetch', vi.fn(async (url: string) => ({
-            ok: !url.endsWith('/audio/kick.wav'),
+            ok: !url.endsWith('/audio/kick.ogg'),
+            status: 404,
+            arrayBuffer: async () => new ArrayBuffer(8),
+        })));
+        const ctx = makeContext();
+        const buffers = await loadSamples(ctx);
+        expect(buffers.has('kick')).toBe(true); // recovered through the m4a fallback
+        expect(ctx.decodeAudioData).toHaveBeenCalledTimes(19);
+        vi.unstubAllGlobals();
+    });
+
+    it('gives up on a sample only when both formats fail', async () => {
+        vi.stubGlobal('fetch', vi.fn(async (url: string) => ({
+            ok: !/\/audio\/kick\./.test(url),
             status: 404,
             arrayBuffer: async () => new ArrayBuffer(8),
         })));
@@ -49,6 +62,44 @@ describe('sampleLibrary', () => {
         expect(buffers.has('snare')).toBe(true);
         expect(ctx.decodeAudioData).toHaveBeenCalledTimes(18);
         vi.unstubAllGlobals();
+    });
+
+    it('falls back to the other format when decoding fails', async () => {
+        const fetchMock = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }));
+        vi.stubGlobal('fetch', fetchMock);
+        const ctx = makeContext();
+        ctx.decodeAudioData.mockRejectedValueOnce(new Error('EncodingError'));
+        const buffers = await loadSamples(ctx);
+        expect(buffers.size).toBeGreaterThanOrEqual(19);
+        expect(fetchMock).toHaveBeenCalledTimes(20);
+        vi.unstubAllGlobals();
+    });
+
+    describe('format selection', () => {
+        const urlsFor = async (canPlay: (type: string) => string) => {
+            vi.stubGlobal('Audio', class { canPlayType = canPlay; });
+            const fetchMock = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }));
+            vi.stubGlobal('fetch', fetchMock);
+            await loadSamples(makeContext());
+            return (fetchMock.mock.calls as unknown as string[][]).map(c => c[0]);
+        };
+        afterEach(() => vi.unstubAllGlobals());
+
+        it('prefers Opus/Ogg when the browser plays it', async () => {
+            const urls = await urlsFor(t => (t.includes('opus') ? 'probably' : ''));
+            expect(urls).toHaveLength(19);
+            expect(urls.every(u => u.endsWith('.ogg'))).toBe(true);
+        });
+
+        it('uses AAC/m4a when Ogg is unsupported (old iOS Safari)', async () => {
+            const urls = await urlsFor(t => (t.includes('mp4a') ? 'maybe' : ''));
+            expect(urls.every(u => u.endsWith('.m4a'))).toBe(true);
+        });
+
+        it('defaults to ogg when canPlayType answers nothing or throws', async () => {
+            expect((await urlsFor(() => '')).every(u => u.endsWith('.ogg'))).toBe(true);
+            expect((await urlsFor(() => { throw new Error('boom'); })).every(u => u.endsWith('.ogg'))).toBe(true);
+        });
     });
 
     it('trims to the attack and limits the duration', () => {
