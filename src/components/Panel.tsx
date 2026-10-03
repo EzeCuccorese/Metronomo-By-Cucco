@@ -58,6 +58,8 @@ export const Fill: React.FC<{ children: React.ReactNode; sx?: SxProps<Theme> }> 
   <Box
     sx={[
       {
+        flex: 1,
+        minHeight: 0,
         height: '100%',
         minWidth: 0,
         display: 'flex',
