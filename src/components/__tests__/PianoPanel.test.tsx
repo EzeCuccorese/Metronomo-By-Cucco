@@ -109,6 +109,12 @@ describe('PianoPanel', () => {
         }
     });
 
+    it('clicking a key moves focus onto it (preventDefault would otherwise skip it)', () => {
+        renderPanel();
+        fireEvent.pointerDown(keyEl(64), { pointerId: 1, pointerType: 'mouse', button: 0 });
+        expect(document.activeElement).toBe(keyEl(64));
+    });
+
     it('is playable from the keyboard: Enter plays the focused key, arrows move between keys', () => {
         const { engine } = renderPanel();
         const first = keyEl(48);

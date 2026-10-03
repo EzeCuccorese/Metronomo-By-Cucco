@@ -77,6 +77,10 @@ export default function PianoKeyboard({
         release(e.pointerId);
         pointers.current.set(e.pointerId, midi);
         const keyEl = target.closest<HTMLElement>('[data-midi]');
+        // preventDefault suppressed the native focus: move it to the key explicitly so the
+        // computer keyboard (scoped to focus inside the panel) works right after a click.
+        keyEl?.focus({ preventScroll: true });
+        setFocusMidi(midi);
         onNoteOn(midi, keyEl ? velocityFromPointer(e.clientY, keyEl.getBoundingClientRect()) : 0.8);
     };
 
