@@ -137,6 +137,8 @@ class Scheduler {
     private readonly lateToleranceSeconds: number = 0.03;
     // Stalls up to this long skip the missed steps and stay in phase; longer ones restart the grid.
     private readonly maxCatchUpSeconds: number = 1.0;
+    // Until the first note is out there is no phase to keep (the clock may jump while resuming).
+    private gridAnchored = false;
     private humanizeSeconds: number = 0;
     private clockWorker: Worker | null = null;
     private rafId: number | null = null;
@@ -363,6 +365,7 @@ class Scheduler {
             this.tempo = this.trainer.startBpm;
         }
         this.nextNoteTime = this.audioContext.currentTime + 0.05; // Slight buffer
+        this.gridAnchored = false;
 
         if (this.formasMode) {
             this.formSections = buildFormSections(this.formasGenre, this.formasIntroBars);
@@ -417,9 +420,10 @@ class Scheduler {
 
         const now = this.audioContext.currentTime;
 
-        // After a long stall (e.g. a throttled background tab) restart the grid from now
-        // instead of fast-forwarding silently through many bars of form/trainer progress.
-        if (now - this.nextNoteTime > this.maxCatchUpSeconds) {
+        // Before the first note (start/resume) or after a long stall (e.g. a throttled background
+        // tab) restart the grid from now instead of skipping or fast-forwarding through bars.
+        const behind = now - this.nextNoteTime;
+        if ((!this.gridAnchored && behind > 0) || behind > this.maxCatchUpSeconds) {
             this.nextNoteTime = now;
         }
 
@@ -430,6 +434,7 @@ class Scheduler {
             const missed = time < now - this.lateToleranceSeconds;
             this.scheduleNote(time, missed);
             this.nextStep(time, missed);
+            this.gridAnchored = true;
         }
     }
 
@@ -499,7 +504,9 @@ class Scheduler {
                     // Missed during a stall: keep voice leading anchored to the progression.
                     if (chord && chord.length > 0) this.lastChord = chord;
                 } else if (chord && chord.length > 0 && !(this.silenceModeActive && this.isMutedBar)) {
-                    this.polySynth.playChord(chord, segmentDuration, time, this.accompanimentStyle, this.lastChord, groups / segments);
+                    // A slightly late chord starts now: envelope ramps can't be scheduled in the past.
+                    const chordTime = Math.max(time, this.audioContext.currentTime);
+                    this.polySynth.playChord(chord, segmentDuration, chordTime, this.accompanimentStyle, this.lastChord, groups / segments);
                     this.lastChord = chord;
                 }
                 this.harmonyHalfBarIndex += 2 / segments;

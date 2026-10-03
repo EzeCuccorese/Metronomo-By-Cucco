@@ -172,6 +172,36 @@ describe('Scheduler', () => {
             expect(played[1].previous).toEqual(['D4']);
         });
 
+        it('anchors the grid on the first note when the clock jumps while starting', () => {
+            scheduler.setPattern(makePattern({ subdivision: 4, steps: [] }));
+            scheduler.setTempo(120);
+            scheduler.start(); // first beat planned at 0.05 s
+            stall(0.07); // the context resumes late: 20 ms past that beat
+            const startedAt = ctx.currentTime;
+            (scheduler as unknown as { scheduler: () => void }).scheduler();
+            run(scheduler, 1.2);
+
+            const clicks = playsOf('click');
+            expect(clicks[0].time).toBeCloseTo(startedAt, 9);
+            for (let i = 1; i < clicks.length; i++) {
+                expect(clicks[i].time - clicks[i - 1].time).toBeCloseTo(0.5, 9);
+            }
+        });
+
+        it('never schedules a slightly late chord in the past', () => {
+            scheduler.setHarmonyProgression([['C4'], ['D4']]);
+            scheduler.setPattern(makePattern({ subdivision: 4, steps: [] }));
+            scheduler.setTempo(120);
+            scheduler.start();
+            run(scheduler, 0.5);
+
+            stall(1.05 + 0.01 - ctx.currentTime); // D4 is due at 1.05 s
+            (scheduler as unknown as { scheduler: () => void }).scheduler();
+            const [chord, , time] = poly.playChord.mock.calls[1];
+            expect(chord).toEqual(['D4']);
+            expect(time).toBeCloseTo(ctx.currentTime, 9);
+        });
+
         it('still plays a note that is only slightly late', () => {
             scheduler.setPattern(makePattern({ subdivision: 4, steps: [] }));
             scheduler.setTempo(120);
