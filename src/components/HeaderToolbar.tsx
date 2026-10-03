@@ -104,19 +104,25 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
       className="brass-trim"
       elevation={6}
       sx={{
-        p: 1.5,
-        mb: 1.5,
+        p: { xs: 1.5, md: 2 },
         borderRadius: 4,
-        display: 'flex',
-        flexWrap: 'wrap',
+        display: 'grid',
         alignItems: 'center',
-        gap: { xs: 1.5, md: 2.5 },
+        columnGap: 2,
+        rowGap: 1.5,
+        // xs/sm: brand + play on top, tempo and library below; md: tempo joins the first row; lg: one row.
+        gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', md: 'minmax(0, 1fr) auto auto', lg: 'minmax(0, 1fr) auto auto auto' },
+        gridTemplateAreas: {
+          xs: '"brand play" "tempo tempo" "lib lib"',
+          md: '"brand tempo play" "lib lib lib"',
+          lg: '"brand lib tempo play"',
+        },
         bgcolor: '#13110f',
         boxShadow: '0 6px 16px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,255,255,0.02)'
       }}
     >
       {/* Title & Queue indicator */}
-      <Box sx={{ mr: 'auto', display: 'flex', flexDirection: 'column', gap: 0.2, minWidth: 0 }}>
+      <Box sx={{ gridArea: 'brand', display: 'flex', flexDirection: 'column', gap: 0.2, minWidth: 0 }}>
         <Stack
           direction="row"
           spacing={1.5}
@@ -136,7 +142,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
               letterSpacing: '0.05em',
               textShadow: '0 2px 10px rgba(229, 169, 95, 0.15)',
               fontFamily: '"Outfit", sans-serif',
-              fontSize: '1.2rem'
+              fontSize: { xs: '1.05rem', sm: '1.2rem' }
             }}>
             METRÓNOMO PRO
           </Typography>
@@ -184,12 +190,15 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
 
       {/* Preset Selector Dropdown & Visual Library Button */}
       <Stack
-        direction="row"
+        direction={{ xs: "column", sm: "row" }}
         spacing={1}
         useFlexGap
         sx={{
+          gridArea: 'lib',
           alignItems: "center",
-          flexWrap: "wrap"
+          minWidth: 0,
+          '& > .MuiFormControl-root': { flex: { sm: 1, lg: 'none' }, width: { xs: '100%', lg: 210 } },
+          '& > .MuiButton-root': { width: { xs: '100%', sm: 'auto' } },
         }}>
         <Button
           variant="outlined"
@@ -203,6 +212,8 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
             textTransform: 'none',
             fontWeight: 'bold',
             px: 2,
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
             '&:hover': {
               borderColor: '#e5a95f',
               bgcolor: 'rgba(229,169,95,0.1)'
@@ -212,7 +223,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           Biblioteca de Ritmos
         </Button>
 
-        <FormControl size="small" sx={{ minWidth: 180 }}>
+        <FormControl size="small" sx={{ minWidth: 0 }}>
           <InputLabel id="preset-select-label" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>Ritmo Predefinido</InputLabel>
           <Select
             labelId="preset-select-label"
@@ -242,19 +253,22 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
       {/* BPM Controls & Tap Tempo */}
       <Stack
         direction="row"
-        spacing={2}
+        spacing={{ xs: 1.5, sm: 2 }}
         sx={{
+          gridArea: 'tempo',
           alignItems: "center",
           bgcolor: 'rgba(0,0,0,0.3)',
           px: 2,
           py: 0.8,
           borderRadius: 3,
-          border: '1px solid rgba(255,255,255,0.05)'
+          border: '1px solid rgba(255,255,255,0.05)',
+          minWidth: 0,
         }}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 70 }}>
+        {/* Fixed width: "♩ BPM" grows to "♩ BPM · ♩.=67" in compound meters and must not push the slider. */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: { xs: 84, sm: 104 }, flexShrink: 0 }}>
           <BpmInput bpm={bpm} disabled={tempoLocked} onCommit={onBpmChange} />
           <Tooltip title={compound ? `En ${timeSignature[0]}/${timeSignature[1]} el pulso con puntillo (♩.) va a ${Math.round(bpm * 2 / 3)}` : 'Pulsos de negra por minuto'}>
-            <Typography variant="caption" data-testid="bpm-unit" sx={{ fontSize: '0.6rem', color: 'text.secondary', fontWeight: 700, letterSpacing: '0.1em' }}>
+            <Typography variant="caption" data-testid="bpm-unit" sx={{ fontSize: '0.6rem', color: 'text.secondary', fontWeight: 700, letterSpacing: '0.06em', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
               ♩ BPM{compound ? ` · ♩.=${Math.round(bpm * 2 / 3)}` : ''}
             </Typography>
           </Tooltip>
@@ -268,7 +282,9 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           onChange={(_, val) => onBpmChange(val as number)}
           aria-label="Tempo"
           sx={{
-            width: { xs: 90, sm: 110 },
+            minWidth: 80,
+            width: { lg: 150 },
+            flex: { xs: 1, lg: 'none' },
             color: '#e5a95f',
             '& .MuiSlider-thumb': {
               width: 14,
@@ -292,7 +308,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
             fontWeight: 800,
             fontSize: '0.75rem',
             px: 1.5,
-            minWidth: 75,
+            minWidth: { xs: 64, sm: 75 },
             boxShadow: 'none',
             '&:hover': {
               bgcolor: 'rgba(229, 169, 95, 0.3)',
@@ -313,8 +329,11 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
         data-testid="play-toggle"
         startIcon={isPlaying ? <StopIcon sx={{ fontSize: 28 }} /> : <PlayArrowIcon sx={{ fontSize: 28 }} />}
         sx={{
-          height: 48,
-          px: 3.5,
+          gridArea: 'play',
+          height: 52,
+          width: { xs: 132, sm: 148, md: 164 },
+          px: 2,
+          whiteSpace: 'nowrap',
           borderRadius: 3,
           fontWeight: 900,
           fontSize: '0.95rem',
