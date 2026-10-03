@@ -151,8 +151,11 @@ Para una sola app propia, reinstalar desde la Mac una vez por semana (un comando
 1. En `src/audio/AudioContextManager.ts`:
    - Antes del primer `resume()`, si existe `navigator.audioSession`, setear `navigator.audioSession.type = 'playback'`.
    - Escuchar `statechange` y `document.visibilitychange`, y reanudar con `resume()` en estado `suspended` o `interrupted`.
+   - `resume()` devuelve una promesa que WebKit puede rechazar (o dejar sin resolver) si no hay gesto de usuario activo. Siempre capturar con `.catch(...)`, sin promesas sueltas. Si falla, marcar `pendingResume = true` y reintentar en el próximo `pointerdown`/`keydown` (listener `{ once: true }`).
    - Si `resume()` no resuelve en 1 s (bug 291892), recrear el contexto y reconstruir el grafo. Hace falta un `dispose()` en `DrumSynthesizer` y `PolyphonicSynth`.
-2. Wake lock: crear `src/hooks/useWakeLock.ts` con `navigator.wakeLock.request('screen')` mientras `isPlaying`, y volver a pedirlo en `visibilitychange`.
+2. Wake lock: crear `src/hooks/useWakeLock.ts` con `navigator.wakeLock.request('screen')` mientras `isPlaying`, y volver a pedirlo en `visibilitychange` (el sistema lo libera al ocultarse la página).
+   - Envolver `request` en `try/catch`. Puede tirar `NotAllowedError`, por ejemplo con batería baja o en modo de ahorro de energía. En ese caso, seguir sin wake lock y sin romper la reproducción.
+   - Guardar el `WakeLockSentinel` y llamar a `release()` explícitamente cuando `isPlaying` pasa a `false` y en el cleanup del efecto (desmontaje).
 3. Agregar un aviso de Bluetooth en la UI (texto). Opcional: compensación visual con `AudioContext.outputLatency` [sin verificar que Safari reporte la latencia BT].
 4. **Checklist manual en el iPhone 18 Pro (iOS actual), como PWA instalada y en Safari:**
    - Suena con el switch de silencio activado.
