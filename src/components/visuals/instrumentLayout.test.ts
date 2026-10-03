@@ -153,6 +153,15 @@ describe('hitTestInstrument', () => {
         expect(hitTestInstrument(l, it.cx + it.hitR + 6, it.cy + it.hitR + 6)).toBeNull();
     });
 
+    it('treats the expanded touch area outside a small bombo pad as aro', () => {
+        for (const width of [160, 200, 240]) {
+            const l = computeLayout(width);
+            const b = itemByKey(l, 'bombo_parche')!;
+            expect(b.hitR).toBeGreaterThan(b.r);
+            expect(hitTestInstrument(l, b.cx + (b.r + b.hitR) / 2, b.cy)).toMatchObject({ key: 'bombo_aro' });
+        }
+    });
+
     it('distinguishes bombo parche from aro', () => {
         const l = computeLayout(800);
         const b = itemByKey(l, 'bombo_parche')!;

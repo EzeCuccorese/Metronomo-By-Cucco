@@ -250,7 +250,7 @@ export function hitTestInstrument(layout: InstrumentLayout, x: number, y: number
         }
     }
     if (!best) return null;
-    if (best.key === 'bombo_parche' && bestD > best.r * BOMBO_ARO_FROM && bestD <= best.r) {
+    if (best.key === 'bombo_parche' && bestD > best.r * BOMBO_ARO_FROM) {
         return { key: 'bombo_aro', instrument: 'rim', color: '#ffe082', rippleRadius: best.r * 1.5 };
     }
     return { key: best.key, instrument: best.instrument, color: best.color, rippleRadius: best.r * 1.6 };

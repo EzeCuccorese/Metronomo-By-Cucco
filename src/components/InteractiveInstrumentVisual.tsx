@@ -57,6 +57,7 @@ const PREVIEW_BUTTONS: { instrument: string; modifier?: string; label: string }[
 /** Content bounding box of an image (downsampled), so every photo can be fitted by what it shows. */
 function measureContent(img: HTMLImageElement): ContentBox {
     const full = { x: 0, y: 0, w: img.naturalWidth, h: img.naturalHeight };
+    if (!img.naturalWidth || !img.naturalHeight) return full;
     try {
         const n = 64;
         const c = document.createElement('canvas');
@@ -284,6 +285,8 @@ export default function InteractiveInstrumentVisual({
                 contentBoxesRef.current[key] = measureContent(img);
             };
             img.src = src;
+            // Cached images may already be decoded (onload can be skipped or delayed).
+            if (img.complete && img.naturalWidth) contentBoxesRef.current[key] = measureContent(img);
             imagesRef.current[key] = img;
         });
     }, []);
@@ -344,8 +347,8 @@ export default function InteractiveInstrumentVisual({
     useEffect(() => {
         const wrap = wrapRef.current;
         if (!wrap) return;
-        const resizeObserver = new ResizeObserver(applySize);
-        resizeObserver.observe(wrap);
+        const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(applySize);
+        resizeObserver?.observe(wrap);
         applySize();
         // Web fonts change text metrics: drop cached name sizes once they finish loading.
         const fonts = document.fonts;
@@ -354,7 +357,7 @@ export default function InteractiveInstrumentVisual({
         };
         fonts?.addEventListener?.('loadingdone', invalidateNames);
         return () => {
-            resizeObserver.disconnect();
+            resizeObserver?.disconnect();
             fonts?.removeEventListener?.('loadingdone', invalidateNames);
         };
     }, [applySize]);
