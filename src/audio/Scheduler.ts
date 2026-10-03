@@ -220,14 +220,13 @@ class Scheduler {
         this.piano.connect(pianoChannel);
         this.pianoFallback.connect(pianoChannel);
 
-        if (typeof Worker !== 'undefined') {
-            this.clockWorker = new ClockWorker();
-            this.clockWorker.onmessage = (e) => {
-                if (e.data === 'tick') {
-                    this.scheduler();
-                }
-            };
-        }
+
+        this.clockWorker = new ClockWorker();
+        this.clockWorker.onmessage = (e) => {
+            if (e.data === 'tick') {
+                this.scheduler();
+            }
+        };
     }
 
     // --- Mixer passthrough ---

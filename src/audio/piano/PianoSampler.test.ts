@@ -121,11 +121,11 @@ describe('loading', () => {
         errors.mockRestore();
     });
 
-    it('loads the Opus sample relative to the document base URI', async () => {
+    it('loads the Opus sample with a plain fetch of the absolute path', async () => {
         vi.stubGlobal('fetch', okFetch());
         const ctx = new FakeContext();
         const buffer = await loadPianoNote(ctx as unknown as BaseAudioContext, 'C4');
-        expect(buffer).toEqual({ id: new URL('/audio/piano/C4.ogg', document.baseURI).href });
+        expect(buffer).toEqual({ id: '/audio/piano/C4.ogg' });
     });
 
     it('decodes every note once per context and keys them by MIDI number', async () => {

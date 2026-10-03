@@ -61,7 +61,7 @@ export const velocityToCutoff = (velocity: number): number => {
 };
 
 async function fetchAndDecode(context: BaseAudioContext, url: string): Promise<AudioBuffer> {
-    const response = await fetch(new URL(url, document.baseURI).href);
+    const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return context.decodeAudioData(await response.arrayBuffer());
 }

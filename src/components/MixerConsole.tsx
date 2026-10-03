@@ -325,7 +325,6 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
                       onChange={(e) => handleVolumeSliderChange(ch.id, e)}
                       aria-label={`Volumen ${ch.name}`}
                       className="fader-input"
-                      {...({ orient: "vertical" } as Record<string, string>)}
                     />
                     {/* Visual 3D brushed slider cap over the slider thumb */}
                     <div 
