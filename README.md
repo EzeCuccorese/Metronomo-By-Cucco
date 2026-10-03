@@ -71,9 +71,13 @@ src/
 - Las notas de la melodía grabada se agendan en el mismo *lookahead* que la batería (nada de `setTimeout`), así el loop no se corre del compás.
 - El piano se descarga recién cuando lo usás. Cada nota está en Ogg Opus y en AAC (`.m4a`): el navegador usa la que puede decodificar y, si falla, prueba la otra. Si no carga ninguna, suena con el sintetizador.
 
-## Desarrollo
+## Compatibilidad
 
-Requiere Node 22.12+ (CI y Docker usan Node 24 LTS).
+Solo se soportan los navegadores más recientes: Safari (iOS y macOS) y Chrome en su última versión. No hay transpilación ni polyfills para navegadores antiguos (`build.target: esnext`).
+
+Requiere Node 26 (CI y Docker usan Node 26; ver `.nvmrc`). El typecheck corre con TypeScript 7 y ESLint usa TypeScript 6 (ver notas en el PR: typescript-eslint aún no soporta la API de TS 7).
+
+## Desarrollo
 
 ```bash
 npm install
