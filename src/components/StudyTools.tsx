@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState } from 'react';
 import {
     Box, Typography, Button, Stack, Paper, IconButton,
     CircularProgress, List, ListItem, ListItemText,
@@ -6,9 +6,9 @@ import {
     DialogContent, DialogActions, Divider,
     Collapse, Snackbar
 } from '@mui/material';
-import { usePersistentState } from '../hooks/usePersistentState';
+import { usePomodoro, formatTime } from '../hooks/usePomodoro';
+import { useStudyTasks } from '../hooks/useStudyTasks';
 import { usePlayback } from '../state/PlaybackContext';
-import { isBoolean, isNumber, isPlainObject, isString } from '../state/storage';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -19,20 +19,7 @@ import ExpandMore from '@mui/icons-material/ExpandMore';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 
-export interface SubTask {
-    id: string;
-    title: string;
-    completed: boolean;
-}
-
-export interface Task {
-    id: string;
-    title: string;
-    subtasks: SubTask[];
-    estimatedPomodoros: number;
-    completedPomodoros: number;
-    isCompleted: boolean;
-}
+export type { SubTask, Task } from '../hooks/useStudyTasks';
 
 const TomatoIcon = ({ filled, size = 16 }: { filled: boolean; size?: number }) => (
     <Box
@@ -61,30 +48,24 @@ interface StudyToolsProps {
     onStopRequest?: () => void;
 }
 
-const DURATIONS = { pomodoro: 25 * 60, break: 5 * 60 } as const;
-
-const isSubTask = (v: unknown): v is SubTask =>
-    isPlainObject(v) && isString(v.id) && isString(v.title) && isBoolean(v.completed);
-const isTask = (v: unknown): v is Task =>
-    isPlainObject(v) && isString(v.id) && isString(v.title) && Array.isArray(v.subtasks) && v.subtasks.every(isSubTask) &&
-    isNumber(v.estimatedPomodoros) && isNumber(v.completedPomodoros) && isBoolean(v.isCompleted);
-const isTaskList = (v: unknown): v is Task[] => Array.isArray(v) && v.every(isTask);
-const isNullableString = (v: unknown): v is string | null => v === null || isString(v);
-
 export default function StudyTools({ onStopRequest }: StudyToolsProps) {
     const totalBarsPracticed = usePlayback(s => s.totalBars);
-
-    // Timer State
-    const [timerType, setTimerType] = useState<'pomodoro' | 'break'>('pomodoro');
-    const [timeLeft, setTimeLeft] = useState<number>(DURATIONS.pomodoro);
-    const [isActive, setIsActive] = useState(false);
     const [notice, setNotice] = useState<string | null>(null);
-    const endTimeRef = useRef<number>(0);
-
-    // Task State
-    const [tasks, setTasks] = usePersistentState<Task[]>('study.tasks', [], isTaskList);
-    const [activeTaskId, setActiveTaskId] = usePersistentState<string | null>('study.activeTask', null, isNullableString);
+    const {
+        tasks, activeTaskId, setActiveTaskId, addTask,
+        deleteTask, toggleSubtask, toggleTaskComplete, recordPomodoro,
+    } = useStudyTasks();
     const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+
+    const { mode: timerType, timeLeft, isActive, progress, toggle: toggleTimer, reset: resetTimer, setMode } = usePomodoro(mode => {
+        if (mode === 'pomodoro') {
+            recordPomodoro();
+            setNotice('¡Pomodoro completado! Tomate un descanso.');
+        } else {
+            setNotice('Descanso terminado. ¡A practicar!');
+        }
+        onStopRequest?.();
+    });
 
     // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -92,109 +73,13 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
     const [newTaskPomodoros, setNewTaskPomodoros] = useState(1);
     const [newTaskSubtasks, setNewTaskSubtasks] = useState<string>('');
 
-    const intervalRef = useRef<number | null>(null);
-
-    const handleTimerComplete = useCallback(() => {
-        setIsActive(false);
-
-        if (timerType === 'pomodoro') {
-            if (activeTaskId) {
-                setTasks(prev => prev.map(t => t.id === activeTaskId ? { ...t, completedPomodoros: t.completedPomodoros + 1 } : t));
-            }
-            setNotice('¡Pomodoro completado! Tomate un descanso.');
-        } else {
-            setNotice('Descanso terminado. ¡A practicar!');
-        }
-        onStopRequest?.();
-    }, [timerType, activeTaskId, onStopRequest, setTasks]);
-
-    // Timer Logic: counts against a wall-clock deadline so throttled background tabs don't drift.
-    useEffect(() => {
-        if (!isActive) return;
-        endTimeRef.current = Date.now() + timeLeft * 1000;
-        intervalRef.current = window.setInterval(() => {
-            const remaining = Math.max(0, Math.round((endTimeRef.current - Date.now()) / 1000));
-            setTimeLeft(remaining);
-            if (remaining === 0) {
-                if (intervalRef.current) clearInterval(intervalRef.current);
-                handleTimerComplete();
-            }
-        }, 250);
-        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-        // timeLeft is read only when (re)starting the countdown.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isActive, handleTimerComplete]);
-
-    const toggleTimer = () => setIsActive(active => !active);
-    const resetTimer = () => {
-        setIsActive(false);
-        setTimeLeft(DURATIONS[timerType]);
-    };
-    const setMode = (mode: 'pomodoro' | 'break') => {
-        setIsActive(false);
-        setTimerType(mode);
-        setTimeLeft(DURATIONS[mode]);
-    };
-
-    const formatTime = (seconds: number) => {
-        const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    };
-
-    // Task Management
-    const addTask = () => {
-        if (!newTaskTitle.trim()) return;
-
-        const subItems = newTaskSubtasks.split('\n').filter(s => s.trim()).map((s, idx) => ({
-            id: Date.now() + '-' + idx,
-            title: s.trim(),
-            completed: false
-        }));
-
-        const newTask: Task = {
-            id: Date.now().toString(),
-            title: newTaskTitle,
-            subtasks: subItems,
-            estimatedPomodoros: Math.max(1, newTaskPomodoros),
-            completedPomodoros: 0,
-            isCompleted: false
-        };
-
-        setTasks(prev => [...prev, newTask]);
+    const handleAddTask = () => {
+        if (!addTask(newTaskTitle, newTaskPomodoros, newTaskSubtasks)) return;
         setNewTaskTitle('');
         setNewTaskSubtasks('');
         setNewTaskPomodoros(1);
         setIsDialogOpen(false);
     };
-
-    const deleteTask = (id: string) => {
-        setTasks(prev => prev.filter(t => t.id !== id));
-        if (activeTaskId === id) setActiveTaskId(null);
-    };
-
-    const toggleSubtask = (taskId: string, subId: string) => {
-        setTasks(prev => prev.map(t => {
-            if (t.id !== taskId) return t;
-            return {
-                ...t,
-                subtasks: t.subtasks.map(s => s.id === subId ? { ...s, completed: !s.completed } : s)
-            };
-        }));
-    };
-
-    const toggleTaskComplete = (taskId: string) => {
-        setTasks(prev => prev.map(t => {
-            if (t.id !== taskId) return t;
-            return {
-                ...t,
-                isCompleted: !t.isCompleted,
-                subtasks: t.subtasks.map(s => ({ ...s, completed: !t.isCompleted }))
-            };
-        }));
-    };
-
-    const progress = 100 - (timeLeft / DURATIONS[timerType]) * 100;
 
     return (
         <Paper className="brass-trim" sx={{
@@ -422,7 +307,7 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-                    <Button onClick={addTask} variant="contained" color="secondary">Agregar</Button>
+                    <Button onClick={handleAddTask} variant="contained" color="secondary">Agregar</Button>
                 </DialogActions>
             </Dialog>
             <Snackbar

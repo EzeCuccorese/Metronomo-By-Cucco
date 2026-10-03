@@ -127,6 +127,117 @@ describe('Scheduler', () => {
         });
     });
 
+    describe('main-thread stalls', () => {
+        /** Freezes the scheduler for `seconds` while the audio clock keeps running. */
+        const stall = (seconds: number) => {
+            ctx.currentTime = Math.round((ctx.currentTime + seconds) * 1e6) / 1e6;
+        };
+
+        it('skips the steps missed during a short stall and stays on the original grid', () => {
+            scheduler.setPattern(makePattern({ subdivision: 4, steps: [] }));
+            scheduler.setTempo(120);
+            scheduler.start();
+            run(scheduler, 0.5);
+            const before = playsOf('click');
+            const gridStart = before[0].time;
+
+            // Longer than the lookahead window: the beat at 1.05 s is missed.
+            stall(0.9);
+            const resumedAt = ctx.currentTime;
+            run(scheduler, 1.5);
+
+            const clicks = playsOf('click');
+            const after = clicks.slice(before.length);
+            // No burst: the missed beat is dropped, not played late.
+            expect(after[0].time).toBeGreaterThan(resumedAt);
+            // Phase is kept: every click lies on the grid that started before the stall.
+            clicks.forEach(c => {
+                const beats = (c.time - gridStart) / 0.5;
+                expect(beats).toBeCloseTo(Math.round(beats), 9);
+            });
+        });
+
+        it('keeps harmony voice leading on the progression across a stall', () => {
+            scheduler.setHarmonyProgression([['C4'], ['D4'], ['E4'], ['F4']]);
+            scheduler.setPattern(makePattern({ subdivision: 4, steps: [] }));
+            scheduler.setTempo(120);
+            scheduler.start();
+            run(scheduler, 0.5); // C4 sounds at 0.05 s
+
+            stall(1.0); // the D4 half bar (1.05 s) is missed
+            run(scheduler, 0.6);
+
+            const played = poly.playChord.mock.calls.map(c => ({ chord: c[0], previous: c[4] }));
+            expect(played.map(p => p.chord)).toEqual([['C4'], ['E4']]);
+            expect(played[1].previous).toEqual(['D4']);
+        });
+
+        it('anchors the grid on the first note when the clock jumps while starting', () => {
+            scheduler.setPattern(makePattern({ subdivision: 4, steps: [] }));
+            scheduler.setTempo(120);
+            scheduler.start(); // first beat planned at 0.05 s
+            stall(0.07); // the context resumes late: 20 ms past that beat
+            const startedAt = ctx.currentTime;
+            (scheduler as unknown as { scheduler: () => void }).scheduler();
+            run(scheduler, 1.2);
+
+            const clicks = playsOf('click');
+            expect(clicks[0].time).toBeCloseTo(startedAt, 9);
+            for (let i = 1; i < clicks.length; i++) {
+                expect(clicks[i].time - clicks[i - 1].time).toBeCloseTo(0.5, 9);
+            }
+        });
+
+        it('never schedules a slightly late chord in the past', () => {
+            scheduler.setHarmonyProgression([['C4'], ['D4']]);
+            scheduler.setPattern(makePattern({ subdivision: 4, steps: [] }));
+            scheduler.setTempo(120);
+            scheduler.start();
+            run(scheduler, 0.5);
+
+            stall(1.05 + 0.01 - ctx.currentTime); // D4 is due at 1.05 s
+            (scheduler as unknown as { scheduler: () => void }).scheduler();
+            const [chord, , time] = poly.playChord.mock.calls[1];
+            expect(chord).toEqual(['D4']);
+            expect(time).toBeCloseTo(ctx.currentTime, 9);
+        });
+
+        it('still plays a note that is only slightly late', () => {
+            scheduler.setPattern(makePattern({ subdivision: 4, steps: [] }));
+            scheduler.setTempo(120);
+            scheduler.start();
+            run(scheduler, 0.5);
+            const count = playsOf('click').length;
+
+            // Beats at 0.05 and 0.55 s are already queued; the next one (1.05 s) is
+            // reached by a scheduler that wakes up 10 ms after it.
+            stall(1.05 + 0.01 - ctx.currentTime);
+            (scheduler as unknown as { scheduler: () => void }).scheduler();
+            const late = playsOf('click')[count];
+            expect(late.time).toBeCloseTo(ctx.currentTime, 9);
+        });
+
+        it('restarts the grid from now after a long stall instead of fast-forwarding', () => {
+            const events: PlaybackEvent[] = [];
+            scheduler.setOnPlaybackUpdate(e => events.push(e));
+            scheduler.setPattern(makePattern({ subdivision: 4, steps: [] }));
+            scheduler.setTempo(120);
+            scheduler.start();
+            run(scheduler, 0.5);
+            const count = playsOf('click').length;
+
+            stall(5);
+            run(scheduler, 0.025);
+            const resumeAt = ctx.currentTime;
+            run(scheduler, 0.1);
+
+            const next = playsOf('click')[count];
+            expect(next.time).toBeCloseTo(resumeAt, 9);
+            // ~10 bars of silence did not count as practised bars.
+            expect(Math.max(...events.map(e => e.totalBars))).toBeLessThanOrEqual(1);
+        });
+    });
+
     describe('pattern changes', () => {
         it('hot-swaps edits of the playing pattern on the next step (C2/C3 regression)', () => {
             const original = makePattern({ subdivision: 4 });
