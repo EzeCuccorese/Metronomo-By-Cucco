@@ -192,3 +192,14 @@ export function advanceParticle(p: SparkParticle): boolean {
     p.alpha -= p.decay;
     return p.alpha > 0;
 }
+
+/**
+ * Advances every item and removes the ones that expired, in place. Iterates in reverse so
+ * splicing never skips a neighbour. Returns the survivors in their original order.
+ */
+export function advanceAndPrune<T>(items: T[], advance: (item: T) => boolean): T[] {
+    for (let i = items.length - 1; i >= 0; i--) {
+        if (!advance(items[i])) items.splice(i, 1);
+    }
+    return items;
+}

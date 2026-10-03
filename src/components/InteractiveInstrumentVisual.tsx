@@ -8,6 +8,7 @@ import type { HighlightMap } from './visuals/highlight';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 import {
     CLICK_BOOST,
+    advanceAndPrune,
     advanceParticle,
     advanceRipple,
     createParticle,
@@ -198,12 +199,7 @@ export default function InteractiveInstrumentVisual({
             });
 
             // --- B. RENDERING RIPPLES ---
-            ripplesRef.current.forEach((rp, idx) => {
-                if (!advanceRipple(rp)) {
-                    ripplesRef.current.splice(idx, 1);
-                    return;
-                }
-
+            advanceAndPrune(ripplesRef.current, advanceRipple).forEach(rp => {
                 ctx.save();
                 ctx.beginPath();
                 ctx.arc(rp.x, rp.y, rp.radius, 0, Math.PI * 2);
@@ -215,12 +211,7 @@ export default function InteractiveInstrumentVisual({
             });
 
             // --- B2. RENDERING SPARKS (PARTICLES) ---
-            particlesRef.current.forEach((p, idx) => {
-                if (!advanceParticle(p)) {
-                    particlesRef.current.splice(idx, 1);
-                    return;
-                }
-
+            advanceAndPrune(particlesRef.current, advanceParticle).forEach(p => {
                 ctx.save();
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);

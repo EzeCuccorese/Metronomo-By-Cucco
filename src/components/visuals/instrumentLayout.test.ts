@@ -6,6 +6,7 @@ import {
     SCALE_KEYS,
     SPRING_DAMPING,
     SPRING_STIFFNESS,
+    advanceAndPrune,
     advanceParticle,
     advanceRipple,
     createParticle,
@@ -179,5 +180,32 @@ describe('particles', () => {
         let alive = true;
         for (let i = 0; i < 100 && alive; i++) alive = advanceParticle(p);
         expect(alive).toBe(false);
+    });
+});
+
+describe('advanceAndPrune', () => {
+    it('advances every item exactly once', () => {
+        const items = [{ n: 0 }, { n: 0 }, { n: 0 }];
+        advanceAndPrune(items, it => {
+            it.n++;
+            return true;
+        });
+        expect(items.map(i => i.n)).toEqual([1, 1, 1]);
+    });
+
+    it('does not skip consecutive expired items (regression)', () => {
+        const seen: number[] = [];
+        const items = [1, 2, 3, 4, 5];
+        const out = advanceAndPrune(items, n => {
+            seen.push(n);
+            return n === 5;
+        });
+        expect(seen.sort()).toEqual([1, 2, 3, 4, 5]);
+        expect(out).toEqual([5]);
+    });
+
+    it('keeps survivor order and handles empty lists', () => {
+        expect(advanceAndPrune([1, 2, 3, 4], n => n % 2 === 0)).toEqual([2, 4]);
+        expect(advanceAndPrune([], () => true)).toEqual([]);
     });
 });
