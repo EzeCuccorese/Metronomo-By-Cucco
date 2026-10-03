@@ -45,25 +45,7 @@ const TRIMS: { from: string; to: string; threshold: number; seconds: number }[] 
 
 const cache = new WeakMap<BaseAudioContext, Promise<Map<string, AudioBuffer>>>();
 
-type SampleFormat = 'ogg' | 'm4a';
-
-/**
- * Every sample ships as Opus-in-Ogg (smallest) and AAC-in-MP4 (old iOS Safari cannot
- * decode Ogg). Each device downloads only the format it can play, so the preferred
- * one is picked once; the other is the fallback if a file fails to load or decode.
- */
-function sampleFormats(): SampleFormat[] {
-    if (typeof Audio === 'undefined') return ['ogg', 'm4a'];
-    try {
-        const probe = new Audio();
-        if (probe.canPlayType('audio/ogg; codecs="opus"') !== '') return ['ogg', 'm4a'];
-        if (probe.canPlayType('audio/mp4; codecs="mp4a.40.2"') !== '') return ['m4a', 'ogg'];
-    } catch {
-        // fall through to the default order
-    }
-    return ['ogg', 'm4a'];
-}
-
+/** Every sample ships as Opus-in-Ogg, which every supported browser decodes. */
 async function fetchAndDecode(context: BaseAudioContext, url: string): Promise<AudioBuffer> {
     const baseUrl = typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null'
         ? window.location.origin
@@ -73,19 +55,15 @@ async function fetchAndDecode(context: BaseAudioContext, url: string): Promise<A
     return await context.decodeAudioData(await response.arrayBuffer());
 }
 
-async function loadSample(context: BaseAudioContext, base: string, formats: SampleFormat[]): Promise<AudioBuffer | null> {
-    for (let i = 0; i < formats.length; i++) {
-        const url = `${base}.${formats[i]}`;
-        try {
-            return await fetchAndDecode(context, url);
-        } catch (e) {
-            // Only an error once every format has failed; otherwise the next one is tried.
-            if (i < formats.length - 1) console.warn(`Failed to load sample ${url}, trying ${base}.${formats[i + 1]}`, e);
-            else console.error(`Failed to load sample ${url}`, e);
-        }
+async function loadSample(context: BaseAudioContext, base: string): Promise<AudioBuffer | null> {
+    const url = `${base}.ogg`;
+    try {
+        return await fetchAndDecode(context, url);
+    } catch (e) {
+        console.error(`Failed to load sample ${url}`, e);
+        // The synthesizer falls back to its synthesized voice for this instrument.
+        return null;
     }
-    // The synthesizer falls back to its synthesized voice for this instrument.
-    return null;
 }
 
 export function trimBuffer(context: BaseAudioContext, buffer: AudioBuffer, threshold: number, durationSec: number): AudioBuffer {
@@ -128,30 +106,6 @@ export function trimBuffer(context: BaseAudioContext, buffer: AudioBuffer, thres
     return trimmedBuffer;
 }
 
-/**
- * Removes leading near-silence (|x| < threshold across all channels), capped at `maxSeconds`.
- * Guards against decoders that keep AAC encoder priming (~44 ms) instead of honouring the
- * file's edit list: a drum hit must land on the grid, not a few tens of ms late.
- * Returns the same buffer when there is nothing to strip.
- */
-export function stripLeadingSilence(context: BaseAudioContext, buffer: AudioBuffer, threshold = 0.001, maxSeconds = 0.05): AudioBuffer {
-    const maxSkip = Math.min(buffer.length - 1, Math.floor(maxSeconds * buffer.sampleRate));
-    const channels: Float32Array[] = [];
-    for (let ch = 0; ch < buffer.numberOfChannels; ch++) channels.push(buffer.getChannelData(ch));
-    let skip = 0;
-    scan: while (skip < maxSkip) {
-        for (const data of channels) {
-            if (Math.abs(data[skip]) >= threshold) break scan;
-        }
-        skip++;
-    }
-    if (skip === 0) return buffer;
-
-    const out = context.createBuffer(buffer.numberOfChannels, buffer.length - skip, buffer.sampleRate);
-    channels.forEach((data, ch) => out.getChannelData(ch).set(data.subarray(skip)));
-    return out;
-}
-
 /** Adds the trimmed versions of the raw recordings present in `buffers`. */
 export function addTrimmedSamples(context: BaseAudioContext, buffers: Map<string, AudioBuffer>): void {
     TRIMS.forEach(({ from, to, threshold, seconds }) => {
@@ -166,13 +120,11 @@ export function loadSamples(context: BaseAudioContext): Promise<Map<string, Audi
     if (!pending) {
         pending = (async () => {
             const buffers = new Map<string, AudioBuffer>();
-            const formats = sampleFormats();
-            const decoded = await Promise.all(SAMPLE_ASSETS.map(a => loadSample(context, a.base, formats)));
+            const decoded = await Promise.all(SAMPLE_ASSETS.map(a => loadSample(context, a.base)));
             decoded.forEach((buffer, i) => {
                 if (!buffer) return;
                 const { name } = SAMPLE_ASSETS[i];
-                // Raw recordings are aligned to their attack by trimBuffer instead.
-                buffers.set(name, name.endsWith('_raw') ? buffer : stripLeadingSilence(context, buffer));
+                buffers.set(name, buffer);
             });
             addTrimmedSamples(context, buffers);
             return buffers;

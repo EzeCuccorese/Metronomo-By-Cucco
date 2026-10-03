@@ -19,9 +19,9 @@ test.describe('PWA', () => {
         expect((await request.get('/apple-touch-icon.png')).status()).toBe(200);
     });
 
-    test('the service worker precaches both sample formats for offline use', async ({ request }) => {
+    test('the service worker precaches the samples for offline use', async ({ request }) => {
         const sw = await (await request.get('/sw.js')).text();
-        ['audio/bombo_parche.ogg', 'audio/bombo_parche.m4a', 'audio/kick.ogg', 'audio/kick.m4a', 'audio/clave.ogg', 'audio/candombe_chico.m4a'].forEach(asset => {
+        ['audio/bombo_parche.ogg', 'audio/kick.ogg', 'audio/clave.ogg', 'audio/candombe_chico.ogg'].forEach(asset => {
             expect(sw, asset).toContain(asset);
         });
     });
