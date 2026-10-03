@@ -73,13 +73,11 @@ export function synthClave(host: VoiceHost, time: number, velocity: number): voi
     // Dual bandpass filters in parallel
     const bp1 = host.getFilter();
     bp1.type = 'bandpass';
-    bp1.frequency.setValueAtTime(1800, time);
-    bp1.Q.setValueAtTime(25.0, time);
+    scheduleFilter(bp1, time, 1800, 25.0);
 
     const bp2 = host.getFilter();
     bp2.type = 'bandpass';
-    bp2.frequency.setValueAtTime(2200, time);
-    bp2.Q.setValueAtTime(25.0, time);
+    scheduleFilter(bp2, time, 2200, 25.0);
 
     // Mix gain after filters
     const mixGain1 = host.getGain();

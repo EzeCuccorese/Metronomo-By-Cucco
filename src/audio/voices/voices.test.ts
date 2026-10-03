@@ -54,6 +54,12 @@ function makeHost(withBuffers: boolean) {
 }
 
 describe('synth voices', () => {
+    it('ride still plays the impact ping and the hum when the noise buffer is missing', () => {
+        const { host, started } = makeHost(false);
+        synthRide(host, 0, 1);
+        expect(started).toHaveLength(2);
+    });
+
     it('start at least one voice and release pooled nodes on end when buffers are ready', () => {
         const { host, started } = makeHost(true);
         const voices = [

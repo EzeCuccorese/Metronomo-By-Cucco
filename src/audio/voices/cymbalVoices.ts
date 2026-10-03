@@ -71,8 +71,7 @@ export function synthCrash(host: VoiceHost, time: number, velocity: number): voi
 
     const filter = host.getFilter();
     filter.type = 'highpass';
-    filter.frequency.setValueAtTime(2000, time);
-    filter.Q.setValueAtTime(1, time); // pooled filters may carry a previous voice's Q
+    scheduleFilter(filter, time, 2000);
 
     const gain = host.getGain();
 
@@ -111,37 +110,38 @@ export function synthRide(host: VoiceHost, time: number, velocity: number): void
     impact.stop(time + 0.05);
 
     // B. The "Body" wash - Simulated edge hit using band-pass filtered noise
-    if (!host.noiseBuffer) return;
+    const noiseBuffer = host.noiseBuffer;
+    if (noiseBuffer) {
+        // Multiple band-passes for complex metallic shimmer
+        const resonances = [6000, 8500, 11000];
+        resonances.forEach((freq, i) => {
+            const noise = host.context.createBufferSource();
+            noise.buffer = noiseBuffer;
 
-    // Multiple band-passes for complex metallic shimmer
-    const resonances = [6000, 8500, 11000];
-    resonances.forEach((freq, i) => {
-        const noise = host.context.createBufferSource();
-        noise.buffer = host.noiseBuffer!;
+            const filter = host.getFilter();
+            filter.type = 'bandpass';
+            scheduleFilter(filter, time, freq, 5);
 
-        const filter = host.getFilter();
-        filter.type = 'bandpass';
-        scheduleFilter(filter, time, freq, 5);
+            const noiseGain = host.getGain();
 
-        const noiseGain = host.getGain();
+            noise.connect(filter);
+            filter.connect(noiseGain);
+            host.connectVoiceToChannel(noiseGain, 'hihat');
 
-        noise.connect(filter);
-        filter.connect(noiseGain);
-        host.connectVoiceToChannel(noiseGain, 'hihat');
+            // Shimmer envelope
+            noiseGain.gain.setValueAtTime(0, time);
+            noiseGain.gain.linearRampToValueAtTime(velocity * (0.2 - (i * 0.05)), time + 0.02);
+            noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 1.2); // Clean decay
 
-        // Shimmer envelope
-        noiseGain.gain.setValueAtTime(0, time);
-        noiseGain.gain.linearRampToValueAtTime(velocity * (0.2 - (i * 0.05)), time + 0.02);
-        noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 1.2); // Clean decay
+            noise.onended = () => {
+                host.releaseFilter(filter);
+                host.releaseGain(noiseGain);
+            };
 
-        noise.onended = () => {
-            host.releaseFilter(filter);
-            host.releaseGain(noiseGain);
-        };
-
-        host.startVoice(noise, time);
-        noise.stop(time + 1.2);
-    });
+            host.startVoice(noise, time);
+            noise.stop(time + 1.2);
+        });
+    }
 
     // C. Low-frequency metal "hum" (Very subtle, dry)
     const hum = host.context.createOscillator();
@@ -181,8 +181,7 @@ export function synthShaker(host: VoiceHost, time: number, velocity: number): vo
     const volumeFactor = isPush ? 0.28 : 0.18;
 
     // Apply sweeping dynamic bandpass filter
-    filter.Q.setValueAtTime(q, time);
-    filter.frequency.setValueAtTime(startFreq, time);
+    scheduleFilter(filter, time, startFreq, q);
     filter.frequency.exponentialRampToValueAtTime(endFreq, time + decay);
 
     const gain = host.getGain();
