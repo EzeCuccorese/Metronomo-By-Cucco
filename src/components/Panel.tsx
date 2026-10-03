@@ -34,7 +34,7 @@ export const Panel: React.FC<PanelProps> = ({ title, action, children, sx }) => 
     ]}
   >
     {title && (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, minHeight: 24 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, minHeight: 24, width: '100%' }}>
         <Typography
           variant="overline"
           component="h2"
