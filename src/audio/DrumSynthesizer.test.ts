@@ -35,6 +35,7 @@ const mockAudioContext = {
             connect: vi.fn(),
             disconnect: vi.fn(),
             start: vi.fn(),
+            addEventListener: vi.fn(),
             stop: vi.fn(),
             onended: null as any,
         };
@@ -45,6 +46,7 @@ const mockAudioContext = {
         curve: null,
         oversample: 'none',
         connect: vi.fn(),
+        disconnect: vi.fn(),
     })),
     createStereoPanner: vi.fn(() => ({
         pan: mockAudioParam(),
@@ -58,6 +60,7 @@ const mockAudioContext = {
             connect: vi.fn(),
             disconnect: vi.fn(),
             start: vi.fn(),
+            addEventListener: vi.fn(),
             stop: vi.fn(),
             onended: null as any,
         };
@@ -133,6 +136,8 @@ vi.mock('./AudioContextManager', () => {
 });
 
 import DrumSynthesizer from './DrumSynthesizer';
+import { PRESET_PATTERNS } from '../rhythms/RhythmPatterns';
+import { INSTRUMENT_CHANNEL } from './instrumentChannels';
 
 describe('DrumSynthesizer', () => {
     let synth: DrumSynthesizer;
@@ -253,5 +258,85 @@ describe('DrumSynthesizer', () => {
         expect(f1).toBeDefined();
         (synth as any).releaseGain(g1);
         (synth as any).releaseFilter(f1);
+    });
+
+    const loadAllSamples = () => {
+        const dummyBuffer = mockAudioContext.createBuffer(1, 44100, 44100);
+        dummyBuffer.getChannelData(0).fill(0.5, 0, 1000);
+        ['kick', 'snare', 'hihat', 'hihat-open', 'ride', 'surdo', 'tom_high', 'tom_low', 'tom_floor',
+            'bombo_parche_raw', 'bombo_aro_raw', 'caja_raw', 'cajon_raw', 'palmas_raw', 'shaker_real_raw',
+            'clave_raw', 'candombe_chico_raw', 'candombe_repique_raw', 'candombe_piano_raw']
+            .forEach(name => (synth as any).audioBuffers.set(name, dummyBuffer));
+        (synth as any).trimBomboAssets();
+    };
+
+    /** Follows connect() calls from a node and reports whether it reaches the given target. */
+    const reaches = (node: any, target: any, depth = 0): boolean => {
+        if (node === target) return true;
+        if (depth > 6 || !node?.connect?.mock) return false;
+        return node.connect.mock.calls.some((c: any[]) => reaches(c[0], target, depth + 1));
+    };
+
+    it('routes every instrument used by the presets to an existing mixer channel (C4 regression)', () => {
+        loadAllSamples();
+        const used = new Set(PRESET_PATTERNS.flatMap(p => p.steps.map(s => s.instrument)));
+        used.forEach(inst => {
+            createdBufferSources = [];
+            createdOscillators = [];
+            synth.play(inst, 0.1, 0.9);
+            const sources = [...createdBufferSources, ...createdOscillators].filter(n => n.start.mock.calls.length > 0);
+            expect(sources.length, `${inst} should start at least one voice`).toBeGreaterThan(0);
+            const channelGain = (synth as any).channels[INSTRUMENT_CHANNEL[inst]].gain;
+            expect(sources.some(src => reaches(src, channelGain)), `${inst} should reach its channel`).toBe(true);
+        });
+    });
+
+    it('every preset instrument still sounds through synthesis when no sample could be loaded', () => {
+        // No loadAllSamples(): simulates failed downloads or decodes (e.g. constrained mobile browsers).
+        const used = new Set(PRESET_PATTERNS.flatMap(p => p.steps.map(s => s.instrument)));
+        const channelGains = Object.values((synth as any).channels).map((c: any) => c.gain);
+        used.forEach(inst => {
+            createdBufferSources = [];
+            createdOscillators = [];
+            synth.play(inst, 0.1, 0.9);
+            const voices = [...createdBufferSources, ...createdOscillators].filter(n => n.start.mock.calls.length > 0);
+            expect(voices.length, `${inst} should synthesize a fallback voice`).toBeGreaterThan(0);
+            expect(voices.some(v => channelGains.some(g => reaches(v, g))), `${inst} fallback should reach the mixer`).toBe(true);
+        });
+    });
+
+    it('does not start sample voices on a muted channel', () => {
+        loadAllSamples();
+        synth.setChannelMute('snare', true);
+        createdBufferSources = [];
+        synth.play('palmas', 0.1, 1);
+        expect(createdBufferSources).toHaveLength(0);
+    });
+
+    it('sends the guide click through a clean bus that bypasses the saturator', () => {
+        const clickPanner = (synth as any).channels.click.panner;
+        const saturator = (synth as any).saturator;
+        expect(reaches(clickPanner, saturator)).toBe(false);
+        expect(clickPanner.connect).toHaveBeenCalledWith((synth as any).clickTransport);
+        expect((synth as any).channels.kick.panner.connect).toHaveBeenCalledWith((synth as any).drumTransport);
+    });
+
+    it('silence() stops every scheduled voice and fades the transports', () => {
+        loadAllSamples();
+        synth.play('kick', 0.5, 1);
+        synth.play('click', 0.6, 1);
+        expect(synth.activeVoiceCount).toBe(2);
+        synth.silence();
+        const voices = [...createdBufferSources, ...createdOscillators].filter(n => n.start.mock.calls.some((c: number[]) => c[0] >= 0.5));
+        expect(voices).toHaveLength(2);
+        voices.forEach(n => expect(n.stop).toHaveBeenCalled());
+        expect(synth.activeVoiceCount).toBe(0);
+        expect((synth as any).drumTransport.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, expect.any(Number));
+    });
+
+    it('dispose() disconnects the mixer graph', () => {
+        synth.dispose();
+        expect((synth as any).masterGain.disconnect).toHaveBeenCalled();
+        expect((synth as any).channels.kick.gain.disconnect).toHaveBeenCalled();
     });
 });

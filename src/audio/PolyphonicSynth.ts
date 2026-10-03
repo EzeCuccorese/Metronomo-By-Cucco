@@ -1,5 +1,6 @@
 
 import AudioContextManager from './AudioContextManager';
+import { VoiceTracker } from './VoiceTracker';
 
 // Basic frequency map for Octave 4 (Middle C)
 const BASE_FREQUENCIES: Record<string, number> = {
@@ -25,36 +26,43 @@ const getFrequency = (noteStr: string): number => {
     return base * Math.pow(2, octave - 4);
 };
 
-// MIDI note helper (Future Use)
-// const getMidiNote = (noteStr: string): number => {
-//     const freq = getFrequency(noteStr);
-//     return Math.round(69 + 12 * Math.log2(freq / 440));
-// };
-
-// Convert MIDI back to Note Name (approx)
-// const midiToNote = (midi: number): string => {
-//     const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-//     const octave = Math.floor(midi / 12) - 1;
-//     const noteIndex = midi % 12;
-//     return `${notes[noteIndex]}${octave}`;
-// };
-
 export type AccompanimentStyle = 'pad' | 'quarters' | 'offbeats' | 'arpeggio_8' | 'zamba_base';
 
 export class PolyphonicSynth {
     private context: AudioContext;
     private output: GainNode;
+    // Separate fade stage so silence() never fights with the user's volume setting.
+    private fade: GainNode;
+    private voices = new VoiceTracker();
 
     constructor() {
         this.context = AudioContextManager.getInstance().getContext();
         this.output = this.context.createGain();
-        this.output.connect(this.context.destination);
+        this.fade = this.context.createGain();
+        this.output.connect(this.fade);
+        this.fade.connect(this.context.destination);
         this.output.gain.value = 0.3; // Master volume for harmony
     }
 
     public connect(node: AudioNode) {
+        this.fade.disconnect();
+        this.fade.connect(node);
+    }
+
+    /** Fades out and stops every sounding or pending chord voice. */
+    public silence(fadeSeconds: number = 0.02) {
+        const now = this.context.currentTime;
+        this.fade.gain.cancelScheduledValues(now);
+        this.fade.gain.setValueAtTime(1, now);
+        this.fade.gain.linearRampToValueAtTime(0, now + fadeSeconds);
+        this.fade.gain.setValueAtTime(1, now + fadeSeconds + 0.005);
+        this.voices.stopAll(now + fadeSeconds);
+    }
+
+    public dispose() {
+        this.voices.stopAll(this.context.currentTime);
         this.output.disconnect();
-        this.output.connect(node);
+        this.fade.disconnect();
     }
 
     public playChord(notes: string[], duration: number, time: number, style: AccompanimentStyle = 'pad', prevNotes: string[] = []) {
@@ -67,15 +75,18 @@ export class PolyphonicSynth {
                 this.playPad(optimizedNotes, duration, time);
                 break;
             case 'quarters':
-                this.playRhythmic(optimizedNotes, duration, time, [0, 0.25, 0.5, 0.75], 0.2);
+                // `duration` is half a bar: two hits land on its beats regardless of tempo.
+                this.playRhythmic(optimizedNotes, duration, time, [0, 0.5].map(f => f * duration), Math.min(0.2, duration * 0.4));
                 break;
             case 'offbeats':
-                this.playRhythmic(optimizedNotes, duration, time, [0.5, 1.5, 2.5, 3.5].map(b => b * (duration / 4)), 0.2);
+                this.playRhythmic(optimizedNotes, duration, time, [0.25, 0.75].map(f => f * duration), Math.min(0.2, duration * 0.2));
                 break;
             case 'arpeggio_8':
-                this.playArpeggio(optimizedNotes, duration, time, 8);
+                this.playArpeggio(optimizedNotes, duration, time, 4);
                 break;
-            // Add other styles as needed
+            case 'zamba_base':
+                this.playZambaBase(optimizedNotes, duration, time);
+                break;
         }
 
         return optimizedNotes; // Return for next cycle state
@@ -114,6 +125,15 @@ export class PolyphonicSynth {
             const note = notes[i % notes.length];
             this.playVoice(note, stepTime, time + (i * stepTime), 'pluck');
         }
+    }
+
+    /** Bass note on the downbeat, chord on the remaining thirds of the half bar. */
+    private playZambaBase(notes: string[], duration: number, time: number) {
+        const [root, ...upper] = notes;
+        const bass = root.replace(/(\d)$/, d => String(Math.max(1, Number(d) - 1)));
+        const third = duration / 3;
+        this.playVoice(bass, third * 0.9, time, 'short');
+        [1, 2].forEach(i => upper.forEach(n => this.playVoice(n, third * 0.8, time + i * third, 'short')));
     }
 
     private playVoice(note: string, duration: number, time: number, type: 'long' | 'short' | 'pluck' = 'long') {
@@ -204,10 +224,15 @@ export class PolyphonicSynth {
 
         // Start/Stop oscillators
         fundamental.start(time);
+        this.voices.add(fundamental);
         secondHarmonic.start(time);
+        this.voices.add(secondHarmonic);
         thirdHarmonic.start(time);
+        this.voices.add(thirdHarmonic);
         tine.start(time);
+        this.voices.add(tine);
         lfo.start(time);
+        this.voices.add(lfo);
 
         fundamental.stop(time + duration + 0.1);
         secondHarmonic.stop(time + duration + 0.1);

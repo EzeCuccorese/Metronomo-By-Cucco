@@ -2,12 +2,30 @@ import { Box, Typography } from '@mui/material';
 import { useEffect, useRef, useCallback } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
+import { usePlaybackStore } from '../state/PlaybackContext';
 
 interface InteractiveInstrumentVisualProps {
     pattern: RhythmPattern;
-    currentStepIndex?: number;
-    onPreviewInstrument: (instrument: string) => void;
+    isPlaying: boolean;
+    onPreviewInstrument: (instrument: string, modifier?: string) => void;
 }
+
+/** Keyboard / screen-reader alternative to the clickable canvas. */
+const PREVIEW_BUTTONS: { instrument: string; modifier?: string; label: string }[] = [
+    { instrument: 'clave', label: 'Claves' },
+    { instrument: 'caja', label: 'Caja coplera' },
+    { instrument: 'bombo_leguero', label: 'Bombo legüero (parche)' },
+    { instrument: 'rim', label: 'Bombo legüero (aro)' },
+    { instrument: 'candombe_chico', label: 'Tambor chico' },
+    { instrument: 'candombe_repique', label: 'Tambor repique' },
+    { instrument: 'candombe_piano', label: 'Tambor piano' },
+    { instrument: 'cajon', label: 'Cajón' },
+    { instrument: 'palmas', label: 'Palmas' },
+    { instrument: 'hihat', label: 'Hi-hat' },
+    { instrument: 'snare', label: 'Redoblante' },
+    { instrument: 'kick', label: 'Bombo de batería' },
+    { instrument: 'shaker', label: 'Shaker' },
+];
 
 interface Ripple {
     x: number;
@@ -32,9 +50,10 @@ interface SparkParticle {
 
 export default function InteractiveInstrumentVisual({
     pattern,
-    currentStepIndex = -1,
+    isPlaying,
     onPreviewInstrument
 }: InteractiveInstrumentVisualProps) {
+    const store = usePlaybackStore();
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const canvasSizeRef = useRef<{ width: number; height: number }>({ width: 380, height: 175 });
     const particlesRef = useRef<SparkParticle[]>([]);
@@ -137,13 +156,18 @@ export default function InteractiveInstrumentVisual({
         return () => resizeObserver.disconnect();
     }, []);
 
-    // Dynamic scale trigger on sequencer ticks
+    // Dynamic scale trigger on sequencer ticks (subscribed to the store: no React re-render per step)
+    const patternRef = useRef(pattern);
     useEffect(() => {
+        patternRef.current = pattern;
+    });
+
+    const animateStep = useCallback((currentStepIndex: number) => {
         if (currentStepIndex === lastStepRef.current) return;
         lastStepRef.current = currentStepIndex;
 
-        const activeSteps = pattern.steps.filter(s => s.step === (currentStepIndex + 1));
-        
+        const activeSteps = patternRef.current.steps.filter(s => s.step === (currentStepIndex + 1));
+
         activeSteps.forEach(s => {
             const inst = s.instrument;
             const velocity = s.velocity || 1.0;
@@ -195,7 +219,16 @@ export default function InteractiveInstrumentVisual({
                 triggerRipple(345, 115, '#cfd8dc', 25);
             }
         });
-    }, [currentStepIndex, pattern, triggerRipple]);
+    }, [triggerRipple]);
+
+    useEffect(() => {
+        if (!isPlaying) {
+            lastStepRef.current = -1;
+            return;
+        }
+        animateStep(store.getSnapshot().step);
+        return store.subscribe(() => animateStep(store.getSnapshot().step));
+    }, [store, isPlaying, animateStep]);
 
     // Canvas render loop
     useEffect(() => {
@@ -924,12 +957,21 @@ export default function InteractiveInstrumentVisual({
                 <canvas
                     ref={canvasRef}
                     onClick={handleCanvasClick}
+                    role="img"
+                    aria-label="Instrumentos rítmicos: hacé clic en uno para escucharlo"
                     style={{
                         width: '100%',
                         height: '100%',
                         display: 'block'
                     }}
                 />
+            </Box>
+            <Box component="ul" className="visually-hidden-focusable" aria-label="Probar instrumentos" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, listStyle: 'none', p: 0, m: 0, mt: 1 }}>
+                {PREVIEW_BUTTONS.map(b => (
+                    <li key={`${b.instrument}-${b.label}`}>
+                        <button type="button" onClick={() => onPreviewInstrument(b.instrument, b.modifier)}>{b.label}</button>
+                    </li>
+                ))}
             </Box>
         </Box>
     );

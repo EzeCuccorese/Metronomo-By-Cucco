@@ -6,17 +6,18 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  IconButton
+  IconButton,
+  ButtonBase
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { PRESET_PATTERNS } from '../rhythms/RhythmPatterns';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
+import { usePlayback } from '../state/PlaybackContext';
 
 export interface GenreSelectorModalProps {
   open: boolean;
   onClose: () => void;
   selectedPatternId: string;
-  queuedPatternId: string | null;
   isPlaying: boolean;
   onSelectPattern: (patternId: string) => void;
 }
@@ -25,34 +26,35 @@ export const GenreSelectorModal: React.FC<GenreSelectorModalProps> = ({
   open,
   onClose,
   selectedPatternId,
-  queuedPatternId,
   isPlaying,
   onSelectPattern
 }) => {
+  const queuedPatternId = usePlayback(s => s.queuedPatternId);
   return (
     <Dialog 
       open={open} 
       onClose={onClose}
       maxWidth="md"
       fullWidth
-      PaperProps={{
+      aria-labelledby="genre-library-title"
+      slotProps={{ paper: {
         sx: {
           bgcolor: '#12100e',
           borderRadius: 4,
           border: '1px solid rgba(229,169,95,0.2)'
         }
-      }}
+      } }}
     >
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
         <Box>
-          <Typography variant="h6" fontWeight="bold" color="primary.main">
+          <Typography id="genre-library-title" variant="h6" component="span" fontWeight="bold" color="primary.main" sx={{ display: 'block' }}>
             BIBLIOTECA VISUAL DE RITMOS
           </Typography>
           <Typography variant="caption" color="text.secondary">
             Selecciona un patrón rítmico folclórico o moderno
           </Typography>
         </Box>
-        <IconButton onClick={onClose} sx={{ color: 'text.secondary' }}>
+        <IconButton onClick={onClose} aria-label="Cerrar biblioteca" sx={{ color: 'text.secondary' }}>
           <CloseIcon />
         </IconButton>
       </DialogTitle>
@@ -68,13 +70,20 @@ export const GenreSelectorModal: React.FC<GenreSelectorModalProps> = ({
             const isQueued = queuedPatternId === p.id;
 
             return (
-              <Box
+              <ButtonBase
                 key={p.id}
+                focusRipple
+                aria-label={`${p.name} (${p.timeSignature[0]}/${p.timeSignature[1]})${isSelected ? ', activo' : ''}${isQueued ? ', en cola' : ''}`}
+                aria-pressed={isSelected}
+                data-testid={`genre-card-${p.id}`}
                 onClick={() => {
                   onSelectPattern(p.id);
                   if (!isPlaying) onClose();
                 }}
                 sx={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
                   position: 'relative',
                   height: 180,
                   borderRadius: 3,
@@ -94,7 +103,8 @@ export const GenreSelectorModal: React.FC<GenreSelectorModalProps> = ({
                 <Box
                   component="img"
                   src={p.coverImage || '/genres/genre_rock.webp'}
-                  alt={p.name}
+                  alt=""
+                  loading="lazy"
                   sx={{
                     width: '100%',
                     height: '100%',
@@ -127,7 +137,7 @@ export const GenreSelectorModal: React.FC<GenreSelectorModalProps> = ({
                     height: '100%',
                     display: 'flex',
                     flexDirection: 'column',
-                    justify: 'space-between'
+                    justifyContent: 'space-between'
                   }}
                 >
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -153,7 +163,7 @@ export const GenreSelectorModal: React.FC<GenreSelectorModalProps> = ({
                     </Typography>
                   </Box>
                 </Box>
-              </Box>
+              </ButtonBase>
             );
           })}
         </Box>

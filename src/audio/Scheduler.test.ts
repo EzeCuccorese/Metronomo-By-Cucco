@@ -1,343 +1,458 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 
-const mockAudioParam = () => ({
-    value: 1,
-    setValueAtTime: vi.fn(),
-    linearRampToValueAtTime: vi.fn(),
-    exponentialRampToValueAtTime: vi.fn(),
-    cancelScheduledValues: vi.fn(),
+// --- Test doubles: the Scheduler is tested in isolation from the synthesis code. ---
+const ctx = { currentTime: 0 };
+
+vi.mock('./AudioContextManager', () => ({
+    default: { getInstance: () => ({ getContext: () => ctx, resume: vi.fn() }) }
+}));
+
+const drum = {
+    play: vi.fn(),
+    silence: vi.fn(),
+    dispose: vi.fn(),
+    getChannelNode: vi.fn(() => ({})),
+    setChannelVolume: vi.fn(),
+    setChannelPan: vi.fn(),
+    setChannelMute: vi.fn(),
+};
+vi.mock('./DrumSynthesizer', () => ({
+    default: class { constructor() { return drum; } }
+}));
+
+const poly = {
+    playChord: vi.fn(),
+    silence: vi.fn(),
+    dispose: vi.fn(),
+    connect: vi.fn(),
+    setVolume: vi.fn(),
+};
+vi.mock('./PolyphonicSynth', () => ({
+    PolyphonicSynth: class { constructor() { return poly; } }
+}));
+
+const worker = { postMessage: vi.fn(), terminate: vi.fn(), onmessage: null as unknown };
+vi.mock('./clock.worker?worker', () => ({
+    default: class { constructor() { return worker; } }
+}));
+
+// jsdom has no Worker: the Scheduler only creates its clock when the API exists.
+globalThis.Worker = class {} as unknown as typeof Worker;
+
+let rafCallbacks: FrameRequestCallback[] = [];
+globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+    rafCallbacks.push(cb);
+    return rafCallbacks.length;
+}) as typeof requestAnimationFrame;
+globalThis.cancelAnimationFrame = vi.fn();
+
+import Scheduler, { buildFormSections } from './Scheduler';
+import type { PlaybackEvent } from './Scheduler';
+
+const makePattern = (overrides: Partial<RhythmPattern> = {}): RhythmPattern => ({
+    id: 'test',
+    name: 'Test',
+    description: '',
+    timeSignature: [4, 4],
+    subdivision: 4,
+    instruments: ['kick'],
+    countingMode: 'numbers',
+    steps: [{ step: 1, instrument: 'kick', velocity: 1 }],
+    ...overrides,
 });
 
-const mockAudioContext = {
-    createGain: vi.fn(() => ({
-        gain: mockAudioParam(),
-        connect: vi.fn(),
-        disconnect: vi.fn(),
-    })),
-    createBiquadFilter: vi.fn(() => ({
-        type: 'lowpass',
-        frequency: mockAudioParam(),
-        gain: mockAudioParam(),
-        Q: mockAudioParam(),
-        detune: mockAudioParam(),
-        connect: vi.fn(),
-        disconnect: vi.fn(),
-    })),
-    createOscillator: vi.fn(() => ({
-        type: 'sine',
-        frequency: mockAudioParam(),
-        detune: mockAudioParam(),
-        connect: vi.fn(),
-        disconnect: vi.fn(),
-        start: vi.fn(),
-        stop: vi.fn(),
-        onended: null,
-    })),
-    createWaveShaper: vi.fn(() => ({
-        curve: null,
-        oversample: 'none',
-        connect: vi.fn(),
-    })),
-    createStereoPanner: vi.fn(() => ({
-        pan: mockAudioParam(),
-        connect: vi.fn(),
-        disconnect: vi.fn(),
-    })),
-    createBufferSource: vi.fn((..._args: unknown[]) => ({
-        buffer: null,
-        playbackRate: mockAudioParam(),
-        connect: vi.fn(),
-        disconnect: vi.fn(),
-        start: vi.fn(),
-        stop: vi.fn(),
-        onended: null,
-    })),
-    createBuffer: vi.fn((channels: any, length: any, sampleRate: any) => ({
-        numberOfChannels: channels,
-        length,
-        sampleRate,
-        getChannelData: vi.fn((_channel?: number) => new Float32Array(length)),
-    })),
-    decodeAudioData: vi.fn(async (_data?: unknown) => {
-        return {
-            numberOfChannels: 1,
-            length: 44100,
-            sampleRate: 44100,
-            getChannelData: vi.fn((_channel?: number) => new Float32Array(44100)),
-        };
-    }),
-    destination: {},
-    currentTime: 0.1,
-    sampleRate: 44100,
-};
-
-class MockAudioContext {
-    createGain() { return mockAudioContext.createGain(); }
-    createBiquadFilter() { return mockAudioContext.createBiquadFilter(); }
-    createOscillator() { return mockAudioContext.createOscillator(); }
-    createWaveShaper() { return mockAudioContext.createWaveShaper(); }
-    createStereoPanner() { return mockAudioContext.createStereoPanner(); }
-    createBufferSource(...args: unknown[]) { return mockAudioContext.createBufferSource(...args); }
-    createBuffer(c: any, l: any, s: any) { return mockAudioContext.createBuffer(c, l, s); }
-    decodeAudioData(d: any) { return mockAudioContext.decodeAudioData(d); }
-    destination = mockAudioContext.destination;
-    get currentTime() { return mockAudioContext.currentTime; }
-    sampleRate = mockAudioContext.sampleRate;
-}
-
-class MockOfflineAudioContext {
-    createGain() { return mockAudioContext.createGain(); }
-    createOscillator() { return mockAudioContext.createOscillator(); }
-    createBufferSource(...args: unknown[]) { return mockAudioContext.createBufferSource(...args); }
-    createBuffer(c: any, l: any, s: any) { return mockAudioContext.createBuffer(c, l, s); }
-    createBiquadFilter() { return mockAudioContext.createBiquadFilter(); }
-    destination = mockAudioContext.destination;
-    startRendering() {
-        return Promise.resolve({
-            numberOfChannels: 1,
-            length: 100,
-            sampleRate: 44100,
-            getChannelData: vi.fn(() => new Float32Array(100)),
-        });
+/** Advances the audio clock in worker-sized ticks, running scheduler and visual loop like the browser would. */
+function run(scheduler: Scheduler, seconds: number, tick = 0.025) {
+    const end = ctx.currentTime + seconds;
+    while (ctx.currentTime < end - 1e-9) {
+        ctx.currentTime = Math.round((ctx.currentTime + tick) * 1e6) / 1e6;
+        (scheduler as unknown as { scheduler: () => void }).scheduler();
+        const callbacks = rafCallbacks;
+        rafCallbacks = [];
+        callbacks.forEach(cb => cb(0));
     }
 }
 
-(globalThis as any).window = {
-    AudioContext: MockAudioContext,
-    webkitAudioContext: MockAudioContext,
-} as any;
-
-(globalThis as any).OfflineAudioContext = MockOfflineAudioContext as any;
-(globalThis as any).requestAnimationFrame = vi.fn() as any;
-(globalThis as any).cancelAnimationFrame = vi.fn() as any;
-
-vi.mock('./clock.worker?worker', () => {
-    return {
-        default: class MockWorker {
-            postMessage = vi.fn();
-            terminate = vi.fn();
-            addEventListener = vi.fn();
-            removeEventListener = vi.fn();
-            onmessage = null;
-        }
-    };
-});
-
-(globalThis as any).fetch = vi.fn().mockImplementation(() =>
-    Promise.resolve({
-        ok: true,
-        arrayBuffer: () => Promise.resolve(new ArrayBuffer(100)),
-    } as any)
-);
-
-import Scheduler from './Scheduler';
-import { PRESET_PATTERNS } from '../rhythms/RhythmPatterns';
-import type { RhythmPattern } from '../rhythms/RhythmPatterns';
+const playsOf = (instrument: string) =>
+    drum.play.mock.calls.filter(c => c[0] === instrument).map(c => ({ time: c[1] as number, velocity: c[2] as number }));
 
 describe('Scheduler', () => {
     let scheduler: Scheduler;
-    const testPattern: RhythmPattern = {
-        id: 'test_pat',
-        name: 'Test Pattern',
-        description: 'Test description',
-        timeSignature: [4, 4],
-        subdivision: 16,
-        instruments: ['kick', 'snare', 'hihat', 'click', 'bombo_leguero'],
-        countingMode: 'numbers',
-        steps: [
-            { step: 1, instrument: 'kick', velocity: 1.0 },
-            { step: 4, instrument: 'hihat', velocity: 0.7 },
-            { step: 5, instrument: 'snare', velocity: 0.9 },
-            { step: 8, instrument: 'bombo_leguero', velocity: 0.8, modifier: 'aro' },
-            { step: 9, instrument: 'bombo_leguero', velocity: 0.8, modifier: 'parche' },
-            { step: 11, instrument: 'bombo_leguero', velocity: 0.8, modifier: 'aro' },
-            { step: 15, instrument: 'hihat', velocity: 0.7 },
-            { step: 16, instrument: 'bombo_leguero', velocity: 0.8, modifier: 'parche' }
-        ]
-    };
 
     beforeEach(() => {
         vi.clearAllMocks();
-        mockAudioContext.currentTime = 0.1;
+        ctx.currentTime = 0;
+        rafCallbacks = [];
         scheduler = new Scheduler();
     });
 
-    it('should initialize with default parameters', () => {
-        expect(scheduler).toBeDefined();
-        expect(scheduler.getQueuedPatternId()).toBeNull();
+    describe('guide click', () => {
+        it('clicks every quarter note exactly on the grid (no humanize jitter)', () => {
+            scheduler.setPattern(makePattern({ subdivision: 16, steps: [] }));
+            scheduler.setTempo(120);
+            scheduler.start();
+            run(scheduler, 2.1);
+
+            const clicks = playsOf('click');
+            expect(clicks.length).toBeGreaterThanOrEqual(4);
+            for (let i = 1; i < clicks.length; i++) {
+                expect(clicks[i].time - clicks[i - 1].time).toBeCloseTo(0.5, 9);
+            }
+            expect(clicks[0].velocity).toBe(1);
+            expect(clicks[1].velocity).toBe(0.7);
+        });
+
+        it('accents compound meters by dotted-quarter groups (6/8)', () => {
+            scheduler.setPattern(makePattern({ timeSignature: [6, 8], subdivision: 12, steps: [] }));
+            scheduler.setTempo(120);
+            scheduler.start();
+            run(scheduler, 1.45); // one 6/8 bar at ♩=120 lasts 1.5 s
+
+            const velocities = playsOf('click').slice(0, 6).map(c => c.velocity);
+            expect(velocities).toEqual([1, 0.45, 0.45, 0.7, 0.45, 0.45]);
+        });
+
+        it('keeps the click on time even when humanize moves the instruments', () => {
+            vi.spyOn(Math, 'random').mockReturnValue(1);
+            scheduler.setHumanize(10);
+            scheduler.setPattern(makePattern({ subdivision: 4 }));
+            scheduler.start();
+            run(scheduler, 0.6);
+
+            const kick = playsOf('kick')[0];
+            const click = playsOf('click')[0];
+            expect(kick.time - click.time).toBeCloseTo(0.005, 6);
+            vi.restoreAllMocks();
+        });
     });
 
-    it('should allow setting tempo dynamically while playing', () => {
-        scheduler.setPattern(testPattern);
-        scheduler.start();
-        scheduler.setTempo(140);
-        expect(scheduler.getQueuedPatternId()).toBeNull();
-        scheduler.stop();
+    describe('pattern changes', () => {
+        it('hot-swaps edits of the playing pattern on the next step (C2/C3 regression)', () => {
+            const original = makePattern({ subdivision: 4 });
+            scheduler.setPattern(original);
+            scheduler.start();
+            run(scheduler, 0.3);
+            expect(playsOf('snare')).toHaveLength(0);
+
+            scheduler.setPattern({ ...original, steps: [...original.steps, { step: 3, instrument: 'snare', velocity: 1 }] });
+            expect(scheduler.getQueuedPatternId()).toBeNull();
+            run(scheduler, 2);
+            expect(playsOf('snare').length).toBeGreaterThan(0);
+        });
+
+        it('applies edits immediately while stopped', () => {
+            const original = makePattern();
+            scheduler.setPattern(original);
+            scheduler.setPattern({ ...original, steps: [{ step: 2, instrument: 'snare', velocity: 1 }] });
+            scheduler.start();
+            run(scheduler, 1);
+            expect(playsOf('snare').length).toBeGreaterThan(0);
+            expect(playsOf('kick')).toHaveLength(0);
+        });
+
+        it('queues a different pattern until the bar line and adopts its recommended tempo', () => {
+            const events: PlaybackEvent[] = [];
+            scheduler.setOnPlaybackUpdate(e => events.push(e));
+            scheduler.setPattern(makePattern());
+            scheduler.setTempo(120);
+            scheduler.start();
+            run(scheduler, 0.6);
+
+            scheduler.setPattern(makePattern({ id: 'b', recommendedTempo: 90, steps: [{ step: 1, instrument: 'snare', velocity: 1 }] }));
+            expect(scheduler.getQueuedPatternId()).toBe('b');
+            expect(events.at(-1)?.pattern.id).toBe('test');
+
+            run(scheduler, 2);
+            expect(scheduler.getQueuedPatternId()).toBeNull();
+            expect(scheduler.getTempo()).toBe(90);
+            const firstSnare = playsOf('snare')[0].time;
+            expect(firstSnare).toBeCloseTo(2.05, 6); // exactly one 4/4 bar (2 s) after the 50 ms start offset
+            expect(events.at(-1)?.pattern.id).toBe('b');
+        });
+
+        it('keeps a queued switch when the playing pattern is edited meanwhile', () => {
+            const original = makePattern();
+            scheduler.setPattern(original);
+            scheduler.start();
+            run(scheduler, 0.2);
+            scheduler.setPattern(makePattern({ id: 'b' }));
+            scheduler.setPattern({ ...original, steps: [] });
+            expect(scheduler.getQueuedPatternId()).toBe('b');
+        });
+
+        it('re-selecting the active pattern cancels a pending switch', () => {
+            const original = makePattern();
+            scheduler.setPattern(original);
+            scheduler.start();
+            scheduler.setPattern(makePattern({ id: 'b' }));
+            scheduler.setPattern(original);
+            expect(scheduler.getQueuedPatternId()).toBeNull();
+        });
+
+        it('requeues a meter change of the same pattern for the bar line', () => {
+            const original = makePattern();
+            scheduler.setPattern(original);
+            scheduler.start();
+            scheduler.setPattern({ ...original, subdivision: 8 });
+            expect(scheduler.getQueuedPatternId()).toBe('test');
+        });
     });
 
-    it('should queue pattern when set while playing and switch at bar boundary', () => {
-        scheduler.setPattern(testPattern);
-        scheduler.start();
-        const patternB: RhythmPattern = { ...testPattern, id: 'pat_b', name: 'Pattern B', recommendedTempo: 130 };
-        scheduler.setPattern(patternB);
-        expect(scheduler.getQueuedPatternId()).toBe('pat_b');
+    describe('timing safety', () => {
+        it('never schedules notes in the past, even with anticipating grooves', () => {
+            const pattern = makePattern({
+                timeSignature: [6, 8], subdivision: 12, grooveType: 'chamame_saltadito',
+                steps: Array.from({ length: 12 }, (_, i) => ({ step: i + 1, instrument: 'cajon' as const, velocity: 1 }))
+            });
+            scheduler.setPattern(pattern);
+            scheduler.start();
+            const times: { scheduledAt: number; time: number }[] = [];
+            drum.play.mockImplementation((_i: string, time: number) => times.push({ scheduledAt: ctx.currentTime, time }));
+            run(scheduler, 3);
+            expect(times.length).toBeGreaterThan(20);
+            times.forEach(t => expect(t.time).toBeGreaterThanOrEqual(t.scheduledAt));
+        });
 
-        for (let i = 0; i < 40; i++) {
-            mockAudioContext.currentTime += 0.2;
-            (scheduler as any).scheduler();
-        }
+        it('rescales the wait for the next step when the tempo changes', () => {
+            scheduler.setPattern(makePattern());
+            scheduler.setTempo(60);
+            scheduler.start();
+            run(scheduler, 0.1);
+            scheduler.setTempo(120);
+            expect(scheduler.getTempo()).toBe(120);
+        });
 
-        expect(scheduler.getQueuedPatternId()).toBeNull();
-        scheduler.stop();
+        it('ignores invalid tempos', () => {
+            scheduler.setTempo(0);
+            scheduler.setTempo(NaN);
+            expect(scheduler.getTempo()).toBe(120);
+        });
     });
 
-    it('should start, tick, and stop cleanly', () => {
-        scheduler.setPattern(testPattern);
-        scheduler.start();
-        expect(scheduler['isPlaying']).toBe(true);
+    describe('transport', () => {
+        it('stop() silences scheduled voices and harmony immediately', () => {
+            scheduler.setPattern(makePattern());
+            scheduler.start();
+            run(scheduler, 0.5);
+            scheduler.stop();
+            expect(drum.silence).toHaveBeenCalledTimes(1);
+            expect(poly.silence).toHaveBeenCalledTimes(1);
+            expect(worker.postMessage).toHaveBeenLastCalledWith({ action: 'stop' });
 
-        for (let i = 0; i < 20; i++) {
-            mockAudioContext.currentTime += 0.2;
-            (scheduler as any).scheduler();
-        }
+            const calls = drum.play.mock.calls.length;
+            run(scheduler, 1);
+            expect(drum.play.mock.calls.length).toBe(calls);
+        });
 
-        scheduler.stop();
-        expect(scheduler['isPlaying']).toBe(false);
+        it('dispose() releases the worker, the synths and further callbacks', () => {
+            const listener = vi.fn();
+            scheduler.setOnPlaybackUpdate(listener);
+            scheduler.setPattern(makePattern());
+            scheduler.start();
+            scheduler.dispose();
+            scheduler.dispose(); // idempotent
+
+            expect(worker.terminate).toHaveBeenCalledTimes(1);
+            expect(drum.dispose).toHaveBeenCalledTimes(1);
+            expect(poly.dispose).toHaveBeenCalledTimes(1);
+            scheduler.start();
+            expect(scheduler.getIsPlaying()).toBe(false);
+        });
+
+        it('only runs the animation loop while playing', () => {
+            scheduler.setPattern(makePattern());
+            expect(rafCallbacks).toHaveLength(0);
+            scheduler.start();
+            expect(rafCallbacks).toHaveLength(1);
+            scheduler.stop();
+            expect(globalThis.cancelAnimationFrame).toHaveBeenCalled();
+        });
+
+        it('delivers visual events only once their audio time is reached', () => {
+            const listener = vi.fn();
+            scheduler.setOnPlaybackUpdate(listener);
+            scheduler.setPattern(makePattern());
+            scheduler.start();
+            (scheduler as unknown as { scheduler: () => void }).scheduler();
+            rafCallbacks.splice(0).forEach(cb => cb(0));
+            expect(listener).not.toHaveBeenCalled(); // first step sounds at t = 0.05
+            run(scheduler, 0.1);
+            expect(listener).toHaveBeenCalledWith(expect.objectContaining({ step: 0 }));
+        });
+
+        it('previews a single instrument at full velocity', () => {
+            scheduler.playOneShot('bombo_leguero', 'aro');
+            expect(drum.play).toHaveBeenCalledWith('bombo_leguero', 0, 1, 'aro');
+        });
+
+        it('forwards mixer settings to the synthesizer', () => {
+            scheduler.setChannelVolume('kick', 0.5);
+            scheduler.setChannelPan('kick', -1);
+            scheduler.setChannelMute('kick', true);
+            expect(drum.setChannelVolume).toHaveBeenCalledWith('kick', 0.5);
+            expect(drum.setChannelPan).toHaveBeenCalledWith('kick', -1);
+            expect(drum.setChannelMute).toHaveBeenCalledWith('kick', true);
+        });
     });
 
-    it('should test channel controls (volume, pan, mute)', () => {
-        scheduler.setChannelVolume('kick', 0.8);
-        scheduler.setChannelPan('snare', -0.5);
-        scheduler.setChannelMute('hihat', true);
-        scheduler.setChannelMute('hihat', false);
+    describe('practice features', () => {
+        it('counts practiced bars without any harmony loaded (C6 regression)', () => {
+            const events: PlaybackEvent[] = [];
+            scheduler.setOnPlaybackUpdate(e => events.push(e));
+            scheduler.setPattern(makePattern());
+            scheduler.setTempo(240); // 1 s per bar
+            scheduler.start();
+            run(scheduler, 3.2);
+            expect(scheduler.getPracticeStats().totalBars).toBe(3);
+            expect(events.at(-1)?.totalBars).toBe(3);
+            scheduler.resetPracticeStats();
+            expect(scheduler.getPracticeStats().totalBars).toBe(0);
+        });
+
+        it('speed trainer raises the tempo every N bars up to the target', () => {
+            scheduler.configureTrainer({ active: true, startBpm: 200, targetBpm: 210, barsPerStep: 1, bpmIncrement: 5, mode: 'linear' });
+            scheduler.setPattern(makePattern());
+            scheduler.start();
+            expect(scheduler.getTempo()).toBe(200);
+            run(scheduler, 6);
+            expect(scheduler.getTempo()).toBe(210);
+        });
+
+        it('speed trainer can also slow down', () => {
+            scheduler.configureTrainer({ active: true, startBpm: 220, targetBpm: 210, barsPerStep: 1, bpmIncrement: 5, mode: 'linear' });
+            scheduler.setPattern(makePattern());
+            scheduler.start();
+            run(scheduler, 6);
+            expect(scheduler.getTempo()).toBe(210);
+        });
+
+        it('resistance loop cools down after holding the target', () => {
+            scheduler.configureTrainer({ active: true, startBpm: 235, targetBpm: 240, barsPerStep: 1, bpmIncrement: 5, mode: 'resistance_loop' });
+            scheduler.setPattern(makePattern());
+            scheduler.start();
+            const seen = new Set<number>();
+            for (let i = 0; i < 12; i++) {
+                run(scheduler, 1);
+                seen.add(scheduler.getTempo());
+            }
+            expect(seen.has(240)).toBe(true);
+            expect(seen.has(Math.round(240 * 0.95))).toBe(true);
+        });
+
+        it('a trainer keeps its tempo when a queued preset arrives', () => {
+            scheduler.configureTrainer({ active: true, startBpm: 100, targetBpm: 100, barsPerStep: 4, bpmIncrement: 5, mode: 'linear' });
+            scheduler.setPattern(makePattern());
+            scheduler.start();
+            scheduler.setPattern(makePattern({ id: 'b', recommendedTempo: 60 }));
+            run(scheduler, 3);
+            expect(scheduler.getTempo()).toBe(100);
+        });
+
+        it('silence mode mutes whole bars (instruments, click and harmony)', () => {
+            scheduler.setHarmonyProgression([['C4', 'E4', 'G4']]);
+            scheduler.setSilenceMode(true, 1);
+            scheduler.setPattern(makePattern());
+            scheduler.setTempo(240);
+            scheduler.start();
+            run(scheduler, 1.02); // first bar plays normally
+            const afterFirstBar = drum.play.mock.calls.length;
+            const chordsAfterFirstBar = poly.playChord.mock.calls.length;
+            run(scheduler, 2);
+            expect(afterFirstBar).toBeGreaterThan(0);
+            expect(drum.play.mock.calls.length).toBe(afterFirstBar);
+            expect(poly.playChord.mock.calls.length).toBe(chordsAfterFirstBar);
+
+            scheduler.setSilenceMode(false);
+            run(scheduler, 1.2);
+            expect(drum.play.mock.calls.length).toBeGreaterThan(afterFirstBar);
+        });
+
+        it('plays the harmony twice per bar with half-bar durations', () => {
+            scheduler.setHarmonyProgression([['C4', 'E4', 'G4'], ['F4', 'A4', 'C5']]);
+            scheduler.setAccompanimentStyle('quarters');
+            scheduler.setHarmonyVolume(0.5);
+            scheduler.setPattern(makePattern());
+            scheduler.setTempo(120);
+            scheduler.start();
+            run(scheduler, 2);
+
+            expect(poly.setVolume).toHaveBeenCalledWith(0.5);
+            const calls = poly.playChord.mock.calls;
+            expect(calls.length).toBeGreaterThanOrEqual(2);
+            expect(calls[0][0]).toEqual(['C4', 'E4', 'G4']);
+            expect(calls[0][1]).toBeCloseTo(1, 9);
+            expect(calls[0][3]).toBe('quarters');
+            expect(calls[1][0]).toEqual(['F4', 'A4', 'C5']);
+            expect(calls[1][4]).toEqual(['C4', 'E4', 'G4']);
+        });
+
+        it('restarts the progression when it changes', () => {
+            scheduler.setHarmonyProgression([['C4']]);
+            scheduler.setHarmonyProgression([['C4']]);
+            scheduler.setHarmonyProgression([['D4']]);
+            scheduler.setPattern(makePattern());
+            scheduler.start();
+            run(scheduler, 0.2);
+            expect(poly.playChord.mock.calls[0][0]).toEqual(['D4']);
+        });
     });
 
-    it('should test harmony controls and accompaniment styles', () => {
-        scheduler.setHarmonyProgression([['C4', 'E4', 'G4'], ['F4', 'A4', 'C5']]);
-        scheduler.setHarmonyVolume(0.7);
-        scheduler.setAccompanimentStyle('quarters');
-        scheduler.setAccompanimentStyle('offbeats');
-        scheduler.setAccompanimentStyle('arpeggio_8');
-        scheduler.setAccompanimentStyle('pad');
-    });
+    describe('folk forms', () => {
+        it('builds two parts separated by a silent bar', () => {
+            const sections = buildFormSections('Zamba', 4);
+            expect(sections[0]).toMatchObject({ audioId: 'Precuenta', bars: 2, part: 1 });
+            expect(sections.find(s => s.audioId === 'Silencio')).toBeDefined();
+            expect(sections.at(-1)).toMatchObject({ isFinal: true, part: 2 });
+            expect(sections.filter(s => s.isFinal)).toHaveLength(2);
+            expect(buildFormSections('Gato Norteño', 8).some(s => s.audioId === 'Zapateo')).toBe(true);
+            expect(buildFormSections('Chacarera Doble', 8).filter(s => s.audioId === 'Estrofa')[0].bars).toBe(12);
+        });
 
-    it('should test speed trainer linear increment and decrement modes', () => {
-        // Linear increment
-        scheduler.configureTrainer(true, 100, 120, 1, 5, 'linear');
-        scheduler.setHarmonyProgression([['C4', 'E4', 'G4']]);
-        scheduler.setPattern(testPattern);
-        scheduler.start();
+        it('only plays the click during the count-in and silences the bombo skin in the intro', () => {
+            scheduler.configureFormas(true, 'Chacarera Simple', 1);
+            scheduler.setPattern(makePattern({
+                instruments: ['bombo_leguero', 'click'],
+                steps: [
+                    { step: 1, instrument: 'bombo_leguero', velocity: 1, modifier: 'parche' },
+                    { step: 2, instrument: 'bombo_leguero', velocity: 1, modifier: 'aro' },
+                ]
+            }));
+            scheduler.setTempo(240);
+            scheduler.start();
+            run(scheduler, 1.95); // 2 bars of count-in
+            expect(playsOf('bombo_leguero')).toHaveLength(0);
+            expect(playsOf('click').length).toBeGreaterThan(0);
 
-        for (let i = 0; i < 40; i++) {
-            mockAudioContext.currentTime += 0.2;
-            (scheduler as any).scheduler();
-        }
+            run(scheduler, 0.85); // intro bar: only the rim
+            const bombo = drum.play.mock.calls.filter(c => c[0] === 'bombo_leguero');
+            expect(bombo.length).toBeGreaterThan(0);
+            bombo.forEach(c => expect(c[3]).toBe('aro'));
+        });
 
-        expect(scheduler.getPracticeStats().totalBars).toBeGreaterThan(0);
-        scheduler.stop();
-
-        // Linear decrement
-        scheduler.configureTrainer(true, 140, 100, 1, 5, 'linear');
-        scheduler.start();
-        for (let i = 0; i < 40; i++) {
-            mockAudioContext.currentTime += 0.2;
-            (scheduler as any).scheduler();
-        }
-        scheduler.stop();
-
-        scheduler.resetPracticeStats();
-        expect(scheduler.getPracticeStats().totalBars).toBe(0);
-    });
-
-    it('should test resistance_loop trainer mode, target reach, and cooldown holding', () => {
-        scheduler.configureTrainer(true, 100, 105, 1, 5, 'resistance_loop');
-        scheduler.setPattern(testPattern);
-        scheduler.start();
-
-        for (let i = 0; i < 150; i++) {
-            mockAudioContext.currentTime += 0.2;
-            (scheduler as any).scheduler();
-        }
-
-        scheduler.stop();
-        expect(scheduler).toBeDefined();
-    });
-
-    it('should test silence mode configuration and muted bars', () => {
-        scheduler.setSilenceMode(true, 1.0);
-        scheduler.setPattern(testPattern);
-        scheduler.start();
-
-        for (let i = 0; i < 40; i++) {
-            mockAudioContext.currentTime += 0.2;
-            (scheduler as any).scheduler();
-        }
-
-        scheduler.setSilenceMode(false);
-        scheduler.stop();
-    });
-
-    it('should test Formas mode completion and 2da part handling', () => {
-        const onPlaybackUpdate = vi.fn();
-        scheduler.setOnPlaybackUpdate(onPlaybackUpdate);
-        scheduler.configureFormas(true, 'Chacarera Simple', 0);
-        scheduler.setPattern({ ...testPattern, subdivision: 4 });
-        scheduler.start();
-
-        (scheduler as any).formSections = [
-            { name: 'Precuenta', bars: 1, audioId: 'Precuenta' },
-            { name: 'Silencio', bars: 1, audioId: 'Silencio' },
-            { name: 'Intro', bars: 1, audioId: 'Intro' },
-            { name: 'Tema (2da)', bars: 1, audioId: 'Tema', isFinal: true }
-        ];
-        (scheduler as any).currentSectionIdx = 0;
-        (scheduler as any).currentFormBar = 0;
-
-        for (let i = 0; i < 60; i++) {
-            mockAudioContext.currentTime += 0.2;
-            (scheduler as any).scheduler();
-            (scheduler as any).runVisualUpdateLoop();
-            if (!scheduler['isPlaying']) break;
-        }
-
-        expect(scheduler['isPlaying']).toBe(false);
-    });
-
-    it('should run visual update loop and trigger listener', () => {
-        const updateListener = vi.fn();
-        scheduler.setOnPlaybackUpdate(updateListener);
-        scheduler.setPattern(testPattern);
-        scheduler.start();
-
-        for (let i = 0; i < 20; i++) {
-            mockAudioContext.currentTime += 0.2;
-            (scheduler as any).scheduler();
-        }
-
-        (scheduler as any).runVisualUpdateLoop();
-        expect(updateListener).toHaveBeenCalled();
-
-        scheduler.stop();
-    });
-
-    it('should play one shot instruments', () => {
-        scheduler.playOneShot('kick');
-        scheduler.playOneShot('snare');
-    });
-
-    it('should process tick loop with all preset groove patterns', () => {
-        PRESET_PATTERNS.forEach(pat => {
-            scheduler.setPattern(pat);
+        it('stops by itself when the last bar has been heard and reports it once', () => {
+            const onStopped = vi.fn();
+            const events: PlaybackEvent[] = [];
+            scheduler.setOnStopped(onStopped);
+            scheduler.setOnPlaybackUpdate(e => events.push(e));
+            scheduler.configureFormas(true, 'Zamba', 1);
+            scheduler.setPattern(makePattern());
+            scheduler.setTempo(300); // 0.8 s per bar
             scheduler.start();
 
-            for (let i = 0; i < 50; i++) {
-                mockAudioContext.currentTime += 0.2;
-                if (scheduler['isPlaying']) {
-                    (scheduler as any).scheduler();
-                }
-            }
-            scheduler.stop();
+            const totalBars = buildFormSections('Zamba', 1).reduce((a, s) => a + s.bars, 0);
+            const lengthSeconds = totalBars * 0.8 + 0.05;
+            run(scheduler, lengthSeconds - 0.2);
+            expect(onStopped).not.toHaveBeenCalled();
+            const lastNote = Math.max(...drum.play.mock.calls.map(c => c[1] as number));
+            expect(lastNote).toBeLessThan(lengthSeconds);
+
+            run(scheduler, 0.5);
+            expect(onStopped).toHaveBeenCalledTimes(1);
+            expect(onStopped).toHaveBeenCalledWith('form_finished');
+            expect(scheduler.getIsPlaying()).toBe(false);
+            expect(events.at(-1)?.formState).toMatchObject({ finished: true, totalFormBars: totalBars });
+            expect(events.some(e => e.formState?.part === 2)).toBe(true);
         });
     });
 });

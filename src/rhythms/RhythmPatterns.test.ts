@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { PRESET_PATTERNS, InstrumentIcons } from './RhythmPatterns';
+import { PRESET_PATTERNS } from './RhythmPatterns';
+import { InstrumentIcons } from '../constants/instrumentIcons';
 import type { InstrumentType } from './RhythmPatterns';
 
 describe('RhythmPatterns', () => {

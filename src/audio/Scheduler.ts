@@ -3,12 +3,17 @@ import DrumSynthesizer from './DrumSynthesizer';
 import type { RhythmPattern, RhythmStep } from '../rhythms/RhythmPatterns';
 import { PolyphonicSynth } from './PolyphonicSynth';
 import type { AccompanimentStyle } from './PolyphonicSynth';
+import { getBarDurationSeconds, getClickVelocity } from '../rhythms/meter';
 import ClockWorker from './clock.worker?worker'; // Vite Worker Import
+
+export const FORM_GENRES = ['Chacarera Simple', 'Chacarera Doble', 'Zamba', 'Cueca Norteña', 'Gato Norteño'] as const;
+export type FormGenre = typeof FORM_GENRES[number];
 
 export interface FormSection {
     name: string;
     audioId: 'Intro' | 'Estrofa' | 'Interludio' | 'Estribillo' | 'Zapateo' | 'Precuenta' | 'Silencio';
     bars: number;
+    part: 1 | 2;
     isFinal?: boolean;
 }
 
@@ -19,65 +24,96 @@ export interface FormState {
     totalFormBars: number;
     part: number;
     isFinal: boolean;
+    finished?: boolean;
 }
 
-interface VisualQueueEvent {
+export type TrainerMode = 'linear' | 'resistance_loop';
+
+export interface TrainerConfig {
+    active: boolean;
+    startBpm: number;
+    targetBpm: number;
+    barsPerStep: number;
+    bpmIncrement: number;
+    mode: TrainerMode;
+}
+
+/** Snapshot delivered to the UI exactly when the corresponding step is heard. */
+export interface PlaybackEvent {
     step: number;
-    time: number;
     bpm: number;
-    barCount: number;
+    /** Bars elapsed in the current speed-trainer interval. */
+    trainerBar: number;
     totalBars: number;
     pattern: RhythmPattern;
-    formState?: FormState;
+    formState: FormState | null;
     chordIndex: number;
+    queuedPatternId: string | null;
 }
 
-function buildFormSections(genre: string, introBars: number): FormSection[] {
+interface VisualQueueEvent extends PlaybackEvent {
+    time: number;
+}
+
+export function buildFormSections(genre: FormGenre, introBars: number): FormSection[] {
     const list: FormSection[] = [];
-    
-    const addPart = (partNum: number) => {
-        const suffix = partNum === 1 ? '1ra' : '2da';
-        list.push({ name: `PRECUENTA (${suffix})`, audioId: 'Precuenta', bars: 2 });
-        list.push({ name: `INTRODUCCIÓN (${suffix})`, audioId: 'Intro', bars: introBars });
-        
-        if (genre === 'Chacarera Simple') {
-            list.push({ name: 'ESTROFA 1', audioId: 'Estrofa', bars: 8 });
-            list.push({ name: 'INTERLUDIO 1', audioId: 'Interludio', bars: introBars });
-            list.push({ name: 'ESTROFA 2', audioId: 'Estrofa', bars: 8 });
-            list.push({ name: 'INTERLUDIO 2', audioId: 'Interludio', bars: introBars });
-            list.push({ name: 'ESTROFA 3', audioId: 'Estrofa', bars: 8 });
-            list.push({ name: 'ESTRIBILLO (¡Se acaba!)', audioId: 'Estribillo', bars: 8, isFinal: true });
-        } else if (genre === 'Chacarera Doble') {
-            list.push({ name: 'ESTROFA 1', audioId: 'Estrofa', bars: 12 });
-            list.push({ name: 'INTERLUDIO 1', audioId: 'Interludio', bars: introBars });
-            list.push({ name: 'ESTROFA 2', audioId: 'Estrofa', bars: 12 });
-            list.push({ name: 'INTERLUDIO 2', audioId: 'Interludio', bars: introBars });
-            list.push({ name: 'ESTROFA 3', audioId: 'Estrofa', bars: 12 });
-            list.push({ name: 'ESTRIBILLO (¡Se acaba!)', audioId: 'Estribillo', bars: 12, isFinal: true });
+
+    const addPart = (part: 1 | 2) => {
+        const suffix = part === 1 ? '1ra' : '2da';
+        const push = (s: Omit<FormSection, 'part'>) => list.push({ ...s, part });
+        push({ name: `PRECUENTA (${suffix})`, audioId: 'Precuenta', bars: 2 });
+        push({ name: `INTRODUCCIÓN (${suffix})`, audioId: 'Intro', bars: introBars });
+
+        if (genre === 'Chacarera Simple' || genre === 'Chacarera Doble') {
+            const bars = genre === 'Chacarera Simple' ? 8 : 12;
+            push({ name: 'ESTROFA 1', audioId: 'Estrofa', bars });
+            push({ name: 'INTERLUDIO 1', audioId: 'Interludio', bars: introBars });
+            push({ name: 'ESTROFA 2', audioId: 'Estrofa', bars });
+            push({ name: 'INTERLUDIO 2', audioId: 'Interludio', bars: introBars });
+            push({ name: 'ESTROFA 3', audioId: 'Estrofa', bars });
+            push({ name: 'ESTRIBILLO (¡Se acaba!)', audioId: 'Estribillo', bars, isFinal: true });
         } else if (genre === 'Zamba' || genre === 'Cueca Norteña') {
-            list.push({ name: 'ESTROFA 1', audioId: 'Estrofa', bars: 12 });
-            list.push({ name: 'ESTROFA 2', audioId: 'Estrofa', bars: 12 });
-            list.push({ name: 'ESTRIBILLO (¡Se acaba!)', audioId: 'Estribillo', bars: 12, isFinal: true });
+            push({ name: 'ESTROFA 1', audioId: 'Estrofa', bars: 12 });
+            push({ name: 'ESTROFA 2', audioId: 'Estrofa', bars: 12 });
+            push({ name: 'ESTRIBILLO (¡Se acaba!)', audioId: 'Estribillo', bars: 12, isFinal: true });
         } else if (genre === 'Gato Norteño') {
-            list.push({ name: 'ESTROFA 1 (A-A-B)', audioId: 'Estrofa', bars: 12 });
-            list.push({ name: 'ZAPATEO 1', audioId: 'Zapateo', bars: 8 });
-            list.push({ name: 'ZARANDEO / GIRO (A)', audioId: 'Estrofa', bars: 4 });
-            list.push({ name: 'ZAPATEO 2', audioId: 'Zapateo', bars: 8 });
-            list.push({ name: '¡AHURA! (B Final)', audioId: 'Estribillo', bars: 4, isFinal: true });
+            push({ name: 'ESTROFA 1 (A-A-B)', audioId: 'Estrofa', bars: 12 });
+            push({ name: 'ZAPATEO 1', audioId: 'Zapateo', bars: 8 });
+            push({ name: 'ZARANDEO / GIRO (A)', audioId: 'Estrofa', bars: 4 });
+            push({ name: 'ZAPATEO 2', audioId: 'Zapateo', bars: 8 });
+            push({ name: '¡AHURA! (B Final)', audioId: 'Estribillo', bars: 4, isFinal: true });
         }
     };
 
     addPart(1);
-    list.push({ name: 'ENTRE TIEMPO (Silencio)', audioId: 'Silencio', bars: 1 });
+    list.push({ name: 'ENTRE TIEMPO (Silencio)', audioId: 'Silencio', bars: 1, part: 1 });
     addPart(2);
 
     return list;
 }
 
+const buildStepCache = (pattern: RhythmPattern): Map<number, RhythmStep[]> => {
+    const cache = new Map<number, RhythmStep[]>();
+    pattern.steps.forEach(step => {
+        const list = cache.get(step.step);
+        if (list) list.push(step);
+        else cache.set(step.step, [step]);
+    });
+    return cache;
+};
+
+const sameMeter = (a: RhythmPattern, b: RhythmPattern) =>
+    a.subdivision === b.subdivision &&
+    a.timeSignature[0] === b.timeSignature[0] &&
+    a.timeSignature[1] === b.timeSignature[1];
+
 /**
  * Handles the precise scheduling of audio events.
- * Uses the "Lookahead" technique: A `setInterval` (on the main thread)
- * pushes events into the Web Audio API scheduler queue.
+ * Uses the "Lookahead" technique: a Web Worker clock wakes the scheduler, which
+ * pushes events slightly ahead into the Web Audio timeline. A requestAnimationFrame
+ * loop releases UI updates exactly when each step becomes audible.
+ *
+ * (ES) Agenda los eventos de audio con precisión usando la técnica "lookahead".
  */
 class Scheduler {
     private audioContext: AudioContext;
@@ -86,53 +122,55 @@ class Scheduler {
     // Harmony State
     private polySynth: PolyphonicSynth;
     private harmonyProgression: string[][] = [];
-    private harmonyBarIndex: number = 0;
+    private harmonyHalfBarIndex: number = 0;
     private currentChordIndex: number = -1;
-    private accompanimentStyle: 'pad' | 'quarters' | 'offbeats' | 'arpeggio_8' | 'zamba_base' = 'pad';
+    private accompanimentStyle: AccompanimentStyle = 'pad';
 
     // Timing variables
     private isPlaying: boolean = false;
     private nextNoteTime: number = 0.0;
     private tempo: number = 120.0;
-    private lookahead: number = 25.0; // ms
-    private scheduleAheadTime: number = 0.1; // seconds
+    private readonly lookahead: number = 25.0; // ms
+    private readonly scheduleAheadTime: number = 0.1; // seconds
+    private humanizeSeconds: number = 0;
     private clockWorker: Worker | null = null;
+    private rafId: number | null = null;
+    private disposed = false;
 
     // Pattern state
     private currentPattern: RhythmPattern | null = null;
     private queuedPattern: RhythmPattern | null = null;
     private currentStepIndex: number = 0;
-    private stepCache: Map<number, RhythmStep[]> = new Map(); // Cache active steps per index
+    private stepCache: Map<number, RhythmStep[]> = new Map();
 
     // Precise Visual Synchronization Queue
     private visualQueue: VisualQueueEvent[] = [];
 
     // Speed Trainer State
-    private trainerActive: boolean = false;
-    private trainerStartBpm: number = 60;
-    private trainerEndBpm: number = 120;
-    private trainerBarsInterval: number = 1; // How many bars to hold before changing
-    private trainerBpmStep: number = 5;      // How much to change BPM
-    private trainerCurrentBarCount: number = 0; // Track bars since last change
-    private trainerMode: 'linear' | 'resistance_loop' = 'linear';
-    private trainerHoldBars: number = 0; // For resistance mode
-    private trainerCoolDownFactor: number = 0.95;
+    private trainer: TrainerConfig = { active: false, startBpm: 60, targetBpm: 120, barsPerStep: 4, bpmIncrement: 5, mode: 'linear' };
+    private trainerCurrentBarCount: number = 0;
+    private trainerHoldBars: number = 0;
+    private readonly trainerCoolDownFactor: number = 0.95;
 
     // Study Features
     private silenceModeActive: boolean = false;
     private silenceChance: number = 0.5;
     private isMutedBar: boolean = false;
+    private totalBarsPracticed: number = 0;
 
     // Formas (Folk Structures) State
     private formasMode: boolean = false;
-    private formasGenre: string = 'Chacarera Simple';
+    private formasGenre: FormGenre = 'Chacarera Simple';
     private formasIntroBars: number = 8;
     private formSections: FormSection[] = [];
     private currentSectionIdx: number = 0;
     private currentFormBar: number = 0;
     private currentFormTotalBars: number = 0;
-    private currentFormPart: number = 1;
-    private totalBarsPracticed: number = 0;
+    /** Audio time at which a finished form must stop the transport (set once the last bar is scheduled). */
+    private formEndTime: number | null = null;
+
+    private onPlaybackUpdate: ((event: PlaybackEvent) => void) | null = null;
+    private onStopped: ((reason: 'form_finished') => void) | null = null;
 
     constructor() {
         this.audioContext = AudioContextManager.getInstance().getContext();
@@ -140,12 +178,8 @@ class Scheduler {
         this.polySynth = new PolyphonicSynth();
 
         // Connect Polyphonic Synth to the multi-channel mixer strip
-        const synthChannelNode = this.synthesizer.getChannelNode('synth');
-        if (synthChannelNode) {
-            this.polySynth.connect(synthChannelNode);
-        }
+        this.polySynth.connect(this.synthesizer.getChannelNode('synth'));
 
-        // Initialize Worker
         if (typeof Worker !== 'undefined') {
             this.clockWorker = new ClockWorker();
             this.clockWorker.onmessage = (e) => {
@@ -154,11 +188,9 @@ class Scheduler {
                 }
             };
         }
-
-        // Start the high-precision visual loop on requestAnimationFrame
-        requestAnimationFrame(this.runVisualUpdateLoop);
     }
 
+    // --- Mixer passthrough ---
     public setChannelVolume(name: string, volume: number) {
         this.synthesizer.setChannelVolume(name, volume);
     }
@@ -171,6 +203,7 @@ class Scheduler {
         this.synthesizer.setChannelMute(name, isMuted);
     }
 
+    // --- Harmony ---
     public setAccompanimentStyle(style: AccompanimentStyle) {
         this.accompanimentStyle = style;
     }
@@ -179,7 +212,7 @@ class Scheduler {
         const isDifferent = JSON.stringify(this.harmonyProgression) !== JSON.stringify(chords);
         if (isDifferent) {
             this.harmonyProgression = chords;
-            this.harmonyBarIndex = 0;
+            this.harmonyHalfBarIndex = 0;
         }
     }
 
@@ -187,78 +220,88 @@ class Scheduler {
         this.polySynth.setVolume(vol);
     }
 
-    public setTempo(bpm: number) {
-        if (this.tempo === bpm) return;
+    // --- Transport ---
+    public getTempo(): number {
+        return this.tempo;
+    }
 
-        // Instant Tempo Change Logic
+    public getIsPlaying(): boolean {
+        return this.isPlaying;
+    }
+
+    public setTempo(bpm: number) {
+        if (this.tempo === bpm || !(bpm > 0)) return;
+
         const ratio = this.tempo / bpm;
         this.tempo = bpm;
 
-        // Sync all queued visual events to the new tempo to prevent race conditions in React state
+        // Keep pending visual events consistent with the new tempo.
         this.visualQueue.forEach(event => {
             event.bpm = bpm;
         });
 
         if (this.isPlaying) {
+            // Rescale the wait for the next step so the change is felt immediately.
             const now = this.audioContext.currentTime;
             const timeToNext = this.nextNoteTime - now;
-
             if (timeToNext > 0 && timeToNext < 1.0) {
                 this.nextNoteTime = now + (timeToNext * ratio);
             }
         }
     }
 
+    /** Random timing deviation applied to instruments (never to the guide click). */
+    public setHumanize(milliseconds: number) {
+        this.humanizeSeconds = Math.max(0, milliseconds) / 1000;
+    }
+
+    /**
+     * Loads a pattern.
+     * - Stopped: applied immediately.
+     * - Playing, same pattern edited with the same meter: hot-swapped, heard from the next step.
+     * - Playing, different pattern or meter: queued for the next bar line.
+     */
     public setPattern(pattern: RhythmPattern) {
-        if (this.currentPattern && this.currentPattern.id === pattern.id) {
-            return; // Avoid redundant sets and feedback loops!
+        if (this.currentPattern === pattern) {
+            this.queuedPattern = null; // Re-selecting the active pattern cancels a pending switch.
+            return;
         }
-        if (this.isPlaying && this.currentPattern) {
-            // Queue the rhythm switch smoothly for the start of the next bar
-            this.queuedPattern = pattern;
-        } else {
-            // Not playing or first load, apply instantly
-            this.currentPattern = pattern;
-            this.queuedPattern = null;
+        if (this.queuedPattern === pattern) return;
+
+        if (!this.isPlaying || !this.currentPattern) {
+            this.applyPattern(pattern);
             this.currentStepIndex = 0;
             this.trainerCurrentBarCount = 0;
             this.visualQueue = [];
-
-            // Build Cache
-            this.stepCache.clear();
-            pattern.steps.forEach(step => {
-                if (!this.stepCache.has(step.step)) {
-                    this.stepCache.set(step.step, []);
-                }
-                this.stepCache.get(step.step)!.push(step);
-            });
+            return;
         }
+
+        if (pattern.id === this.currentPattern.id && sameMeter(pattern, this.currentPattern)) {
+            // Live edit: swap the steps in place without touching a pending switch.
+            this.currentPattern = pattern;
+            this.stepCache = buildStepCache(pattern);
+            return;
+        }
+
+        this.queuedPattern = pattern;
+    }
+
+    private applyPattern(pattern: RhythmPattern) {
+        this.currentPattern = pattern;
+        this.queuedPattern = null;
+        this.stepCache = buildStepCache(pattern);
     }
 
     public getQueuedPatternId(): string | null {
         return this.queuedPattern ? this.queuedPattern.id : null;
     }
 
-    public configureTrainer(
-        active: boolean,
-        start: number,
-        end: number,
-        barsInterval: number,
-        bpmStep: number,
-        mode: 'linear' | 'resistance_loop' = 'linear'
-    ) {
-        this.trainerActive = active;
-        this.trainerStartBpm = start;
-        this.trainerEndBpm = end;
-        this.trainerBarsInterval = barsInterval;
-        this.trainerBpmStep = bpmStep;
-        this.trainerMode = mode;
+    public configureTrainer(config: TrainerConfig) {
+        const wasActive = this.trainer.active;
+        this.trainer = { ...config };
 
-        if (active) {
-            this.tempo = start;
-            this.visualQueue.forEach(event => {
-                event.bpm = start;
-            });
+        if (config.active && (!wasActive || !this.isPlaying)) {
+            this.setTempo(config.startBpm);
             this.trainerCurrentBarCount = 0;
             this.trainerHoldBars = 0;
         }
@@ -266,7 +309,8 @@ class Scheduler {
 
     public setSilenceMode(active: boolean, chance: number = 0.2) {
         this.silenceModeActive = active;
-        this.silenceChance = chance;
+        this.silenceChance = Math.min(1, Math.max(0, chance));
+        if (!active) this.isMutedBar = false;
     }
 
     public resetPracticeStats() {
@@ -277,42 +321,35 @@ class Scheduler {
         return { totalBars: this.totalBarsPracticed };
     }
 
-    private onPlaybackUpdate: ((
-        step: number,
-        bpm: number,
-        barCount: number,
-        totalBars: number,
-        pattern: RhythmPattern,
-        formState: FormState | null,
-        chordIndex: number
-    ) => void) | null = null;
-
-    public setOnPlaybackUpdate(callback: (
-        step: number,
-        bpm: number,
-        barCount: number,
-        totalBars: number,
-        pattern: RhythmPattern,
-        formState: FormState | null,
-        chordIndex: number
-    ) => void) {
+    public setOnPlaybackUpdate(callback: (event: PlaybackEvent) => void) {
         this.onPlaybackUpdate = callback;
     }
 
-    public configureFormas(enabled: boolean, genre: string, introBars: number) {
+    public setOnStopped(callback: (reason: 'form_finished') => void) {
+        this.onStopped = callback;
+    }
+
+    public configureFormas(enabled: boolean, genre: FormGenre, introBars: number) {
         this.formasMode = enabled;
         this.formasGenre = genre;
         this.formasIntroBars = introBars;
     }
 
     public start() {
-        if (this.isPlaying) return;
+        if (this.isPlaying || this.disposed) return;
 
         this.isPlaying = true;
         this.currentStepIndex = 0;
-        this.harmonyBarIndex = 0;
+        this.harmonyHalfBarIndex = 0;
         this.currentChordIndex = -1;
         this.visualQueue = [];
+        this.formEndTime = null;
+        this.isMutedBar = false;
+        this.trainerCurrentBarCount = 0;
+        this.trainerHoldBars = 0;
+        if (this.trainer.active) {
+            this.tempo = this.trainer.startBpm;
+        }
         this.nextNoteTime = this.audioContext.currentTime + 0.05; // Slight buffer
 
         if (this.formasMode) {
@@ -320,37 +357,98 @@ class Scheduler {
             this.currentSectionIdx = 0;
             this.currentFormBar = 0;
             this.currentFormTotalBars = 0;
-            this.currentFormPart = 1;
         }
 
-        // Start Worker
         this.clockWorker?.postMessage({ action: 'start', interval: this.lookahead });
+        this.startVisualLoop();
     }
 
     public stop() {
+        if (this.isPlaying) {
+            this.synthesizer.silence();
+            this.polySynth.silence();
+        }
         this.isPlaying = false;
         this.clockWorker?.postMessage({ action: 'stop' });
+        this.stopVisualLoop();
         this.visualQueue = [];
-        this.queuedPattern = null;
-        this.harmonyBarIndex = 0;
+        this.formEndTime = null;
+        if (this.queuedPattern) {
+            // A queued switch that never reached its bar line becomes the active pattern.
+            this.applyPattern(this.queuedPattern);
+        }
+        this.harmonyHalfBarIndex = 0;
         this.currentChordIndex = -1;
     }
 
-    public playOneShot(instrument: string) {
+    /** Releases the worker, the animation loop and every audio node. The instance is unusable afterwards. */
+    public dispose() {
+        if (this.disposed) return;
+        this.stop();
+        this.disposed = true;
+        this.clockWorker?.terminate();
+        this.clockWorker = null;
+        this.onPlaybackUpdate = null;
+        this.onStopped = null;
+        this.synthesizer.dispose();
+        this.polySynth.dispose();
+    }
+
+    public playOneShot(instrument: string, modifier?: string) {
         const time = this.audioContext.currentTime;
-        this.synthesizer.play(instrument, time, 1.0); // Full velocity for preview
+        this.synthesizer.play(instrument, time, 1.0, modifier); // Full velocity for preview
     }
 
     private scheduler() {
+        if (!this.isPlaying) return;
+
         // Prevent falling behind and scheduling past notes (which Web Audio plays simultaneously on start/resume)
         if (this.nextNoteTime < this.audioContext.currentTime) {
             this.nextNoteTime = this.audioContext.currentTime;
         }
 
-        while (this.nextNoteTime < this.audioContext.currentTime + this.scheduleAheadTime) {
+        while (this.isPlaying && this.formEndTime === null && this.nextNoteTime < this.audioContext.currentTime + this.scheduleAheadTime) {
             const time = this.nextNoteTime;
             this.scheduleNote(time);
             this.nextStep(time);
+        }
+    }
+
+    private currentSection(): FormSection | null {
+        return this.formasMode ? this.formSections[this.currentSectionIdx] ?? null : null;
+    }
+
+    private grooveOffset(idx: number, stepDuration: number, activeSteps: RhythmStep[]): number {
+        const pattern = this.currentPattern!;
+        switch (pattern.grooveType) {
+            case 'swing_triplet':
+                return idx % 2 !== 0 ? stepDuration * (pattern.swingBase || 0.15) : 0;
+            case 'samba_carioca': {
+                const pos = idx % 4;
+                if (pos === 1) return stepDuration * 0.18;
+                if (pos === 3) return -stepDuration * 0.05;
+                return 0;
+            }
+            case 'chacarera_poliritmica':
+                // Urgency on beat 3 of the 3/4 feel (step 9)
+                return activeSteps.some(s => s.step === 9) ? -0.003 : 0;
+            case 'zamba_tradicional':
+                // Drag on the main "Pám" (step 9)
+                return activeSteps.some(s => s.step === 9) ? stepDuration * 0.12 : 0;
+            case 'chamame_saltadito':
+                if (idx === 4) return -0.006;
+                if (idx === 10) return -0.004;
+                return 0;
+            case 'salsa_tumbao':
+                return idx === 7 || idx === 15 ? -0.004 : 0;
+            case 'cumbia_colombiana': {
+                const pos = idx % 4;
+                if (pos === 1) return stepDuration * 0.08;
+                if (pos === 3) return -stepDuration * 0.04;
+                return 0;
+            }
+            default:
+                return 0;
         }
     }
 
@@ -359,304 +457,221 @@ class Scheduler {
 
         const sub = this.currentPattern.subdivision;
         const ts = this.currentPattern.timeSignature;
+        const idx = this.currentStepIndex;
+        const section = this.currentSection();
 
-        // --- HARMONY TRIGGER (Start of Bar OR Middle of Bar) ---
-        const midPoint = Math.floor(sub / 2);
-        const isStart = this.currentStepIndex === 0;
-        const isMiddle = this.currentStepIndex === midPoint;
-
-        const currentSec = this.formasMode && this.formSections[this.currentSectionIdx] ? this.formSections[this.currentSectionIdx] : null;
-        let shouldPlayHarmony = true;
-        if (this.formasMode && currentSec) {
-            if (currentSec.audioId === 'Precuenta' || currentSec.audioId === 'Silencio') {
-                shouldPlayHarmony = false;
-            }
-        }
+        // --- HARMONY TRIGGER (start or middle of the bar) ---
+        const isStart = idx === 0;
+        const isMiddle = idx === Math.floor(sub / 2);
+        const harmonyAllowed = !section || (section.audioId !== 'Precuenta' && section.audioId !== 'Silencio');
 
         if (isStart || isMiddle) {
-            if (this.harmonyProgression.length > 0 && shouldPlayHarmony) {
-                this.currentChordIndex = this.harmonyBarIndex % this.harmonyProgression.length;
+            if (this.harmonyProgression.length > 0 && harmonyAllowed) {
+                const chordIndex = this.harmonyHalfBarIndex % this.harmonyProgression.length;
+                this.currentChordIndex = chordIndex;
+                const chord = this.harmonyProgression[chordIndex];
+                const prevChord = this.harmonyHalfBarIndex > 0
+                    ? this.harmonyProgression[(this.harmonyHalfBarIndex - 1) % this.harmonyProgression.length]
+                    : [];
+                const chordDuration = getBarDurationSeconds(this.tempo, ts) / 2;
+
+                if (chord && chord.length > 0 && !(this.silenceModeActive && this.isMutedBar)) {
+                    this.polySynth.playChord(chord, chordDuration, time, this.accompanimentStyle, prevChord);
+                }
+                this.harmonyHalfBarIndex++;
             } else {
                 this.currentChordIndex = -1;
             }
         }
 
-        if ((isStart || isMiddle) && this.harmonyProgression.length > 0 && shouldPlayHarmony) {
-            const chordIndex = this.currentChordIndex;
-            const chord = this.harmonyProgression[chordIndex];
-
-            const prevIndex = (this.harmonyBarIndex === 0)
-                ? 0
-                : (this.harmonyBarIndex - 1) % this.harmonyProgression.length;
-            const prevChord = (this.harmonyBarIndex > 0) ? this.harmonyProgression[prevIndex] : [];
-
-            // Correct Duration: contemple compound meters (beats * 60 / tempo) scaled by denominator
-            const beats = ts[0];
-            const wholeBarSeconds = (60.0 / this.tempo) * (4.0 / ts[1]) * beats;
-            const chordDuration = wholeBarSeconds / 2;
-
-            if (chord && chord.length > 0) {
-                this.polySynth.playChord(chord, chordDuration, time, this.accompanimentStyle, prevChord);
-            }
-
-            this.harmonyBarIndex++;
-            this.totalBarsPracticed += 0.5;
-        }
-
-        // Use Cached Steps
-        const activeSteps = this.stepCache.get(this.currentStepIndex + 1) || [];
-
-        let microTimingOffset = (Math.random() - 0.5) * 0.003; // Slight humanize jitter (3ms)
-
-        // Step Duration (Ideal) - Fixed formula scaling by denominator
-        const timePerBar = (60.0 / this.tempo) * (4.0 / ts[1]) * ts[0];
-        const stepDuration = timePerBar / sub;
-
-        const groove = this.currentPattern.grooveType || 'straight';
-        const idx = this.currentStepIndex;
-
-        if (groove === 'swing_triplet') {
-            const isOffBeat = idx % 2 !== 0;
-            if (isOffBeat) {
-                microTimingOffset = stepDuration * (this.currentPattern.swingBase || 0.15);
-            }
-        } else if (groove === 'samba_carioca') {
-            const positionInBeat = idx % 4;
-            if (positionInBeat === 1) {
-                microTimingOffset = stepDuration * 0.18;
-            } else if (positionInBeat === 3) {
-                microTimingOffset = -stepDuration * 0.05;
-            }
-        } else if (groove === 'chacarera_poliritmica') {
-            // Urgency on beat 3 of 3/4 feel (Step 9)
-            if (activeSteps.some(s => s.step === 9)) {
-                microTimingOffset = -0.003; // Adelantado 3ms
-            }
-        } else if (groove === 'zamba_tradicional') {
-            // Drag on the main "Pám" (Step 9)
-            if (activeSteps.some(s => s.step === 9)) {
-                microTimingOffset = stepDuration * 0.12; // Drag 12% of step duration
-            }
-        } else if (groove === 'chamame_saltadito') {
-            // Bouncing triplet swing with dynamic anticipation on step 5 (-6ms) and step 11 (-4ms)
-            if (idx === 4) {
-                microTimingOffset = -0.006;
-            } else if (idx === 10) {
-                microTimingOffset = -0.004;
-            }
-        } else if (groove === 'salsa_tumbao') {
-            // Syncopated conga/clave groove with anticipation on the "ponche" steps 8 and 16 (-4ms)
-            if (idx === 7 || idx === 15) {
-                microTimingOffset = -0.004;
-            }
-        } else if (groove === 'cumbia_colombiana') {
-            // Driving shaker galopa swing: dragging the middle-beats slightly, anticipating the drop
-            const pos = idx % 4;
-            if (pos === 1) {
-                microTimingOffset = stepDuration * 0.08;
-            } else if (pos === 3) {
-                microTimingOffset = -stepDuration * 0.04;
-            }
-        }
-
-        const playTime = time + microTimingOffset;
-
         if (this.silenceModeActive && this.isMutedBar) {
-            return; // Silent bar
+            return; // Silent bar: the musician keeps time alone.
         }
+        if (section?.audioId === 'Silencio') {
+            return;
+        }
+
+        const activeSteps = this.stepCache.get(idx + 1) || [];
+        const stepDuration = getBarDurationSeconds(this.tempo, ts) / sub;
+        const now = this.audioContext.currentTime;
+
+        const groove = this.grooveOffset(idx, stepDuration, activeSteps);
+        const jitter = this.humanizeSeconds > 0 ? (Math.random() - 0.5) * this.humanizeSeconds : 0;
+        // Never schedule in the past: late events would pile up and fire together.
+        const playTime = Math.max(now, time + groove + jitter);
 
         activeSteps.forEach(step => {
-            if (currentSec) {
-                if (currentSec.audioId === 'Precuenta' && step.instrument !== 'click') {
-                    return; // Count-in: only play metronome tick
-                }
-                if (currentSec.audioId === 'Silencio') {
-                    return; // Mute everything
-                }
-                if ((currentSec.audioId === 'Intro' || currentSec.audioId === 'Interludio') && step.instrument === 'bombo_leguero' && step.modifier !== 'aro') {
-                    return; // Mute bombo skin parche hits in intro/interludio
+            if (section) {
+                if (section.audioId === 'Precuenta' && step.instrument !== 'click') return; // Count-in: click only
+                if ((section.audioId === 'Intro' || section.audioId === 'Interludio') && step.instrument === 'bombo_leguero' && step.modifier !== 'aro') {
+                    return; // Only the rim plays during intro/interludio
                 }
             }
-            this.synthesizer.play(step.instrument, playTime, step.velocity, step.modifier);
+            const stepTime = step.instrument === 'click' ? Math.max(now, time) : playTime;
+            this.synthesizer.play(step.instrument, stepTime, step.velocity, step.modifier);
         });
 
-        // Auto-schedule metronome guide click on beat boundaries
-        const stepsPerBeat = sub / ts[0];
-        const isBeatStart = (this.currentStepIndex % stepsPerBeat) === 0;
-
-        if (isBeatStart) {
-            const hasExplicitClick = activeSteps.some(s => s.instrument === 'click');
-            if (!hasExplicitClick) {
-                const clickVelocity = (this.currentStepIndex === 0) ? 1.0 : 0.6;
-                let shouldPlayClick = true;
-                if (currentSec && currentSec.audioId === 'Silencio') {
-                    shouldPlayClick = false;
-                }
-                if (shouldPlayClick) {
-                    this.synthesizer.play('click', playTime, clickVelocity);
-                }
-            }
+        // Guide click on every pulse, exactly on the grid (no groove, no humanize).
+        const clickVelocity = getClickVelocity(idx, sub, ts);
+        if (clickVelocity !== null && !activeSteps.some(s => s.instrument === 'click')) {
+            this.synthesizer.play('click', Math.max(now, time), clickVelocity);
         }
+    }
+
+    private buildFormState(): FormState | null {
+        const section = this.currentSection();
+        if (!section) return null;
+        return {
+            sectionName: section.name,
+            sectionBar: this.currentFormBar,
+            sectionTotalBars: section.bars,
+            totalFormBars: this.currentFormTotalBars,
+            part: section.part,
+            isFinal: !!section.isFinal
+        };
     }
 
     private nextStep(time: number) {
         if (!this.currentPattern) return;
 
         const sub = this.currentPattern.subdivision;
-        const ts = this.currentPattern.timeSignature;
-        const beatsPerBar = ts[0];
-
-        // Fixed Bar and Step Durations
-        const timePerBar = (60.0 / this.tempo) * (4.0 / ts[1]) * beatsPerBar;
-        const timePerStep = timePerBar / sub;
-
-        const scheduledStep = this.currentStepIndex;
-
-        this.nextNoteTime += timePerStep;
-
-        // Push scheduled event parameters to visual queue with exact target audio time
-        const currentFormState = this.formasMode && this.formSections[this.currentSectionIdx] ? {
-            sectionName: this.formSections[this.currentSectionIdx].name,
-            sectionBar: this.currentFormBar,
-            sectionTotalBars: this.formSections[this.currentSectionIdx].bars,
-            totalFormBars: this.currentFormTotalBars,
-            part: this.currentFormPart,
-            isFinal: !!this.formSections[this.currentSectionIdx].isFinal
-        } : undefined;
+        const timePerStep = getBarDurationSeconds(this.tempo, this.currentPattern.timeSignature) / sub;
 
         this.visualQueue.push({
-            step: scheduledStep,
-            time: time,
+            step: this.currentStepIndex,
+            time,
             bpm: Math.round(this.tempo),
-            barCount: this.trainerCurrentBarCount,
+            trainerBar: this.trainerCurrentBarCount,
             totalBars: this.totalBarsPracticed,
             pattern: this.currentPattern,
-            formState: currentFormState,
-            chordIndex: this.currentChordIndex
+            formState: this.buildFormState(),
+            chordIndex: this.currentChordIndex,
+            queuedPatternId: this.getQueuedPatternId()
         });
 
-        // Advance Step Index
+        this.nextNoteTime += timePerStep;
         this.currentStepIndex++;
-        if (this.currentStepIndex >= sub) {
-            this.currentStepIndex = 0; // Bar Wrapped
 
-            if (this.formasMode && this.formSections.length > 0) {
-                this.currentFormBar++;
-                this.currentFormTotalBars++;
-                
-                const currentSec = this.formSections[this.currentSectionIdx];
-                if (currentSec && this.currentFormBar >= currentSec.bars) {
-                    this.currentSectionIdx++;
-                    this.currentFormBar = 0;
-                    
-                    if (this.currentSectionIdx >= this.formSections.length) {
-                        this.stop();
-                        if (this.onPlaybackUpdate) {
-                            this.onPlaybackUpdate(0, this.tempo, 0, this.totalBarsPracticed, this.currentPattern!, {
-                                sectionName: '¡TERMINÓ!',
-                                sectionBar: 0,
-                                sectionTotalBars: 0,
-                                totalFormBars: this.currentFormTotalBars,
-                                part: 2,
-                                isFinal: true
-                            }, this.currentChordIndex);
-                        }
-                        return;
-                    } else {
-                        const newSec = this.formSections[this.currentSectionIdx];
-                        if (newSec && newSec.name.includes('(2da)')) {
-                            this.currentFormPart = 2;
-                        }
-                    }
+        if (this.currentStepIndex < sub) return;
+
+        // --- Bar line ---
+        this.currentStepIndex = 0;
+        this.totalBarsPracticed++;
+
+        if (this.formasMode && this.formSections.length > 0) {
+            this.currentFormBar++;
+            this.currentFormTotalBars++;
+
+            const section = this.formSections[this.currentSectionIdx];
+            if (section && this.currentFormBar >= section.bars) {
+                this.currentSectionIdx++;
+                this.currentFormBar = 0;
+
+                if (this.currentSectionIdx >= this.formSections.length) {
+                    // Stop when the last bar has actually been heard, not when it was scheduled.
+                    this.formEndTime = this.nextNoteTime;
+                    return;
                 }
             }
+        }
 
-            // Apply queued pattern switch precisely at the bar boundary!
-            if (this.queuedPattern) {
-                this.currentPattern = this.queuedPattern;
-                this.queuedPattern = null;
-
-                // Automatically switch tempo to the recommended tempo of the new pattern
-                if (this.currentPattern.recommendedTempo) {
-                    this.tempo = this.currentPattern.recommendedTempo;
-                }
-
-                // Rebuild cache for the new pattern
-                this.stepCache.clear();
-                this.currentPattern.steps.forEach(step => {
-                    if (!this.stepCache.has(step.step)) {
-                        this.stepCache.set(step.step, []);
-                    }
-                    this.stepCache.get(step.step)!.push(step);
-                });
+        // Apply queued pattern switch precisely at the bar boundary
+        if (this.queuedPattern) {
+            this.applyPattern(this.queuedPattern);
+            if (this.currentPattern.recommendedTempo && !this.trainer.active) {
+                this.tempo = this.currentPattern.recommendedTempo;
             }
+        }
 
-            // Handle Silence Mode Trigger
-            if (this.silenceModeActive) {
-                this.isMutedBar = Math.random() < this.silenceChance;
-            } else {
-                this.isMutedBar = false;
+        this.isMutedBar = this.silenceModeActive && Math.random() < this.silenceChance;
+
+        if (this.trainer.active) {
+            this.advanceTrainer();
+        }
+    }
+
+    private advanceTrainer() {
+        this.trainerCurrentBarCount++;
+        if (this.trainerCurrentBarCount < this.trainer.barsPerStep) return;
+        this.trainerCurrentBarCount = 0;
+
+        const { startBpm, targetBpm, bpmIncrement, mode } = this.trainer;
+        if (mode === 'linear') {
+            if (startBpm < targetBpm) {
+                this.tempo = Math.min(this.tempo + bpmIncrement, targetBpm);
+            } else if (startBpm > targetBpm) {
+                this.tempo = Math.max(this.tempo - bpmIncrement, targetBpm);
             }
-
-            // Trainer Logic
-            if (this.trainerActive) {
-                this.trainerCurrentBarCount++;
-
-                if (this.trainerCurrentBarCount >= this.trainerBarsInterval) {
-                    this.trainerCurrentBarCount = 0;
-
-                    if (this.trainerMode === 'linear') {
-                        if (this.trainerStartBpm < this.trainerEndBpm) {
-                            this.tempo = Math.min(this.tempo + this.trainerBpmStep, this.trainerEndBpm);
-                        } else if (this.trainerStartBpm > this.trainerEndBpm) {
-                            this.tempo = Math.max(this.tempo - this.trainerBpmStep, this.trainerEndBpm);
-                        }
-                    } else if (this.trainerMode === 'resistance_loop') {
-                        const isAtTarget = this.tempo >= this.trainerEndBpm;
-
-                        if (isAtTarget) {
-                            this.trainerHoldBars++;
-                            if (this.trainerHoldBars > 4) {
-                                this.tempo = Math.round(this.tempo * this.trainerCoolDownFactor);
-                                this.trainerHoldBars = 0;
-                            }
-                        } else {
-                            this.tempo = Math.min(this.tempo + this.trainerBpmStep, this.trainerEndBpm);
-                        }
-                    }
-                }
+        } else if (this.tempo >= targetBpm) {
+            this.trainerHoldBars++;
+            if (this.trainerHoldBars > 4) {
+                this.tempo = Math.round(this.tempo * this.trainerCoolDownFactor);
+                this.trainerHoldBars = 0;
             }
+        } else {
+            this.tempo = Math.min(this.tempo + bpmIncrement, targetBpm);
+        }
+    }
+
+    private startVisualLoop() {
+        if (this.rafId === null && typeof requestAnimationFrame !== 'undefined') {
+            this.rafId = requestAnimationFrame(this.runVisualUpdateLoop);
+        }
+    }
+
+    private stopVisualLoop() {
+        if (this.rafId !== null) {
+            cancelAnimationFrame(this.rafId);
+            this.rafId = null;
         }
     }
 
     /**
-     * Bucle requestAnimationFrame que corre continuamente en el hilo principal.
-     * Lee la cola visual y gatilla el callback de React EXACTAMENTE cuando el
-     * reloj de audio pasa el tiempo de reproducción programado.
+     * requestAnimationFrame loop: releases each queued step to the UI when the
+     * audio clock reaches it, and ends finished forms on time.
      */
     private runVisualUpdateLoop = () => {
-        if (this.isPlaying) {
-            const now = this.audioContext.currentTime;
-            let latestUpdate: VisualQueueEvent | null = null;
+        this.rafId = null;
+        if (!this.isPlaying) return;
 
-            // Consumir todos los eventos que ya se tendrían que estar reproduciendo
-            while (this.visualQueue.length > 0 && this.visualQueue[0].time <= now) {
-                latestUpdate = this.visualQueue.shift() || null;
-            }
+        const now = this.audioContext.currentTime;
+        let latestUpdate: VisualQueueEvent | null = null;
 
-            if (latestUpdate && this.onPlaybackUpdate) {
-                this.onPlaybackUpdate(
-                    latestUpdate.step,
-                    latestUpdate.bpm,
-                    latestUpdate.barCount,
-                    latestUpdate.totalBars,
-                    latestUpdate.pattern,
-                    latestUpdate.formState || null,
-                    latestUpdate.chordIndex
-                );
-            }
+        while (this.visualQueue.length > 0 && this.visualQueue[0].time <= now) {
+            latestUpdate = this.visualQueue.shift()!;
         }
-        requestAnimationFrame(this.runVisualUpdateLoop);
+
+        if (latestUpdate) {
+            this.onPlaybackUpdate?.(latestUpdate);
+        }
+
+        if (this.formEndTime !== null && now >= this.formEndTime && this.visualQueue.length === 0) {
+            const finishedState: FormState = {
+                sectionName: '¡TERMINÓ!',
+                sectionBar: 0,
+                sectionTotalBars: 0,
+                totalFormBars: this.currentFormTotalBars,
+                part: 2,
+                isFinal: true,
+                finished: true
+            };
+            const pattern = this.currentPattern!;
+            this.stop();
+            this.onPlaybackUpdate?.({
+                step: 0,
+                bpm: Math.round(this.tempo),
+                trainerBar: 0,
+                totalBars: this.totalBarsPracticed,
+                pattern,
+                formState: finishedState,
+                chordIndex: -1,
+                queuedPatternId: null
+            });
+            this.onStopped?.('form_finished');
+            return;
+        }
+
+        this.startVisualLoop();
     };
 }
 

@@ -1,9 +1,15 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
+import { CHANNEL_IDS, getChannelForInstrument } from '../audio/instrumentChannels';
+import type { ChannelId } from '../audio/instrumentChannels';
+import { CUSTOM_PATTERN_ID, isMetronomePattern } from '../rhythms/patternLibrary';
+import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
+import { usePersistentState } from '../hooks/usePersistentState';
+import { usePlaybackStore } from '../state/PlaybackContext';
+import { isBoolean, isNumber, isPlainObject, isString } from '../state/storage';
 
 interface MixerConsoleProps {
   pattern: RhythmPattern;
-  currentStep: number;
   isPlaying: boolean;
   onVolumeChange: (channel: string, volume: number) => void;
   onPanChange: (channel: string, pan: number) => void;
@@ -11,11 +17,17 @@ interface MixerConsoleProps {
 }
 
 interface ChannelState {
-  id: string;
+  id: ChannelId;
   name: string;
   volume: number;
   pan: number;
   isMuted: boolean;
+}
+
+interface MixerState {
+  channels: ChannelState[];
+  /** Pattern for which the automatic click mute rule was last applied. */
+  clickRulePatternId: string | null;
 }
 
 const INITIAL_CHANNELS: ChannelState[] = [
@@ -29,216 +41,169 @@ const INITIAL_CHANNELS: ChannelState[] = [
   { id: 'synth', name: 'TECLADO', volume: 0.7, pan: -0.3, isMuted: false },
 ];
 
+const INITIAL_MIXER: MixerState = { channels: INITIAL_CHANNELS, clickRulePatternId: null };
+
+const isChannelState = (v: unknown): v is ChannelState =>
+  isPlainObject(v) && isString(v.id) && (CHANNEL_IDS as readonly string[]).includes(v.id) && isString(v.name) &&
+  isNumber(v.volume) && v.volume >= 0 && v.volume <= 1.5 && isNumber(v.pan) && v.pan >= -1 && v.pan <= 1 && isBoolean(v.isMuted);
+
+const isMixerState = (v: unknown): v is MixerState =>
+  isPlainObject(v) && Array.isArray(v.channels) && v.channels.length === CHANNEL_IDS.length &&
+  v.channels.every(isChannelState) && (v.clickRulePatternId === null || isString(v.clickRulePatternId));
+
+/** Rhythm presets bring their own groove, so the guide click starts muted there. */
+const shouldMuteClick = (pattern: RhythmPattern) =>
+  !(isMetronomePattern(pattern) || pattern.id === CUSTOM_PATTERN_ID);
+
 const SCREW_ANGLES = [12, 45, 87, 34, 115, 78, 62, 95];
+const VU_SEGMENTS = 10;
+const PAN_STEP = 0.05;
 
-const getChannelForInstrument = (inst: string): string => {
-  switch (inst) {
-    case 'bombo_leguero':
-    case 'rim':
-    case 'surdo':
-    case 'cajon':
-    case 'candombe_piano':
-      return 'bombo';
-    case 'clave':
-      return 'clave';
-    case 'shaker':
-      return 'shaker';
-    case 'kick':
-    case 'tom_low':
-    case 'tom_floor':
-      return 'kick';
-    case 'snare':
-    case 'tom_high':
-    case 'caja':
-    case 'palmas':
-    case 'candombe_chico':
-    case 'candombe_repique':
-      return 'snare';
-    case 'hihat':
-    case 'hihat_foot':
-    case 'crash':
-    case 'ride':
-      return 'hihat';
-    case 'click':
-      return 'click';
-    default:
-      return 'synth';
-  }
-};
-
-import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
 const CHANNEL_IMAGES = INSTRUMENT_IMAGES;
+
+const panLabel = (pan: number) =>
+  Math.abs(pan) < 0.005 ? 'C' : pan > 0 ? `R${Math.round(pan * 50)}` : `L${Math.round(Math.abs(pan) * 50)}`;
 
 export const MixerConsole: React.FC<MixerConsoleProps> = ({
   pattern,
-  currentStep,
   isPlaying,
   onVolumeChange,
   onPanChange,
   onMuteChange,
 }) => {
-  const [channels, setChannels] = useState<ChannelState[]>(INITIAL_CHANNELS);
+  const [mixer, setMixer] = usePersistentState<MixerState>('mixer', INITIAL_MIXER, isMixerState);
+  const channels = mixer.channels;
+  const store = usePlaybackStore();
 
-  // Peak levels (0.0 to 1.0) for VU decay
-  const [peaks, setPeaks] = useState<Record<string, number>>({
-    bombo: 0, clave: 0, shaker: 0, kick: 0, snare: 0, hihat: 0, click: 0, synth: 0
-  });
+  const setChannels = useCallback((update: (prev: ChannelState[]) => ChannelState[]) => {
+    setMixer(prev => ({ ...prev, channels: update(prev.channels) }));
+  }, [setMixer]);
 
-  const peakRefs = useRef<Record<string, number>>({
-    bombo: 0, clave: 0, shaker: 0, kick: 0, snare: 0, hihat: 0, click: 0, synth: 0
-  });
-
-  // Track panning drag states
-  const [activeDrag, setActiveDrag] = useState<{ channelId: string; startY: number; startPan: number } | null>(null);
-
-  // Trigger single previews or test click hits
-  const triggerPeak = useCallback((channelId: string, level: number) => {
-    peakRefs.current[channelId] = Math.min(1.0, Math.max(peakRefs.current[channelId], level));
-  }, []);
-
-  // Trigger peak flashes on steps
-  useEffect(() => {
-    if (isPlaying && pattern) {
-      const activeSteps = pattern.steps.filter(s => s.step === currentStep + 1);
-      activeSteps.forEach(step => {
-        const channel = getChannelForInstrument(step.instrument);
-        // Add a slight multiplier based on step velocity
-        triggerPeak(channel, step.velocity);
-      });
-
-      // Simple detection for harmony accompaniment triggers (step 0 or half-way mark)
-      const midPoint = Math.floor(pattern.subdivision / 2);
-      if (currentStep === 0 || currentStep === midPoint) {
-        triggerPeak('synth', 0.7);
-      }
-    }
-  }, [currentStep, pattern, isPlaying, triggerPeak]);
-
-  // VU Meter smooth decay animation loop (runs on requestAnimationFrame)
-  useEffect(() => {
-    let animId: number;
-    
-    const updateVU = () => {
-      const newPeaks: Record<string, number> = {};
-      let changed = false;
-
-      Object.keys(peakRefs.current).forEach(key => {
-        const prev = peakRefs.current[key];
-        // Decay exponentially (0.85 per frame) for natural realistic fallback ballistics
-        const next = Math.max(0, prev * 0.87 - 0.005);
-        peakRefs.current[key] = next;
-        
-        // Only trigger state update if there is visible difference
-        if (Math.abs(peaks[key] - next) > 0.01 || next > 0) {
-          changed = true;
-        }
-        newPeaks[key] = next;
-      });
-
-      if (changed) {
-        setPeaks({ ...newPeaks });
-      }
-
-      animId = requestAnimationFrame(updateVU);
-    };
-
-    animId = requestAnimationFrame(updateVU);
-    return () => cancelAnimationFrame(animId);
-  }, [peaks]);
-
-  // Auto-mute/unmute click based on selected pattern (only click metronome defaults to unmuted click)
-  useEffect(() => {
-    const nextMuted = pattern.id !== 'metronomo';
-    setChannels(prev => prev.map(ch => {
-      if (ch.id === 'click' && ch.isMuted !== nextMuted) {
-        onMuteChange('click', nextMuted);
-        onVolumeChange('click', nextMuted ? 0 : ch.volume);
-        return { ...ch, isMuted: nextMuted };
-      }
-      return ch;
-    }));
-  }, [pattern.id, onMuteChange, onVolumeChange]);
-
-  // Initialize panning and volume to audio manager on start/playback toggles
+  // --- Push mixer changes to the engine (only what changed, to avoid piling up automation events). ---
+  const pushedRef = useRef<Partial<Record<ChannelId, ChannelState>>>({});
   useEffect(() => {
     channels.forEach(ch => {
-      onVolumeChange(ch.id, ch.isMuted ? 0 : ch.volume);
-      onPanChange(ch.id, ch.pan);
-      onMuteChange(ch.id, ch.isMuted);
+      const prev = pushedRef.current[ch.id];
+      if (prev?.volume !== ch.volume) onVolumeChange(ch.id, ch.volume);
+      if (prev?.pan !== ch.pan) onPanChange(ch.id, ch.pan);
+      if (prev?.isMuted !== ch.isMuted) onMuteChange(ch.id, ch.isMuted);
+      pushedRef.current[ch.id] = ch;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying]);
+  }, [channels, onVolumeChange, onPanChange, onMuteChange]);
 
-  const handleVolumeSliderChange = (channelId: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseFloat(e.target.value);
-    setChannels(prev => prev.map(ch => {
-      if (ch.id === channelId) {
-        onVolumeChange(channelId, ch.isMuted ? 0 : value);
-        return { ...ch, volume: value };
-      }
-      return ch;
+  // --- Automatic click mute when the selected pattern changes (not on reload of the same pattern). ---
+  if (mixer.clickRulePatternId !== pattern.id) {
+    const muteClick = shouldMuteClick(pattern);
+    setMixer(prev => ({
+      clickRulePatternId: pattern.id,
+      channels: prev.channels.map(ch => ch.id === 'click' ? { ...ch, isMuted: muteClick } : ch)
     }));
+  }
+
+  // --- VU meters: driven imperatively from the playback store, no React re-render per frame. ---
+  const peaksRef = useRef<Record<string, number>>({});
+  const stripRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const rafRef = useRef<number | null>(null);
+  const patternRef = useRef(pattern);
+  const isPlayingRef = useRef(isPlaying);
+  useEffect(() => {
+    patternRef.current = pattern;
+    isPlayingRef.current = isPlaying;
+  });
+
+  useEffect(() => {
+    let lastStep = -1;
+
+    const paintMeters = () => {
+      let energy = false;
+      CHANNEL_IDS.forEach(id => {
+        const prev = peaksRef.current[id] || 0;
+        const next = Math.max(0, prev * 0.87 - 0.005);
+        peaksRef.current[id] = next;
+        if (next > 0) energy = true;
+
+        const strip = stripRefs.current[id];
+        if (!strip) return;
+        strip.classList.toggle('hot', next > 0.15);
+        strip.querySelectorAll<HTMLElement>('.vu-segment').forEach(seg => {
+          seg.classList.toggle('active', next >= Number(seg.dataset.threshold));
+        });
+      });
+      rafRef.current = energy ? requestAnimationFrame(paintMeters) : null;
+    };
+
+    const unsubscribe = store.subscribe(() => {
+      if (!isPlayingRef.current) return;
+      const { step, chordIndex } = store.getSnapshot();
+      if (step === lastStep) return;
+      lastStep = step;
+      const current = patternRef.current;
+      current.steps.forEach(s => {
+        if (s.step !== step + 1) return;
+        const channel = getChannelForInstrument(s.instrument);
+        peaksRef.current[channel] = Math.min(1, Math.max(peaksRef.current[channel] || 0, s.velocity));
+      });
+      if (chordIndex >= 0 && (step === 0 || step === Math.floor(current.subdivision / 2))) {
+        peaksRef.current.synth = Math.max(peaksRef.current.synth || 0, 0.7);
+      }
+      if (rafRef.current === null) rafRef.current = requestAnimationFrame(paintMeters);
+    });
+    return () => {
+      unsubscribe();
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    };
+  }, [store]);
+
+  // --- Handlers ---
+  const updateChannel = (channelId: ChannelId, patch: Partial<ChannelState>) => {
+    setChannels(prev => prev.map(ch => ch.id === channelId ? { ...ch, ...patch } : ch));
   };
 
-  const handleMuteToggle = (channelId: string) => {
-    setChannels(prev => prev.map(ch => {
-      if (ch.id === channelId) {
-        const nextMuted = !ch.isMuted;
-        onMuteChange(channelId, nextMuted);
-        onVolumeChange(channelId, nextMuted ? 0 : ch.volume);
-        return { ...ch, isMuted: nextMuted };
-      }
-      return ch;
-    }));
+  const handleVolumeSliderChange = (channelId: ChannelId, e: React.ChangeEvent<HTMLInputElement>) => {
+    updateChannel(channelId, { volume: parseFloat(e.target.value) });
   };
 
-  // Pan knob dragging mouse interaction
-  const handlePanMouseDown = (channelId: string, e: React.MouseEvent) => {
+  const handleMuteToggle = (channelId: ChannelId) => {
+    setChannels(prev => prev.map(ch => ch.id === channelId ? { ...ch, isMuted: !ch.isMuted } : ch));
+  };
+
+  const setPan = (channelId: ChannelId, pan: number) => {
+    updateChannel(channelId, { pan: Math.round(Math.min(1, Math.max(-1, pan)) * 100) / 100 });
+  };
+
+  // Pan knob: pointer drag (mouse + touch) and keyboard (arrows, Home = center).
+  const dragRef = useRef<{ channelId: ChannelId; startY: number; startPan: number } | null>(null);
+
+  const handlePanPointerDown = (channelId: ChannelId, e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     const ch = channels.find(c => c.id === channelId);
     if (!ch) return;
-
-    setActiveDrag({
-      channelId,
-      startY: e.clientY,
-      startPan: ch.pan
-    });
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    dragRef.current = { channelId, startY: e.clientY, startPan: ch.pan };
   };
 
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!activeDrag) return;
-      
-      // Moving up increases pan (towards Right), moving down decreases pan (towards Left)
-      const deltaY = activeDrag.startY - e.clientY;
-      const sensitivity = 0.015;
-      const newPan = Math.min(1.0, Math.max(-1.0, activeDrag.startPan + deltaY * sensitivity));
-      
-      setChannels(prev => prev.map(ch => {
-        if (ch.id === activeDrag.channelId) {
-          onPanChange(ch.id, newPan);
-          return { ...ch, pan: newPan };
-        }
-        return ch;
-      }));
-    };
+  const handlePanPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    // Moving up increases pan (towards Right), moving down decreases pan (towards Left)
+    setPan(drag.channelId, drag.startPan + (drag.startY - e.clientY) * 0.015);
+  };
 
-    const handleMouseUp = () => {
-      if (activeDrag) {
-        setActiveDrag(null);
-      }
-    };
+  const handlePanPointerUp = () => {
+    dragRef.current = null;
+  };
 
-    if (activeDrag) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+  const handlePanKeyDown = (ch: ChannelState, e: React.KeyboardEvent<HTMLDivElement>) => {
+    const deltas: Record<string, number> = { ArrowUp: PAN_STEP, ArrowRight: PAN_STEP, ArrowDown: -PAN_STEP, ArrowLeft: -PAN_STEP };
+    if (e.key in deltas) {
+      e.preventDefault();
+      setPan(ch.id, ch.pan + deltas[e.key]);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setPan(ch.id, 0);
     }
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [activeDrag, onPanChange]);
+  };
 
   return (
     <div className="mixer-console-rack brass-trim">
@@ -253,25 +218,21 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
 
       <div className="mixer-channels-container">
         {channels.map((ch) => {
-          const peak = peaks[ch.id] || 0;
           const channelImg = CHANNEL_IMAGES[ch.id];
-          
-          // Generate 10 VU segments (Green, Yellow, Red)
-          const segments = Array.from({ length: 10 }).map((_, idx) => {
-            const threshold = (idx + 1) / 10;
-            const isActive = peak >= threshold;
-            let type: 'green' | 'yellow' | 'red' = 'green';
-            if (idx >= 8) type = 'red';
-            else if (idx >= 6) type = 'yellow';
 
-            return {
-              isActive,
-              type
-            };
-          }).reverse(); // Render top-down (reds on top, greens on bottom)
+          // Generate 10 VU segments (Green, Yellow, Red), rendered top-down
+          const segments = Array.from({ length: VU_SEGMENTS }).map((_, idx) => ({
+            threshold: (idx + 1) / VU_SEGMENTS,
+            type: idx >= 8 ? 'red' : idx >= 6 ? 'yellow' : 'green'
+          })).reverse();
 
           return (
-            <div key={ch.id} className={`mixer-channel-strip ${ch.isMuted ? 'muted' : ''}`}>
+            <div
+              key={ch.id}
+              ref={el => { stripRefs.current[ch.id] = el; }}
+              className={`mixer-channel-strip ${ch.isMuted ? 'muted' : ''}`}
+              data-testid={`mixer-channel-${ch.id}`}
+            >
               
               {/* Instrument Icon Avatar */}
               {channelImg && (
@@ -283,19 +244,12 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
                   marginTop: '4px',
                   position: 'relative'
                 }}>
-                  <img 
-                    src={channelImg} 
-                    alt={ch.name} 
-                    style={{
-                      width: '26px',
-                      height: '26px',
-                      borderRadius: '50%',
-                      border: `1.5px solid ${peak > 0.15 ? '#e5a95f' : 'rgba(215, 204, 200, 0.25)'}`,
-                      boxShadow: peak > 0.15 ? '0 0 10px rgba(229, 169, 95, 0.65)' : 'none',
-                      transition: 'all 0.08s ease-out',
-                      objectFit: 'cover',
-                      backgroundColor: '#110f0e'
-                    }}
+                  <img
+                    src={channelImg}
+                    alt=""
+                    className="channel-avatar"
+                    width={26}
+                    height={26}
                   />
                 </div>
               )}
@@ -303,25 +257,38 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
               {/* 1. PANNING KNOB Area */}
               <div className="channel-pan-section">
                 <span className="channel-param-label">PAN</span>
-                <div 
+                <div
                   className="pan-knob"
-                  onMouseDown={(e) => handlePanMouseDown(ch.id, e)}
-                  style={{ transform: `rotate(${ch.pan * 135}deg)` }}
-                  title="Click and drag up/down to adjust pan"
+                  role="slider"
+                  tabIndex={0}
+                  aria-label={`Paneo ${ch.name}`}
+                  aria-valuemin={-1}
+                  aria-valuemax={1}
+                  aria-valuenow={ch.pan}
+                  aria-valuetext={panLabel(ch.pan)}
+                  onPointerDown={(e) => handlePanPointerDown(ch.id, e)}
+                  onPointerMove={handlePanPointerMove}
+                  onPointerUp={handlePanPointerUp}
+                  onPointerCancel={handlePanPointerUp}
+                  onKeyDown={(e) => handlePanKeyDown(ch, e)}
+                  onDoubleClick={() => setPan(ch.id, 0)}
+                  style={{ transform: `rotate(${ch.pan * 135}deg)`, touchAction: 'none' }}
+                  title="Arrastrá arriba/abajo o usá las flechas. Doble clic: centro"
                 >
                   <div className="pan-knob-notch"></div>
                 </div>
                 <span className="pan-value-display">
-                  {ch.pan === 0 ? 'C' : ch.pan > 0 ? `R${Math.round(ch.pan * 50)}` : `L${Math.round(Math.abs(ch.pan) * 50)}`}
+                  {panLabel(ch.pan)}
                 </span>
               </div>
 
               {/* 2. VU LED Peak meter */}
               <div className="channel-vu-meter">
                 {segments.map((seg, sIdx) => (
-                  <div 
-                    key={sIdx} 
-                    className={`vu-segment ${seg.type} ${seg.isActive ? 'active' : ''}`}
+                  <div
+                    key={sIdx}
+                    className={`vu-segment ${seg.type}`}
+                    data-threshold={seg.threshold}
                   />
                 ))}
               </div>
@@ -345,6 +312,7 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
                       step="0.01"
                       value={ch.volume}
                       onChange={(e) => handleVolumeSliderChange(ch.id, e)}
+                      aria-label={`Volumen ${ch.name}`}
                       className="fader-input"
                       {...({ orient: "vertical" } as Record<string, string>)}
                     />
@@ -366,8 +334,10 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
                 <button 
                   className={`mute-button ${ch.isMuted ? 'active' : ''}`}
                   onClick={() => handleMuteToggle(ch.id)}
-                  title="Mute Channel"
+                  title="Silenciar canal"
+                  aria-label={`Silenciar ${ch.name}`}
                   aria-pressed={ch.isMuted}
+                  data-testid={`mute-${ch.id}`}
                 >
                   MUTE
                 </button>

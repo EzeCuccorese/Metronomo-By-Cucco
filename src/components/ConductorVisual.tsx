@@ -3,12 +3,12 @@ import CircleIcon from '@mui/icons-material/Circle';
 import SpeedIcon from '@mui/icons-material/Speed';
 import { useEffect, useRef, useState } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
+import { usePlayback } from '../state/PlaybackContext';
 
 interface ConductorVisualProps {
     pattern: RhythmPattern;
-    currentStepIndex: number;
+    isPlaying: boolean;
     trainerActive: boolean;
-    currentBarProgress: number;
     totalBarsInterval: number;
     bpm?: number;
 }
@@ -55,12 +55,14 @@ type VisualMode = 'pendulum' | 'orchestra';
 
 export default function ConductorVisual({
     pattern,
-    currentStepIndex,
+    isPlaying,
     trainerActive,
-    currentBarProgress,
     totalBarsInterval,
     bpm = 120
 }: ConductorVisualProps) {
+    const playbackStep = usePlayback(s => s.step);
+    const currentBarProgress = usePlayback(s => s.trainerBar);
+    const currentStepIndex = isPlaying ? playbackStep : 0;
     const { subdivision, timeSignature, countingMode } = pattern;
     const beats = timeSignature[0];
     const stepsPerBeat = subdivision / beats;
@@ -68,6 +70,12 @@ export default function ConductorVisual({
 
     const [visualMode, setVisualMode] = useState<VisualMode>('pendulum');
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+    // Latest values for the long-lived canvas loop (avoids restarting it on every step).
+    const liveRef = useRef({ currentStepIndex, bpm, pattern, beats, stepsPerBeat });
+    useEffect(() => {
+        liveRef.current = { currentStepIndex, bpm, pattern, beats, stepsPerBeat };
+    });
 
     // Animation values
     const angleRef = useRef<number>(0);
@@ -126,13 +134,15 @@ export default function ConductorVisual({
         const render = () => {
             if (!ctx || !canvas) return;
 
-            // Handle High DPI displays
+            // Handle High DPI displays: backing store in device pixels, drawing in CSS pixels.
+            const dpr = window.devicePixelRatio || 1;
             const width = canvas.clientWidth;
             const height = canvas.clientHeight;
-            if (canvas.width !== width || canvas.height !== height) {
-                canvas.width = width;
-                canvas.height = height;
+            if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+                canvas.width = Math.round(width * dpr);
+                canvas.height = Math.round(height * dpr);
             }
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
             ctx.clearRect(0, 0, width, height);
 
@@ -267,7 +277,7 @@ export default function ConductorVisual({
             // Weight height adjusts with BPM (higher up for slower BPM, like physical metronome!)
             const minBpm = 40;
             const maxBpm = 240;
-            const normalizedBpm = Math.max(0, Math.min(1, (bpm - minBpm) / (maxBpm - minBpm)));
+            const normalizedBpm = Math.max(0, Math.min(1, (liveRef.current.bpm - minBpm) / (maxBpm - minBpm)));
             // Higher BPM = weight lower down the rod
             const weightPercent = 0.35 + (1 - normalizedBpm) * 0.45; 
             const weightX = pivotX + Math.sin(rodAngle) * (rodLength * weightPercent);
@@ -325,15 +335,15 @@ export default function ConductorVisual({
             const centerY = h / 2;
 
             // Interpolate smooth step position using elapsed time at current BPM
-            const ts = pattern.timeSignature;
-            const sub = pattern.subdivision;
-            const timePerBar = (60.0 / bpm) * (4.0 / ts[1]) * ts[0];
+            const ts = liveRef.current.pattern.timeSignature;
+            const sub = liveRef.current.pattern.subdivision;
+            const timePerBar = (60.0 / liveRef.current.bpm) * (4.0 / ts[1]) * ts[0];
             const stepDurationMs = (timePerBar / sub) * 1000;
             const elapsedMs = performance.now() - lastStepTimeRef.current;
             const smoothProgress = Math.min(0.99, elapsedMs / stepDurationMs);
-            const smoothStep = currentStepIndex + smoothProgress;
+            const smoothStep = liveRef.current.currentStepIndex + smoothProgress;
 
-            if (pattern.grooveType === 'chacarera_poliritmica') {
+            if (liveRef.current.pattern.grooveType === 'chacarera_poliritmica') {
                 // --- CHACARERA POLIRITMICA DOUBLE-SPARK VISUALIZER (HEMIOLA) ---
 
                 // 1. 3/4 feel triangle path
@@ -372,7 +382,7 @@ export default function ConductorVisual({
                 ctx.fillStyle = 'rgba(255, 109, 0, 0.4)';
                 ctx.fillText('6/8', centerX + radiusX - 25, centerY - 8);
 
-                // Compute Particle 3/4 Position (3 beats per bar, 4 steps per beat)
+                // Compute Particle 3/4 Position (3 liveRef.current.beats per bar, 4 steps per beat)
                 const smoothBeat3 = smoothStep / 4;
                 const currentBeat3 = Math.floor(smoothBeat3);
                 const stepFraction3 = smoothBeat3 % 1;
@@ -441,14 +451,14 @@ export default function ConductorVisual({
                 // --- STANDARD SINGLE-SPARK GEOMETRIC CONDUCTOR PATH ---
                 let points: { x: number; y: number }[] = [];
 
-                if (beats === 3) {
+                if (liveRef.current.beats === 3) {
                     // 3/4 Pattern: 1 (Down), 2 (Right), 3 (Up-Left return)
                     points = [
                         { x: centerX, y: bottomY }, // 1. Down
                         { x: rightX, y: bottomY - (h - 2*padding) * 0.15 }, // 2. Right
                         { x: centerX, y: topY } // 3. Up / Return
                     ];
-                } else if (beats === 2 || beats === 6) {
+                } else if (liveRef.current.beats === 2 || liveRef.current.beats === 6) {
                     // 2/4 or 6/8 Pattern: 1 (Down), 2 (Up-Arc return)
                     points = [
                         { x: centerX - w * 0.15, y: bottomY }, // 1. Down
@@ -477,8 +487,8 @@ export default function ConductorVisual({
                 ctx.stroke();
                 ctx.setLineDash([]); // Reset dash
 
-                const stepsPerBeat = sub / beats;
-                const smoothBeatIndex = smoothStep / stepsPerBeat;
+                const stepsPerBeatLocal = sub / liveRef.current.beats;
+                const smoothBeatIndex = smoothStep / stepsPerBeatLocal;
                 const currentBeatIndex = Math.floor(smoothBeatIndex);
                 const stepFraction = smoothBeatIndex % 1;
                 const easedT = 0.5 - 0.5 * Math.cos(stepFraction * Math.PI);
@@ -530,7 +540,7 @@ export default function ConductorVisual({
         return () => {
             cancelAnimationFrame(animationFrameId);
         };
-    }, [currentStepIndex, visualMode, beats, stepsPerBeat, bpm, pattern.grooveType, pattern.subdivision, pattern.timeSignature]);
+    }, [visualMode]);
 
     // Beat Dots visual feedback (Underneath the Canvas)
     const countText = getCountingText(currentStepIndex, subdivision, countingMode, timeSignature);

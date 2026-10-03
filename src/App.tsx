@@ -1,325 +1,227 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  Box,
-  Grid
-} from '@mui/material';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Box, Grid } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import './App.css';
 
-import Scheduler from './audio/Scheduler';
-import type { FormState } from './audio/Scheduler';
-import type { AccompanimentStyle } from './audio/PolyphonicSynth';
-import AudioContextManager from './audio/AudioContextManager';
+import type { FormGenre, TrainerConfig } from './audio/Scheduler';
+import { FORM_GENRES } from './audio/Scheduler';
 import { PRESET_PATTERNS } from './rhythms/RhythmPatterns';
+import type { RhythmPattern } from './rhythms/RhythmPatterns';
+import {
+  CUSTOM_PATTERN_ID,
+  DEFAULT_PATTERN_ID,
+  getBasePattern,
+  isValidOverrides,
+  normalizePatternId,
+  resolvePattern,
+  withUsedInstruments,
+} from './rhythms/patternLibrary';
+import { clampBpm } from './rhythms/meter';
 import PatternEditor from './components/PatternEditor';
 import ConductorVisual from './components/ConductorVisual';
 import StudyTools from './components/StudyTools';
 import HarmonyBuilder from './components/HarmonyBuilder';
 import InteractiveInstrumentVisual from './components/InteractiveInstrumentVisual';
-import type { RhythmPattern } from './rhythms/RhythmPatterns';
 import { MixerConsole } from './components/MixerConsole';
+import { PracticeModes } from './components/PracticeModes';
+import type { FormasSettings, SilenceSettings } from './components/PracticeModes';
 import { darkTheme } from './theme/darkTheme';
 import { HeaderToolbar } from './components/HeaderToolbar';
 import { GenreSelectorModal } from './components/GenreSelectorModal';
+import { useMetronomeEngine } from './hooks/useMetronomeEngine';
+import { usePersistentState } from './hooks/usePersistentState';
+import { useTapTempo } from './hooks/useTapTempo';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { PlaybackContext } from './state/PlaybackContext';
+import { isBoolean, isNumber, isPlainObject, isString } from './state/storage';
+
+const DEFAULT_TRAINER: TrainerConfig = { active: false, startBpm: 60, targetBpm: 120, barsPerStep: 4, bpmIncrement: 5, mode: 'linear' };
+const DEFAULT_SILENCE: SilenceSettings = { active: false, chance: 0.3 };
+const DEFAULT_FORMAS: FormasSettings = { enabled: false, genre: 'Chacarera Simple', introBars: 8 };
+
+const isBpm = (v: unknown): v is number => isNumber(v) && clampBpm(v) === v;
+const isPatternId = (v: unknown): v is string => isString(v) && getBasePattern(v) !== undefined;
+const isTrainer = (v: unknown): v is TrainerConfig =>
+  isPlainObject(v) && isBoolean(v.active) && isBpm(v.startBpm) && isBpm(v.targetBpm) &&
+  isNumber(v.barsPerStep) && v.barsPerStep >= 1 && isNumber(v.bpmIncrement) && v.bpmIncrement >= 1 &&
+  (v.mode === 'linear' || v.mode === 'resistance_loop');
+const isSilence = (v: unknown): v is SilenceSettings =>
+  isPlainObject(v) && isBoolean(v.active) && isNumber(v.chance) && v.chance >= 0 && v.chance <= 1;
+const isFormas = (v: unknown): v is FormasSettings =>
+  isPlainObject(v) && isBoolean(v.enabled) && FORM_GENRES.includes(v.genre as FormGenre) &&
+  isNumber(v.introBars) && v.introBars >= 1;
 
 function App() {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [bpm, setBpm] = useState(120);
-  const [selectedPatternId, setSelectedPatternId] = useState('rock_basic');
-  const [queuedPatternId, setQueuedPatternId] = useState<string | null>(null);
+  const [bpm, setBpmRaw] = usePersistentState('bpm', 120, isBpm);
+  const [selectedPatternId, setSelectedPatternId] = usePersistentState('pattern', DEFAULT_PATTERN_ID, isPatternId);
+  const [overrides, setOverrides] = usePersistentState<Record<string, RhythmPattern>>('patternOverrides', {}, isValidOverrides);
+  const [trainer, setTrainer] = usePersistentState('trainer', DEFAULT_TRAINER, isTrainer);
+  const [silence, setSilence] = usePersistentState('silence', DEFAULT_SILENCE, isSilence);
+  const [formas, setFormas] = usePersistentState('formas', DEFAULT_FORMAS, isFormas);
   const [libraryOpen, setLibraryOpen] = useState(false);
 
-  // Visualization State
-  const [currentStep, setCurrentStep] = useState(0);
-  const [currentBarProgress, setCurrentBarProgress] = useState(0);
+  const setBpm = useCallback((value: number) => setBpmRaw(clampBpm(value)), [setBpmRaw]);
 
-  // Trainer State
-  const [trainerActive] = useState(false);
-  const [trainerStart] = useState(60);
-  const [trainerEnd] = useState(120);
-  const [trainerBars] = useState(4);
-  const [trainerStep] = useState(5);
-  const [trainerMode] = useState<'linear' | 'resistance_loop'>('linear');
+  const overrideForSelected = overrides[normalizePatternId(selectedPatternId)];
+  const currentPattern = useMemo(
+    () => resolvePattern(selectedPatternId, overrideForSelected ? { [overrideForSelected.id]: overrideForSelected } : {}),
+    [selectedPatternId, overrideForSelected]
+  );
 
-  // Study State
-  const [totalBarsPracticed, setTotalBarsPracticed] = useState(0);
+  const engine = useMetronomeEngine({
+    pattern: currentPattern,
+    bpm,
+    onBpmChange: setBpm,
+    onPatternChange: useCallback((p: RhythmPattern) => setSelectedPatternId(p.id), [setSelectedPatternId]),
+  });
+  const { isPlaying, toggle, queuePattern, configureTrainer, setSilenceMode, configureFormas } = engine;
 
-  // Formas (Folk Structures) State
-  const [formasMode] = useState(false);
-  const [formasGenre] = useState<'Chacarera Simple' | 'Chacarera Doble' | 'Zamba' | 'Cueca Norteña' | 'Gato Norteño'>('Chacarera Simple');
-  const [formasIntroBars] = useState<number>(8);
-  const [, setCurrentFormState] = useState<FormState | null>(null);
+  useEffect(() => { configureTrainer(trainer); }, [trainer, configureTrainer]);
+  useEffect(() => { setSilenceMode(silence.active, silence.chance); }, [silence, setSilenceMode]);
+  useEffect(() => { configureFormas(formas.enabled, formas.genre, formas.introBars); }, [formas, configureFormas]);
 
-  const [activeHarmonyIndex, setActiveHarmonyIndex] = useState<number>(-1);
+  // While the trainer drives the tempo, the visible BPM starts from its start value.
+  useEffect(() => {
+    if (trainer.active && !isPlaying) setBpm(trainer.startBpm);
+  }, [trainer.active, trainer.startBpm, isPlaying, setBpm]);
 
-  // Active Pattern State
-  const [currentPattern, setCurrentPattern] = useState<RhythmPattern>(() => {
-    const p = PRESET_PATTERNS.find(x => x.id === 'rock_basic');
-    return p ? { ...p } : PRESET_PATTERNS[0];
+  const loadPreset = useCallback((patternId: string) => {
+    const id = normalizePatternId(patternId);
+    const next = resolvePattern(id, overrides);
+    if (isPlaying) {
+      queuePattern(next);
+      return;
+    }
+    setSelectedPatternId(id);
+    if (next.recommendedTempo && !trainer.active) setBpm(next.recommendedTempo);
+  }, [isPlaying, overrides, queuePattern, setSelectedPatternId, setBpm, trainer.active]);
+
+  const handlePatternUpdate = useCallback((pattern: RhythmPattern) => {
+    const normalized = withUsedInstruments(pattern);
+    setOverrides(prev => ({ ...prev, [normalized.id]: normalized }));
+  }, [setOverrides]);
+
+  const handleRestorePattern = useCallback(() => {
+    setOverrides(prev => {
+      const next = { ...prev };
+      delete next[currentPattern.id];
+      return next;
+    });
+  }, [setOverrides, currentPattern.id]);
+
+  const handleTap = useTapTempo(setBpm);
+
+  // While the speed trainer runs it owns the tempo: the visible controls are disabled,
+  // so the keyboard shortcuts must not change it either.
+  const tempoLocked = trainer.active && isPlaying;
+
+  useKeyboardShortcuts({
+    onTogglePlay: toggle,
+    onTap: useCallback(() => { if (!tempoLocked) handleTap(); }, [tempoLocked, handleTap]),
+    onNudgeBpm: useCallback((delta: number) => {
+      if (!tempoLocked) setBpmRaw(prev => clampBpm(prev + delta));
+    }, [tempoLocked, setBpmRaw]),
   });
 
-  const schedulerRef = useRef<Scheduler | null>(null);
-  const lastTapRef = useRef<number>(0);
-  const tapTimesRef = useRef<number[]>([]);
-
-  const handleTogglePlay = useCallback(async () => {
-    if (!schedulerRef.current) return;
-
-    if (isPlaying) {
-      schedulerRef.current.stop();
-      setIsPlaying(false);
-      setActiveHarmonyIndex(-1);
-    } else {
-      await AudioContextManager.getInstance().resume();
-      if (trainerActive) {
-        setBpm(trainerStart);
-      }
-      schedulerRef.current.start();
-      setIsPlaying(true);
-    }
-  }, [isPlaying, trainerActive, trainerStart]);
-
-  const handlePreviewSound = useCallback(async (instrument: string) => {
-    if (isPlaying) return;
-    await AudioContextManager.getInstance().resume();
-    schedulerRef.current?.playOneShot(instrument);
-  }, [isPlaying]);
-
-  const handleUpdateProgression = useCallback((chords: string[][]) => {
-    schedulerRef.current?.setHarmonyProgression(chords);
-  }, []);
-
-  const handleHarmonyVolumeChange = useCallback((vol: number) => {
-    schedulerRef.current?.setHarmonyVolume(vol);
-  }, []);
-
-  const handleAccompanimentStyleChange = useCallback((style: string) => {
-    schedulerRef.current?.setAccompanimentStyle(style as AccompanimentStyle);
-  }, []);
-
-  const handleChannelVolumeChange = useCallback((channel: string, vol: number) => {
-    schedulerRef.current?.setChannelVolume(channel, vol);
-  }, []);
-
-  const handleChannelPanChange = useCallback((channel: string, pan: number) => {
-    schedulerRef.current?.setChannelPan(channel, pan);
-  }, []);
-
-  const handleChannelMuteChange = useCallback((channel: string, muted: boolean) => {
-    schedulerRef.current?.setChannelMute(channel, muted);
-  }, []);
-
-  useEffect(() => {
-    schedulerRef.current = new Scheduler();
-    schedulerRef.current.setPattern(currentPattern);
-
-    schedulerRef.current.setOnPlaybackUpdate((step, newBpm, barCount, totalBars, activePattern, formUpdate, chordIndex) => {
-      setBpm(newBpm);
-      setCurrentStep(step);
-      setCurrentBarProgress(barCount);
-      setTotalBarsPracticed(totalBars);
-      if (activePattern) {
-        setCurrentPattern(activePattern);
-        setSelectedPatternId(activePattern.id);
-      }
-      setQueuedPatternId(schedulerRef.current?.getQueuedPatternId() || null);
-      setCurrentFormState(formUpdate || null);
-      setActiveHarmonyIndex(chordIndex);
-    });
-
-    return () => {
-      schedulerRef.current?.stop();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (schedulerRef.current) {
-      schedulerRef.current.configureFormas(formasMode, formasGenre, formasIntroBars);
-    }
-  }, [formasMode, formasGenre, formasIntroBars]);
-
-  useEffect(() => {
-    schedulerRef.current?.setTempo(bpm);
-  }, [bpm]);
-
-  useEffect(() => {
-    if (schedulerRef.current) {
-      schedulerRef.current.setPattern(currentPattern);
-    }
-  }, [currentPattern]);
-
-  useEffect(() => {
-    if (schedulerRef.current) {
-      schedulerRef.current.configureTrainer(trainerActive, trainerStart, trainerEnd, trainerBars, trainerStep, trainerMode);
-    }
-  }, [trainerActive, trainerStart, trainerEnd, trainerBars, trainerStep, trainerMode]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
-
-      if (e.code === 'Space') {
-        e.preventDefault();
-        handleTogglePlay();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleTogglePlay]);
-
-  const loadPreset = (patternId: string) => {
-    let newPattern: RhythmPattern | undefined;
-
-    if (patternId === 'metronome') {
-      newPattern = PRESET_PATTERNS.find(p => p.id === 'metronome_4_4');
-    } else if (patternId === 'custom') {
-      newPattern = {
-        id: 'custom',
-        name: 'Custom',
-        description: '',
-        timeSignature: [4, 4],
-        subdivision: 16,
-        instruments: ['kick', 'snare', 'hihat', 'click'],
-        countingMode: 'numbers',
-        steps: []
-      };
-    } else {
-      const p = PRESET_PATTERNS.find(x => x.id === patternId);
-      if (p) newPattern = { ...p };
-    }
-
-    if (newPattern) {
-      if (isPlaying) {
-        schedulerRef.current?.setPattern(newPattern);
-        setQueuedPatternId(schedulerRef.current?.getQueuedPatternId() || null);
-      } else {
-        setCurrentPattern(newPattern);
-        setSelectedPatternId(patternId);
-        setQueuedPatternId(null);
-      }
-      if (newPattern.recommendedTempo) {
-        setBpm(newPattern.recommendedTempo);
-      }
-    }
-  };
-
-  const handleTap = () => {
-    const now = Date.now();
-    const last = lastTapRef.current;
-    if (last > 0 && (now - last) < 2000) {
-      const diff = now - last;
-      tapTimesRef.current.push(diff);
-      if (tapTimesRef.current.length > 4) tapTimesRef.current.shift();
-      if (tapTimesRef.current.length >= 2) {
-        const avg = tapTimesRef.current.reduce((a, b) => a + b, 0) / tapTimesRef.current.length;
-        const newBpm = Math.round(60000 / avg);
-        if (newBpm >= 40 && newBpm <= 300) setBpm(newBpm);
-      }
-    } else {
-      tapTimesRef.current = [];
-    }
-    lastTapRef.current = now;
-  };
+  const canRestore = currentPattern.id !== CUSTOM_PATTERN_ID && !!overrides[currentPattern.id];
 
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
-      <Box sx={{ minHeight: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', p: { xs: 1, md: 2 }, bgcolor: '#070605', overflowY: 'auto', overflowX: 'hidden', alignItems: 'center' }}>
-        
-        <Box className="studio-chassis console-wood-edge" sx={{ width: '100%', maxWidth: '1440px', display: 'flex', flexDirection: 'column', p: 1.5, boxSizing: 'border-box' }}>
-          
-          {/* HEADER & GLOBAL CONTROLS */}
-          <HeaderToolbar
-            isPlaying={isPlaying}
-            bpm={bpm}
-            onBpmChange={setBpm}
-            onTogglePlay={handleTogglePlay}
-            onTapTempo={handleTap}
-            onOpenLibrary={() => setLibraryOpen(true)}
-            selectedPatternId={selectedPatternId}
-            queuedPatternId={queuedPatternId}
-            availablePresets={PRESET_PATTERNS}
-            onSelectPreset={loadPreset}
-          />
+      <PlaybackContext.Provider value={engine.store}>
+        <Box component="main" sx={{ minHeight: '100vh', width: '100%', display: 'flex', flexDirection: 'column', p: { xs: 1, md: 2 }, bgcolor: '#070605', overflowX: 'hidden', alignItems: 'center' }}>
 
-          {/* MAIN DASHBOARD CONTENT */}
-          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5, minHeight: 0, width: '100%' }}>
-            <Grid container spacing={1.5} sx={{ width: '100%' }}>
-              
-              {/* LEFT COLUMN: Visualizer & Mixer */}
-              <Grid size={{ xs: 12, lg: 7 }} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                <InteractiveInstrumentVisual 
-                  pattern={currentPattern}
-                  currentStepIndex={isPlaying ? currentStep : undefined}
-                  onPreviewInstrument={handlePreviewSound}
-                />
-                
-                <Box sx={{ flex: 1, minHeight: 320 }}>
-                  <MixerConsole 
+          <Box className="studio-chassis console-wood-edge" sx={{ width: '100%', maxWidth: '1440px', display: 'flex', flexDirection: 'column', p: { xs: 1, md: 1.5 }, boxSizing: 'border-box' }}>
+
+            <HeaderToolbar
+              isPlaying={isPlaying}
+              bpm={bpm}
+              timeSignature={currentPattern.timeSignature}
+              onBpmChange={setBpm}
+              onTogglePlay={toggle}
+              onTapTempo={handleTap}
+              onOpenLibrary={() => setLibraryOpen(true)}
+              selectedPatternId={currentPattern.id}
+              availablePresets={PRESET_PATTERNS}
+              onSelectPreset={loadPreset}
+              tempoLocked={tempoLocked}
+            />
+
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5, minHeight: 0, width: '100%' }}>
+              <Grid container spacing={1.5} sx={{ width: '100%' }}>
+
+                {/* LEFT COLUMN: Visualizer & Mixer */}
+                <Grid size={{ xs: 12, lg: 7 }} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, minWidth: 0 }}>
+                  <InteractiveInstrumentVisual
                     pattern={currentPattern}
-                    currentStep={currentStep}
                     isPlaying={isPlaying}
-                    onVolumeChange={handleChannelVolumeChange}
-                    onPanChange={handleChannelPanChange}
-                    onMuteChange={handleChannelMuteChange}
+                    onPreviewInstrument={engine.previewInstrument}
                   />
-                </Box>
+
+                  <Box sx={{ flex: 1, minHeight: 320, minWidth: 0 }}>
+                    <MixerConsole
+                      pattern={currentPattern}
+                      isPlaying={isPlaying}
+                      onVolumeChange={engine.setChannelVolume}
+                      onPanChange={engine.setChannelPan}
+                      onMuteChange={engine.setChannelMute}
+                    />
+                  </Box>
+                </Grid>
+
+                {/* RIGHT COLUMN: Sequencer & Practice Tools */}
+                <Grid size={{ xs: 12, lg: 5 }} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, minWidth: 0 }}>
+                  <ConductorVisual
+                    pattern={currentPattern}
+                    isPlaying={isPlaying}
+                    trainerActive={trainer.active}
+                    totalBarsInterval={trainer.barsPerStep}
+                    bpm={bpm}
+                  />
+
+                  <PracticeModes
+                    trainer={trainer}
+                    onTrainerChange={setTrainer}
+                    silence={silence}
+                    onSilenceChange={setSilence}
+                    formas={formas}
+                    onFormasChange={setFormas}
+                    isPlaying={isPlaying}
+                  />
+
+                  <PatternEditor
+                    pattern={currentPattern}
+                    onPatternUpdate={handlePatternUpdate}
+                    isPlaying={isPlaying}
+                    onPreviewInstrument={engine.previewInstrument}
+                    canRestore={canRestore}
+                    onRestore={handleRestorePattern}
+                  />
+
+                  <HarmonyBuilder
+                    onUpdateProgression={engine.setHarmonyProgression}
+                    onVolumeChange={engine.setHarmonyVolume}
+                    onStyleChange={engine.setAccompanimentStyle}
+                    isPlaying={isPlaying}
+                  />
+
+                  <StudyTools onStopRequest={engine.stop} />
+                </Grid>
+
               </Grid>
-
-              {/* RIGHT COLUMN: Sequencer & Practice Tools */}
-              <Grid size={{ xs: 12, lg: 5 }} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                
-                {/* 1. Visual Conductor Metronome */}
-                <ConductorVisual 
-                  pattern={currentPattern}
-                  currentStepIndex={currentStep}
-                  trainerActive={trainerActive}
-                  currentBarProgress={currentBarProgress}
-                  totalBarsInterval={trainerBars}
-                  bpm={bpm}
-                />
-
-                {/* 2. Pattern Sequencer Editor */}
-                <PatternEditor 
-                  pattern={currentPattern}
-                  onPatternUpdate={setCurrentPattern}
-                  currentStepIndex={isPlaying ? currentStep : undefined}
-                />
-
-                {/* 3. Harmony Sequencer Builder */}
-                <HarmonyBuilder 
-                  onUpdateProgression={handleUpdateProgression}
-                  onVolumeChange={handleHarmonyVolumeChange}
-                  onStyleChange={handleAccompanimentStyleChange}
-                  activeHalfBarIndex={activeHarmonyIndex}
-                />
-
-                {/* 4. Study Tools & Tracker */}
-                <StudyTools 
-                  totalBarsPracticed={totalBarsPracticed}
-                />
-              </Grid>
-
-            </Grid>
+            </Box>
           </Box>
-
         </Box>
 
-      </Box>
-
-      {/* Library Dialog Modal */}
-      <GenreSelectorModal
-        open={libraryOpen}
-        onClose={() => setLibraryOpen(false)}
-        selectedPatternId={selectedPatternId}
-        queuedPatternId={queuedPatternId}
-        isPlaying={isPlaying}
-        onSelectPattern={loadPreset}
-      />
+        <GenreSelectorModal
+          open={libraryOpen}
+          onClose={() => setLibraryOpen(false)}
+          selectedPatternId={currentPattern.id}
+          isPlaying={isPlaying}
+          onSelectPattern={loadPreset}
+        />
+      </PlaybackContext.Provider>
     </ThemeProvider>
   );
 }
