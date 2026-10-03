@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, Chip, Divider, FormControl, IconButton, InputLabel, MenuItem, Select, Stack, Tooltip, Typography } from '@mui/material';
-import { ChevronLeft, ChevronRight, Keyboard, Piano } from 'lucide-react';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import KeyboardIcon from '@mui/icons-material/Keyboard';
+import PianoIcon from '@mui/icons-material/Piano';
 import type { MetronomeEngine } from '../hooks/useMetronomeEngine';
 import { usePersistentState } from '../hooks/usePersistentState';
 import { usePianoComputerKeyboard } from '../hooks/usePianoComputerKeyboard';
@@ -178,7 +181,7 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
             sx={{ p: 2, borderRadius: 3, bgcolor: '#1a1a1a', border: '1px solid #333', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }}
         >
             <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
-                <Piano size={20} color="#c0c0c0" aria-hidden="true" />
+                <PianoIcon sx={{ fontSize: 20, color: '#c0c0c0' }} aria-hidden="true" />
                 <Typography id="piano-panel-title" variant="subtitle1" component="h2" sx={{ color: 'white', fontWeight: 'bold' }}>
                     Piano
                 </Typography>
@@ -202,7 +205,7 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
                     <Tooltip title="Bajar octava (Z)">
                         <span>
                             <IconButton size="small" aria-label="Bajar octava" disabled={settings.octave <= MIN_OCTAVE} onClick={() => shiftOctave(-1)}>
-                                <ChevronLeft size={18} />
+                                <ChevronLeftIcon sx={{ fontSize: 18 }} />
                             </IconButton>
                         </span>
                     </Tooltip>
@@ -212,7 +215,7 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
                     <Tooltip title="Subir octava (X)">
                         <span>
                             <IconButton size="small" aria-label="Subir octava" disabled={settings.octave >= MAX_OCTAVE} onClick={() => shiftOctave(1)}>
-                                <ChevronRight size={18} />
+                                <ChevronRightIcon sx={{ fontSize: 18 }} />
                             </IconButton>
                         </span>
                     </Tooltip>
@@ -221,7 +224,7 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
                 <Button
                     size="small"
                     variant={settings.computerKeys ? 'contained' : 'outlined'}
-                    startIcon={<Keyboard size={14} />}
+                    startIcon={<KeyboardIcon sx={{ fontSize: 16 }} />}
                     aria-pressed={settings.computerKeys}
                     onClick={() => update({ computerKeys: !settings.computerKeys })}
                     title="Tocá con A W S E D F T G Y H U J K (Z / X cambian de octava). Apagado: sólo con el foco en el piano"

@@ -1,3 +1,5 @@
+> **Estado:** Parcial (2026-10). Commits `24bac07`, `d55fb23`, `3be95c8`, `36d5f1d`. Hecho: `src/constants/instrumentAssets.ts` centralizado, cobertura con umbrales en `vite.config.ts`, cabeceras nginx. **Obsoleto:** `useMetronomeAudio` y `usePresetManager` ya no existen (eliminados en `b413173`; el motor es `useMetronomeEngine` + store externo en `src/state/`). La cobertura hoy se rige por `auditoria-critica-y-plan-de-mejoras.plan.md`.
+
 # Plan de Auditoría de Arquitectura de Código & Cobertura de Pruebas (>= 95%)
 
 Este plan define el alcance para auditar y refactorizar el proyecto bajo las mejores prácticas de arquitectura de software (**Domain-Driven Design**, **DRY**, **SOLID**, **Clean Code**) e **incrementar la cobertura de pruebas unitarias al 95% o superior**, excluyendo explícitamente la creación de workflows o pipelines de CI/CD.

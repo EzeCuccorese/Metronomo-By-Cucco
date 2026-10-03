@@ -158,6 +158,12 @@ class Scheduler {
     private tempo: number = 120.0;
     private readonly lookahead: number = 25.0; // ms
     private readonly scheduleAheadTime: number = 0.1; // seconds
+    // A note this late still sounds (immediately); later ones were missed during a stall.
+    private readonly lateToleranceSeconds: number = 0.03;
+    // Stalls up to this long skip the missed steps and stay in phase; longer ones restart the grid.
+    private readonly maxCatchUpSeconds: number = 1.0;
+    // Until the first note is out there is no phase to keep (the clock may jump while resuming).
+    private gridAnchored = false;
     private humanizeSeconds: number = 0;
     private clockWorker: Worker | null = null;
     private rafId: number | null = null;
@@ -479,6 +485,7 @@ class Scheduler {
             this.tempo = this.trainer.startBpm;
         }
         this.nextNoteTime = this.audioContext.currentTime + 0.05; // Slight buffer
+        this.gridAnchored = false;
 
         if (this.formasMode) {
             this.formSections = buildFormSections(this.formasGenre, this.formasIntroBars);
@@ -541,20 +548,28 @@ class Scheduler {
     private scheduler() {
         if (!this.isPlaying) return;
 
-        // Prevent falling behind and scheduling past notes (which Web Audio plays simultaneously on start/resume)
-        if (this.nextNoteTime < this.audioContext.currentTime) {
-            this.nextNoteTime = this.audioContext.currentTime;
+        const now = this.audioContext.currentTime;
+
+        // Before the first note (start/resume) or after a long stall (e.g. a throttled background
+        // tab) restart the grid from now instead of skipping or fast-forwarding through bars.
+        const behind = now - this.nextNoteTime;
+        if ((!this.gridAnchored && behind > 0) || behind > this.maxCatchUpSeconds) {
+            this.nextNoteTime = now;
         }
 
         // A finished take stops accepting late notes half a step after its last bar line.
-        if (this.take?.isFinished && !this.take.acceptsLateNotesAt(this.audioContext.currentTime - this.inputLatency())) {
+        if (this.take?.isFinished && !this.take.acceptsLateNotesAt(now - this.inputLatency())) {
             this.take = null;
         }
 
-        while (this.isPlaying && this.formEndTime === null && this.nextNoteTime < this.audioContext.currentTime + this.scheduleAheadTime) {
+        while (this.isPlaying && this.formEndTime === null && this.nextNoteTime < now + this.scheduleAheadTime) {
             const time = this.nextNoteTime;
-            this.scheduleNote(time);
-            this.nextStep(time);
+            // Steps missed during a short stall advance silently so the grid stays in phase
+            // (playing them would fire a burst of notes at once).
+            const missed = time < now - this.lateToleranceSeconds;
+            this.scheduleNote(time, missed);
+            this.nextStep(time, missed);
+            this.gridAnchored = true;
         }
     }
 
@@ -596,7 +611,7 @@ class Scheduler {
         }
     }
 
-    private scheduleNote(time: number) {
+    private scheduleNote(time: number, silent = false) {
         if (!this.currentPattern) return;
 
         const sub = this.currentPattern.subdivision;
@@ -620,7 +635,12 @@ class Scheduler {
                 const chord = this.harmonyProgression[chordIndex];
                 const segmentDuration = getBarDurationSeconds(this.tempo, ts) / segments;
 
-                if (chord && chord.length > 0 && !(this.silenceModeActive && this.isMutedBar)) {
+                if (silent) {
+                    // Missed during a stall: keep voice leading anchored to the progression.
+                    if (chord && chord.length > 0) this.lastChord = chord;
+                } else if (chord && chord.length > 0 && !(this.silenceModeActive && this.isMutedBar)) {
+                    // A slightly late chord starts now: envelope ramps can't be scheduled in the past.
+                    const chordTime = Math.max(time, this.audioContext.currentTime);
                     if (isPianoStyle(this.accompanimentStyle)) {
                         const { notes, voicing } = buildPianoSegment(this.accompanimentStyle, {
                             chord,
@@ -629,10 +649,10 @@ class Scheduler {
                             beats: groups / segments,
                             pulsesPerBeat: isCompoundMeter(ts) ? 3 : 2,
                         });
-                        notes.forEach(n => this.piano.play(n.midi, time + n.offset, n.velocity, n.duration, 'harmony'));
+                        notes.forEach(n => this.piano.play(n.midi, chordTime + n.offset, n.velocity, n.duration, 'harmony'));
                         this.lastPianoVoicing = voicing;
                     } else {
-                        this.polySynth.playChord(chord, segmentDuration, time, this.accompanimentStyle, this.lastChord, groups / segments);
+                        this.polySynth.playChord(chord, segmentDuration, chordTime, this.accompanimentStyle, this.lastChord, groups / segments);
                     }
                     this.lastChord = chord;
                 }
@@ -642,8 +662,11 @@ class Scheduler {
             }
         }
 
-        this.scheduleMelody(time, idx, sub, ts, harmonyAllowed);
+        this.scheduleMelody(time, idx, sub, ts, harmonyAllowed, silent);
 
+        if (silent) {
+            return; // Missed step: harmony counters advanced above, nothing sounds.
+        }
         if (this.silenceModeActive && this.isMutedBar) {
             return; // Silent bar: the musician keeps time alone.
         }
@@ -679,7 +702,7 @@ class Scheduler {
     }
 
     /** Bar lines drive the recorder; every step plays the melody notes that fall inside it. */
-    private scheduleMelody(time: number, idx: number, sub: number, ts: [number, number], allowed: boolean) {
+    private scheduleMelody(time: number, idx: number, sub: number, ts: [number, number], allowed: boolean, silent = false) {
         const barDuration = getBarDurationSeconds(this.tempo, ts);
         if (idx === 0) {
             this.advanceRecorder(time, sub, barDuration / sub, allowed);
@@ -687,7 +710,8 @@ class Scheduler {
         }
 
         const recording = this.take !== null && !this.take.isFinished;
-        if (!this.melody || recording || !allowed || (this.silenceModeActive && this.isMutedBar)) return;
+        // Missed steps (stall) still move the recorder and the loop position, but nothing sounds.
+        if (silent || !this.melody || recording || !allowed || (this.silenceModeActive && this.isMutedBar)) return;
         const loopBar = this.melodyBar % this.melody.bars;
         melodyNotesForStep(this.melody, loopBar, idx, sub, barDuration).forEach(n =>
             this.piano.play(n.midi, time + n.offset, n.velocity, n.duration, 'melody'));
@@ -732,13 +756,13 @@ class Scheduler {
         };
     }
 
-    private nextStep(time: number) {
+    private nextStep(time: number, silent = false) {
         if (!this.currentPattern) return;
 
         const sub = this.currentPattern.subdivision;
         const timePerStep = getBarDurationSeconds(this.tempo, this.currentPattern.timeSignature) / sub;
 
-        this.visualQueue.push({
+        if (!silent) this.visualQueue.push({
             step: this.currentStepIndex,
             time,
             bpm: Math.round(this.tempo),

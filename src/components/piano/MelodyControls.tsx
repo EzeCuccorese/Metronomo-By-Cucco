@@ -1,5 +1,9 @@
 import { Box, Button, FormControl, InputLabel, MenuItem, Select, Stack, Typography } from '@mui/material';
-import { Circle, Repeat, Square, Trash2, Undo2 } from 'lucide-react';
+import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import RepeatIcon from '@mui/icons-material/Repeat';
+import StopIcon from '@mui/icons-material/Stop';
+import DeleteIcon from '@mui/icons-material/Delete';
+import UndoIcon from '@mui/icons-material/Undo';
 import type { MelodyRecordState } from '../../audio/Scheduler';
 import type { Melody } from '../../audio/piano/melody';
 import { MELODY_BAR_OPTIONS } from '../../audio/piano/melody';
@@ -45,7 +49,7 @@ export default function MelodyControls(props: MelodyControlsProps) {
                 </FormControl>
 
                 {busy ? (
-                    <Button variant="contained" color="error" size="small" startIcon={<Square size={14} />} onClick={onCancel}>
+                    <Button variant="contained" color="error" size="small" startIcon={<StopIcon sx={{ fontSize: 16 }} />} onClick={onCancel}>
                         Cancelar
                     </Button>
                 ) : (
@@ -53,7 +57,7 @@ export default function MelodyControls(props: MelodyControlsProps) {
                         variant="contained"
                         color="error"
                         size="small"
-                        startIcon={<Circle size={14} fill="currentColor" />}
+                        startIcon={<FiberManualRecordIcon sx={{ fontSize: 16 }} />}
                         onClick={onRecord}
                         title="Graba sobre el metrónomo: si está detenido, arranca con un compás de precuenta"
                     >
@@ -64,17 +68,17 @@ export default function MelodyControls(props: MelodyControlsProps) {
                 <Button
                     variant={loopOn ? 'contained' : 'outlined'}
                     size="small"
-                    startIcon={<Repeat size={14} />}
+                    startIcon={<RepeatIcon sx={{ fontSize: 16 }} />}
                     aria-pressed={loopOn}
                     disabled={!hasMelody}
                     onClick={() => onLoopChange(!loopOn)}
                 >
                     Loop
                 </Button>
-                <Button variant="outlined" size="small" startIcon={<Undo2 size={14} />} disabled={!canUndo || busy} onClick={onUndo}>
+                <Button variant="outlined" size="small" startIcon={<UndoIcon sx={{ fontSize: 16 }} />} disabled={!canUndo || busy} onClick={onUndo}>
                     Deshacer
                 </Button>
-                <Button variant="outlined" size="small" color="error" startIcon={<Trash2 size={14} />} disabled={!hasMelody || busy} onClick={onClear}>
+                <Button variant="outlined" size="small" color="error" startIcon={<DeleteIcon sx={{ fontSize: 16 }} />} disabled={!hasMelody || busy} onClick={onClear}>
                     Borrar
                 </Button>
             </Stack>

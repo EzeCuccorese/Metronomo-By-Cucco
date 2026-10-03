@@ -1,6 +1,8 @@
 import { useEffect, useCallback } from 'react';
 import { Box, Typography, Select, MenuItem, Stack, Slider, FormControl, InputLabel, Button, Divider, Chip } from '@mui/material';
-import { Music, Trash2, RotateCcw } from 'lucide-react';
+import MusicNoteIcon from '@mui/icons-material/MusicNote';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ReplayIcon from '@mui/icons-material/Replay';
 import type { AccompanimentStyle } from '../audio/PolyphonicSynth';
 import { usePersistentState } from '../hooks/usePersistentState';
 import { usePlayback } from '../state/PlaybackContext';
@@ -191,7 +193,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
                     alignItems: "center",
                     mb: 2
                 }}>
-                <Music size={20} color="#c0c0c0" />
+                <MusicNoteIcon sx={{ fontSize: 20, color: '#c0c0c0' }} />
                 <Typography variant="subtitle1" sx={{
                     color: 'white',
                     fontWeight: "bold"
@@ -330,7 +332,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
                                 onClick={() => removeChord(step.id)}
                                 aria-label={`Quitar ${step.degree}`}
                             >
-                                <Trash2 size={16} />
+                                <DeleteIcon sx={{ fontSize: 16 }} />
                             </Button>
                         </Stack>
                     </Box>
@@ -367,7 +369,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
             </Box>
 
             <Button
-                startIcon={<RotateCcw size={16} />}
+                startIcon={<ReplayIcon sx={{ fontSize: 16 }} />}
                 fullWidth variant="outlined"
                 size="small" sx={{ mt: 2 }}
                 onClick={() => setSequence([])}
