@@ -10,7 +10,7 @@ License:  Creative Commons Attribution 3.0 Unported (CC-BY 3.0)
 Changes made for this app:
 - Only 17 notes are used: C, D#, F# and A from octave 2 to 5, plus C6.
 - Each note was trimmed to 2.8 s (leading silence removed, 0.8 s fade-out at the end).
-- Re-encoded to Ogg Opus (56 kb/s, 48 kHz, stereo) and AAC in MP4 (.m4a, 64 kb/s, 44.1 kHz, stereo).
+- Re-encoded to Ogg Opus (56 kb/s, 48 kHz, stereo).
 - In the app, notes between samples are transposed from the nearest one by changing the playback rate.
 
 Muestras de piano (ES): Salamander Grand Piano de Alexander Holm, licencia CC-BY 3.0.

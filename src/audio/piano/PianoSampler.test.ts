@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
-    loadPianoNote, loadPianoSamples, MAX_VOICES, PIANO_SAMPLE_FILES, PianoSampler, pickSample, preferredFormats,
+    loadPianoNote, loadPianoSamples, MAX_VOICES, PIANO_SAMPLE_FILES, PianoSampler, pickSample,
     velocityToCutoff, velocityToGain,
 } from './PianoSampler';
 import type { PianoFallback } from './PianoSampler';
@@ -102,60 +102,37 @@ describe('velocity', () => {
     });
 });
 
-describe('format selection', () => {
-    it('prefers Opus when the browser can play it', () => {
-        expect(preferredFormats(m => (m.includes('opus') ? 'probably' : 'maybe'))).toEqual(['ogg', 'm4a']);
-    });
-
-    it('goes AAC first when only AAC is supported (older Safari)', () => {
-        expect(preferredFormats(m => (m.includes('mp4a') ? 'maybe' : ''))).toEqual(['m4a', 'ogg']);
-    });
-
-    it('tries Opus first when the browser does not say', () => {
-        expect(preferredFormats(() => '')).toEqual(['ogg', 'm4a']);
-        expect(preferredFormats()).toEqual(['ogg', 'm4a']); // jsdom: canPlayType returns ''
-    });
-});
-
 describe('loading', () => {
     afterEach(() => vi.unstubAllGlobals());
 
-    it('falls back to the other format when the first one fails', async () => {
-        vi.stubGlobal('fetch', okFetch(url => url.endsWith('.ogg')));
-        const ctx = new FakeContext();
-        const buffer = await loadPianoNote(ctx as unknown as BaseAudioContext, 'C4', ['ogg', 'm4a']);
-        expect(buffer).toEqual({ id: 'http://localhost:3000/audio/piano/C4.m4a' });
-    });
-
-    it('returns null when no format works', async () => {
+    it('returns null when the note cannot be fetched', async () => {
         vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
         const ctx = new FakeContext();
-        expect(await loadPianoNote(ctx as unknown as BaseAudioContext, 'C4', ['ogg', 'm4a'])).toBeNull();
+        expect(await loadPianoNote(ctx as unknown as BaseAudioContext, 'C4')).toBeNull();
     });
 
     it('does not cache a failed load, so a later call retries', async () => {
         const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
         vi.stubGlobal('fetch', okFetch(() => true));
         const ctx = new FakeContext() as unknown as BaseAudioContext;
-        expect((await loadPianoSamples(ctx, ['ogg'])).size).toBe(0);
+        expect((await loadPianoSamples(ctx)).size).toBe(0);
         vi.stubGlobal('fetch', okFetch());
-        expect((await loadPianoSamples(ctx, ['ogg'])).size).toBe(17);
+        expect((await loadPianoSamples(ctx)).size).toBe(17);
         errors.mockRestore();
     });
 
-    it('survives an opaque "null" origin', async () => {
-        vi.stubGlobal('location', { origin: 'null' });
+    it('loads the Opus sample relative to the document base URI', async () => {
         vi.stubGlobal('fetch', okFetch());
         const ctx = new FakeContext();
-        const buffer = await loadPianoNote(ctx as unknown as BaseAudioContext, 'C4', ['ogg']);
-        expect(buffer).toEqual({ id: 'http://localhost/audio/piano/C4.ogg' });
+        const buffer = await loadPianoNote(ctx as unknown as BaseAudioContext, 'C4');
+        expect(buffer).toEqual({ id: new URL('/audio/piano/C4.ogg', document.baseURI).href });
     });
 
     it('decodes every note once per context and keys them by MIDI number', async () => {
         const fetchMock = okFetch(url => url.includes('/A5.'));
         vi.stubGlobal('fetch', fetchMock);
         const ctx = new FakeContext() as unknown as BaseAudioContext;
-        const [a, b] = await Promise.all([loadPianoSamples(ctx, ['ogg', 'm4a']), loadPianoSamples(ctx)]);
+        const [a, b] = await Promise.all([loadPianoSamples(ctx), loadPianoSamples(ctx)]);
         expect(a).toBe(b);
         expect(a.size).toBe(16); // A5 is missing in both formats
         expect(a.has(60)).toBe(true);
@@ -260,26 +237,13 @@ describe('PianoSampler', () => {
         expect(env.gain.setTargetAtTime).toHaveBeenCalledTimes(1);
     });
 
-    it('falls back to cancelScheduledValues where cancelAndHoldAtTime is missing', async () => {
+    it('tolerates a source that already stopped', async () => {
         await ready();
         const id = sampler.noteOn(60, 0, 1);
         const env = ctx.gains.at(-1)!;
-        (env.gain as { cancelAndHoldAtTime?: unknown }).cancelAndHoldAtTime = undefined;
         ctx.sources.at(-1)!.stop.mockImplementation(() => { throw new Error('already stopped'); });
-        sampler.noteOff(id, 0.5);
-        expect(env.gain.cancelScheduledValues).toHaveBeenCalledWith(0.5);
-        expect(env.gain.setValueAtTime).toHaveBeenCalledWith(1, 0.5);
-    });
-
-    it('without cancelAndHoldAtTime, holds the partial attack level instead of jumping to the peak', async () => {
-        await ready();
-        const id = sampler.noteOn(60, 0, 1);
-        const env = ctx.gains.at(-1)!;
-        (env.gain as { cancelAndHoldAtTime?: unknown }).cancelAndHoldAtTime = undefined;
-        const [, rampEnd] = env.gain.linearRampToValueAtTime.mock.calls[0] as [number, number];
-        sampler.noteOff(id, rampEnd / 2);
-        const [level] = env.gain.setValueAtTime.mock.calls.at(-1)! as [number, number];
-        expect(level).toBeCloseTo(velocityToGain(1) / 2, 6);
+        expect(() => sampler.noteOff(id, 0.5)).not.toThrow();
+        expect(env.gain.cancelAndHoldAtTime).toHaveBeenCalledWith(0.5);
     });
 
     it('schedules whole notes with play()', async () => {

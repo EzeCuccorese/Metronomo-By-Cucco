@@ -21,7 +21,7 @@ test.describe('PWA', () => {
 
     test('the service worker precaches the folk samples for offline use', async ({ request }) => {
         const sw = await (await request.get('/sw.js')).text();
-        ['audio/bombo_parche.ogg', 'audio/clave.ogg', 'audio/candombe_chico.ogg', 'audio/kick.wav', 'audio/piano/C4.ogg', 'audio/piano/C4.m4a'].forEach(asset => {
+        ['audio/bombo_parche.ogg', 'audio/clave.ogg', 'audio/candombe_chico.ogg', 'audio/kick.wav', 'audio/piano/C4.ogg'].forEach(asset => {
             expect(sw, asset).toContain(asset);
         });
     });

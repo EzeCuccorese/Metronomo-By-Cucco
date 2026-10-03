@@ -2,19 +2,16 @@
  * Sampled acoustic piano (Salamander Grand Piano, CC-BY 3.0, Alexander Holm).
  *
  * One recording every minor third from C2 to C6 is stored in /audio/piano/ as Ogg Opus
- * and AAC (m4a). The browser gets the format it can decode (Opus preferred, the other one
- * tried on failure), and notes in between are pitch-shifted from the nearest sample via
+ * (every supported browser decodes it), and notes in between are pitch-shifted from the nearest sample via
  * playbackRate (never more than one semitone away inside the range).
  * Until the samples are decoded, or if they can't be, notes go to a fallback voice.
  *
- * (ES) Piano sampleado. Se elige el formato que el navegador decodifica (Opus primero,
- * AAC como alternativa) y las notas intermedias se transponen desde el sample más cercano.
+ * (ES) Piano sampleado en Ogg Opus. Las notas intermedias se transponen desde el sample más cercano.
  */
 import { noteToMidi } from './notes';
 
 export type PianoBus = 'harmony' | 'melody' | 'live';
 export type PianoStatus = 'idle' | 'loading' | 'ready' | 'failed';
-export type PianoFormat = 'ogg' | 'm4a';
 
 /** File names of the sampled notes (tone.js naming: "Ds" = D#, "Fs" = F#). */
 export const PIANO_SAMPLE_FILES = ['C', 'Ds', 'Fs', 'A']
@@ -63,51 +60,28 @@ export const velocityToCutoff = (velocity: number): number => {
     return 1400 * Math.pow(2, v * 3.8);
 };
 
-type CanPlay = (mime: string) => string;
-
-const defaultCanPlay: CanPlay = (mime) => {
-    try {
-        return typeof document !== 'undefined' ? document.createElement('audio').canPlayType(mime) : '';
-    } catch {
-        return '';
-    }
-};
-
-/** Formats to try, best first: Opus when the browser says it can play it, else AAC first. */
-export function preferredFormats(canPlay: CanPlay = defaultCanPlay): PianoFormat[] {
-    const opus = canPlay('audio/ogg; codecs="opus"');
-    const aac = canPlay('audio/mp4; codecs="mp4a.40.2"');
-    if (opus) return ['ogg', 'm4a'];
-    if (aac) return ['m4a', 'ogg'];
-    return ['ogg', 'm4a'];
-}
-
 async function fetchAndDecode(context: BaseAudioContext, url: string): Promise<AudioBuffer> {
-    const baseUrl = typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null' ? window.location.origin : 'http://localhost';
-    const response = await fetch(new URL(url, baseUrl).href);
+    const response = await fetch(new URL(url, document.baseURI).href);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return context.decodeAudioData(await response.arrayBuffer());
 }
 
-/** Decodes one note, trying each format in order. Null when none works. */
-export async function loadPianoNote(context: BaseAudioContext, file: string, formats: readonly PianoFormat[]): Promise<AudioBuffer | null> {
-    for (const format of formats) {
-        try {
-            return await fetchAndDecode(context, `${PIANO_SAMPLE_BASE_URL}${file}.${format}`);
-        } catch {
-            // Try the next format.
-        }
+/** Decodes one note. Null when it can't be fetched or decoded. */
+export async function loadPianoNote(context: BaseAudioContext, file: string): Promise<AudioBuffer | null> {
+    try {
+        return await fetchAndDecode(context, `${PIANO_SAMPLE_BASE_URL}${file}.ogg`);
+    } catch {
+        return null;
     }
-    return null;
 }
 
 const cache = new WeakMap<BaseAudioContext, Promise<Map<number, AudioBuffer>>>();
 
 /** Downloads and decodes every piano note once per AudioContext. */
-export function loadPianoSamples(context: BaseAudioContext, formats: readonly PianoFormat[] = preferredFormats()): Promise<Map<number, AudioBuffer>> {
+export function loadPianoSamples(context: BaseAudioContext): Promise<Map<number, AudioBuffer>> {
     let pending = cache.get(context);
     if (!pending) {
-        pending = Promise.all(PIANO_SAMPLE_FILES.map(f => loadPianoNote(context, f, formats))).then(buffers => {
+        pending = Promise.all(PIANO_SAMPLE_FILES.map(f => loadPianoNote(context, f))).then(buffers => {
             const map = new Map<number, AudioBuffer>();
             buffers.forEach((b, i) => { if (b) map.set(fileToMidi(PIANO_SAMPLE_FILES[i]), b); });
             if (map.size === 0) {
@@ -130,8 +104,6 @@ interface Voice {
     bus: PianoBus;
     source: AudioBufferSourceNode;
     env: GainNode;
-    peak: number;
-    start: number;
     released: boolean;
 }
 
@@ -250,7 +222,7 @@ export class PianoSampler {
         env.connect(this.buses[bus]);
 
         const id = this.nextId++;
-        const voice: Voice = { id, midi, bus, source, env, peak, start, released: false };
+        const voice: Voice = { id, midi, bus, source, env, released: false };
         this.voices.set(id, voice);
         source.addEventListener('ended', () => {
             this.voices.delete(id);
@@ -270,14 +242,7 @@ export class PianoSampler {
         voice.released = true;
         const param = voice.env.gain;
         const at = Math.max(time, this.context.currentTime);
-        if (typeof param.cancelAndHoldAtTime === 'function') {
-            param.cancelAndHoldAtTime(at);
-        } else {
-            param.cancelScheduledValues(at);
-            // Hold the level the envelope has reached at `at` (it may still be in the attack).
-            const level = at <= voice.start ? 0 : at >= voice.start + ATTACK ? voice.peak : voice.peak * ((at - voice.start) / ATTACK);
-            param.setValueAtTime(level, at);
-        }
+        param.cancelAndHoldAtTime(at);
         param.setTargetAtTime(0, at, tau);
         try {
             voice.source.stop(at + tau * 8);

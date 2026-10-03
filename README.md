@@ -69,7 +69,7 @@ src/
 - El click guía va por un bus limpio, sin saturación ni EQ.
 - Los datos guardados en `localStorage` se validan estructuralmente antes de usarse. Un valor corrupto nunca rompe la app.
 - Las notas de la melodía grabada se agendan en el mismo *lookahead* que la batería (nada de `setTimeout`), así el loop no se corre del compás.
-- El piano se descarga recién cuando lo usás. Cada nota está en Ogg Opus y en AAC (`.m4a`): el navegador usa la que puede decodificar y, si falla, prueba la otra. Si no carga ninguna, suena con el sintetizador.
+- El piano se descarga recién cuando lo usás. Cada nota está en Ogg Opus (los navegadores actuales lo decodifican todos). Si no carga ninguna, suena con el sintetizador.
 
 ## Compatibilidad
 

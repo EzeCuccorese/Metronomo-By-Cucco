@@ -24,8 +24,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       workbox: {
-        // Audio samples (wav + ogg + m4a) are precached: the folk instruments must sound offline too.
-        globPatterns: ['**/*.{js,css,html,svg,png,webp,wav,ogg,m4a,woff2,webmanifest}'],
+        // Audio samples (wav + ogg) are precached: the folk instruments must sound offline too.
+        globPatterns: ['**/*.{js,css,html,svg,png,webp,wav,ogg,woff2,webmanifest}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024
       },
       manifest: {
