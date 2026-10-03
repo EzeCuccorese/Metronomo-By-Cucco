@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const mockAudioParam = () => ({
     value: 1,
@@ -143,16 +143,31 @@ import { INSTRUMENT_CHANNEL } from './instrumentChannels';
 describe('DrumSynthesizer', () => {
     let synth: DrumSynthesizer;
 
+    let consoleError: ReturnType<typeof vi.spyOn>;
+
     beforeEach(() => {
         vi.clearAllMocks();
         createdBufferSources = [];
         createdOscillators = [];
+        // The constructor starts loading samples in the background. Make that deterministic (no real
+        // network) and keep the expected "falls back to synthesis" console.error out of the worker's
+        // RPC channel, which otherwise races with environment teardown (EnvironmentTeardownError).
+        vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 404 })));
+        consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
         synth = new DrumSynthesizer();
+    });
+
+    afterEach(async () => {
+        // Never leave the background sample load pending when the test (and eventually the file) ends.
+        await synth.loadPromise;
+        consoleError.mockRestore();
+        vi.unstubAllGlobals();
     });
 
     it('should initialize and load buffers', async () => {
         expect(synth).toBeDefined();
         await synth.loadPromise;
+        expect(consoleError).toHaveBeenCalled();
     });
 
     it('should play all registered instruments without cached samples (synthesis fallback)', () => {
