@@ -208,7 +208,7 @@ describe('App (integration with a scripted engine)', () => {
 
     it('previews instruments through the accessible buttons', () => {
         render(<App />);
-        fireEvent.click(screen.getByRole('button', { name: 'Bombo legüero (aro)' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Tocar bombo legüero (aro)' }));
         return Promise.resolve().then(() => {
             expect(scheduler().calls.playOneShot.at(-1)).toEqual(['rim', undefined]);
         });

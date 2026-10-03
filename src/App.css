@@ -601,3 +601,18 @@ html, body {
     transition-duration: 0.01ms !important;
   }
 }
+
+.instrument-preview-button {
+  font: inherit;
+  padding: 6px 10px;
+  color: #f4f1ed;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(229, 169, 95, 0.4);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.instrument-preview-button:focus-visible {
+  outline: 2px solid #ffd54f;
+  outline-offset: 2px;
+}

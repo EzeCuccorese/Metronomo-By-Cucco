@@ -4,6 +4,7 @@ import SpeedIcon from '@mui/icons-material/Speed';
 import { useEffect, useRef, useState } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 import { usePlayback } from '../state/PlaybackContext';
+import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 
 interface ConductorVisualProps {
     pattern: RhythmPattern;
@@ -70,6 +71,12 @@ export default function ConductorVisual({
 
     const [visualMode, setVisualMode] = useState<VisualMode>('pendulum');
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    // Read inside the long-lived canvas loop; reduced motion draws discrete states without interpolation.
+    const reduceMotion = usePrefersReducedMotion();
+    const reduceMotionRef = useRef(reduceMotion);
+    useEffect(() => {
+        reduceMotionRef.current = reduceMotion;
+    }, [reduceMotion]);
 
     // Latest values for the long-lived canvas loop (avoids restarting it on every step).
     const liveRef = useRef({ currentStepIndex, bpm, pattern, beats, stepsPerBeat });
@@ -157,11 +164,13 @@ export default function ConductorVisual({
                 gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
                 ctx.fillStyle = gradient;
                 ctx.fillRect(0, 0, width, height);
-                pulseIntensityRef.current -= 0.05; // Decay pulse
+                pulseIntensityRef.current = reduceMotionRef.current ? 0 : pulseIntensityRef.current - 0.05; // Decay pulse (single-frame flash when reduced)
             }
 
             // Lerp pendulum angle for super smooth movement
-            angleRef.current = angleRef.current * 0.82 + targetAngleRef.current * 0.18;
+            angleRef.current = reduceMotionRef.current
+                ? targetAngleRef.current
+                : angleRef.current * 0.82 + targetAngleRef.current * 0.18;
 
             if (visualMode === 'pendulum') {
                 drawPendulum(ctx, width, height, angleRef.current);
@@ -340,7 +349,7 @@ export default function ConductorVisual({
             const timePerBar = (60.0 / liveRef.current.bpm) * (4.0 / ts[1]) * ts[0];
             const stepDurationMs = (timePerBar / sub) * 1000;
             const elapsedMs = performance.now() - lastStepTimeRef.current;
-            const smoothProgress = Math.min(0.99, elapsedMs / stepDurationMs);
+            const smoothProgress = reduceMotionRef.current ? 0 : Math.min(0.99, elapsedMs / stepDurationMs);
             const smoothStep = liveRef.current.currentStepIndex + smoothProgress;
 
             if (liveRef.current.pattern.grooveType === 'chacarera_poliritmica') {
@@ -398,9 +407,11 @@ export default function ConductorVisual({
                 const p2Y = centerY + Math.sin(angle) * radiusY;
 
                 // Update Trails
+                if (reduceMotionRef.current) trail3Ref.current.length = 0;
                 trail3Ref.current.push({ x: p3X, y: p3Y, alpha: 1.0 });
                 if (trail3Ref.current.length > 25) trail3Ref.current.shift();
 
+                if (reduceMotionRef.current) trail2Ref.current.length = 0;
                 trail2Ref.current.push({ x: p2X, y: p2Y, alpha: 1.0 });
                 if (trail2Ref.current.length > 25) trail2Ref.current.shift();
 
@@ -500,6 +511,7 @@ export default function ConductorVisual({
                 const particleY = currentPoint.y + (nextPoint.y - currentPoint.y) * easedT;
 
                 // Add particle to trail
+                if (reduceMotionRef.current) trailRef.current.length = 0;
                 trailRef.current.push({ x: particleX, y: particleY, alpha: 1.0 });
                 if (trailRef.current.length > 25) {
                     trailRef.current.shift();
@@ -684,6 +696,7 @@ export default function ConductorVisual({
             }}>
                 <canvas
                     ref={canvasRef}
+                    aria-hidden="true"
                     style={{
                         position: 'absolute',
                         top: 0,
