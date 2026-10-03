@@ -41,7 +41,7 @@ describe('PatternEditor', () => {
         fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Compás' }));
         fireEvent.click(within(await screen.findByRole('listbox')).getByText('6/8'));
         expect(last().timeSignature).toEqual([6, 8]);
-        expect(last().subdivision).toBe(24); // keeps 4 steps per pulse
+        expect(last().subdivision).toBe(12); // sixteenths stay sixteenths: 2 per eighth
     });
 
     it('clears the pattern and can undo it', () => {

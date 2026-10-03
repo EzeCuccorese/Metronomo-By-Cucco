@@ -15,6 +15,9 @@ interface EngineOptions {
     onPatternChange: (pattern: RhythmPattern) => void;
 }
 
+/** Longest wait for the samples before starting anyway with the synthesized fallbacks. */
+const SAMPLE_WAIT_MS = 2500;
+
 interface ChannelSettings {
     volume?: number;
     pan?: number;
@@ -141,23 +144,40 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
     }, []);
 
     // --- Transport ---
+    const stopRequestedRef = useRef(false);
+
     const start = useCallback(async () => {
         if (isPlayingRef.current || startingRef.current) return;
         startingRef.current = true;
+        stopRequestedRef.current = false;
         try {
             await AudioContextManager.getInstance().resume();
+            // Give the samples a moment to arrive so the first bars don't play synthesized fallbacks.
             const scheduler = schedulerRef.current;
-            if (!scheduler) return;
+            if (scheduler) {
+                let timer: ReturnType<typeof setTimeout> | undefined;
+                await Promise.race([
+                    scheduler.whenReady(),
+                    new Promise<void>(resolve => { timer = setTimeout(resolve, SAMPLE_WAIT_MS); }),
+                ]);
+                clearTimeout(timer);
+            }
+            // The user may have pressed stop (or the component unmounted) while we were waiting.
+            if (stopRequestedRef.current || !schedulerRef.current || schedulerRef.current !== scheduler) return;
             scheduler.resetPracticeStats();
             scheduler.start();
             store.update({ step: 0, totalBars: 0, trainerBar: 0, formState: null });
             setPlaying(true);
+        } catch (error) {
+            // e.g. iOS refusing to resume an interrupted context: stay stopped, the next tap retries.
+            console.error('Could not start audio playback', error);
         } finally {
             startingRef.current = false;
         }
     }, [store, setPlaying]);
 
     const stop = useCallback(() => {
+        if (startingRef.current) stopRequestedRef.current = true;
         const scheduler = schedulerRef.current;
         if (!scheduler || !isPlayingRef.current) return;
         scheduler.stop();
@@ -174,7 +194,7 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
     }, [store, setPlaying]);
 
     const toggle = useCallback(() => {
-        if (isPlayingRef.current) stop();
+        if (isPlayingRef.current || startingRef.current) stop();
         else void start();
     }, [start, stop]);
 

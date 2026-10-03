@@ -2,6 +2,7 @@ import AudioContextManager from './AudioContextManager';
 import { CHANNEL_IDS, INSTRUMENT_CHANNEL } from './instrumentChannels';
 import type { ChannelId } from './instrumentChannels';
 import { VoiceTracker } from './VoiceTracker';
+import { loadSamples } from './sampleLibrary';
 
 /**
  * Synthesizes drum sounds using oscillators and noise buffers.
@@ -207,146 +208,9 @@ class DrumSynthesizer {
         this.filterPool.push(node);
     }
 
-    private async loadAsset(name: string, url: string) {
-        try {
-            const baseUrl = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'http://localhost';
-            const resolvedUrl = new URL(url, baseUrl).href;
-            const response = await fetch(resolvedUrl);
-            const arrayBuffer = await response.arrayBuffer();
-            const audioBuffer = await this.context.decodeAudioData(arrayBuffer);
-            this.audioBuffers.set(name, audioBuffer);
-        } catch (e) {
-            console.error(`Failed to load asset ${name} from ${url}`, e);
-        }
-    }
-
     private async loadAssets() {
-        const assets = [
-            { name: 'kick', url: '/audio/kick.wav' },
-            { name: 'snare', url: '/audio/snare.wav' },
-            { name: 'hihat', url: '/audio/hihat.wav' },
-            { name: 'hihat-open', url: '/audio/hihat-open.wav' },
-            { name: 'ride', url: '/audio/ride.wav' },
-            { name: 'surdo', url: '/audio/surdo.wav' },
-            { name: 'tom_high', url: '/audio/tom1.wav' },
-            { name: 'tom_low', url: '/audio/tom2.wav' },
-            { name: 'tom_floor', url: '/audio/tom3.wav' },
-            { name: 'bombo_parche_raw', url: '/audio/bombo_parche.ogg' },
-            { name: 'bombo_aro_raw', url: '/audio/bombo_aro.ogg' },
-            { name: 'caja_raw', url: '/audio/caja.ogg' },
-            { name: 'cajon_raw', url: '/audio/cajon.ogg' },
-            { name: 'palmas_raw', url: '/audio/palmas.ogg' },
-            { name: 'shaker_real_raw', url: '/audio/shaker_real.ogg' },
-            { name: 'clave_raw', url: '/audio/clave.ogg' },
-            { name: 'candombe_chico_raw', url: '/audio/candombe_chico.ogg' },
-            { name: 'candombe_repique_raw', url: '/audio/candombe_repique.ogg' },
-            { name: 'candombe_piano_raw', url: '/audio/candombe_piano.ogg' }
-        ];
-
-        await Promise.all(assets.map(asset => this.loadAsset(asset.name, asset.url)));
-        this.trimBomboAssets();
-    }
-
-    private trimBomboAssets() {
-        const rawParche = this.audioBuffers.get('bombo_parche_raw');
-        if (rawParche) {
-            const trimmed = this.trimBuffer(rawParche, 0.02, 0.8);
-            this.audioBuffers.set('bombo_parche', trimmed);
-        }
-
-        const rawAro = this.audioBuffers.get('bombo_aro_raw');
-        if (rawAro) {
-            const trimmed = this.trimBuffer(rawAro, 0.02, 0.25);
-            this.audioBuffers.set('bombo_aro', trimmed);
-        }
-
-        const rawCaja = this.audioBuffers.get('caja_raw');
-        if (rawCaja) {
-            const trimmed = this.trimBuffer(rawCaja, 0.02, 0.8);
-            this.audioBuffers.set('caja', trimmed);
-        }
-
-        const rawCajon = this.audioBuffers.get('cajon_raw');
-        if (rawCajon) {
-            const trimmed = this.trimBuffer(rawCajon, 0.02, 0.8);
-            this.audioBuffers.set('cajon', trimmed);
-        }
-
-        const rawPalmas = this.audioBuffers.get('palmas_raw');
-        if (rawPalmas) {
-            const trimmed = this.trimBuffer(rawPalmas, 0.02, 0.4);
-            this.audioBuffers.set('palmas', trimmed);
-        }
-
-        const rawShakerReal = this.audioBuffers.get('shaker_real_raw');
-        if (rawShakerReal) {
-            const trimmed = this.trimBuffer(rawShakerReal, 0.01, 0.3);
-            this.audioBuffers.set('shaker_real', trimmed);
-        }
-
-        const rawClave = this.audioBuffers.get('clave_raw');
-        if (rawClave) {
-            const trimmed = this.trimBuffer(rawClave, 0.02, 0.3);
-            this.audioBuffers.set('clave', trimmed);
-        }
-
-        const rawChico = this.audioBuffers.get('candombe_chico_raw');
-        if (rawChico) {
-            const trimmed = this.trimBuffer(rawChico, 0.02, 0.5);
-            this.audioBuffers.set('candombe_chico', trimmed);
-        }
-
-        const rawRepique = this.audioBuffers.get('candombe_repique_raw');
-        if (rawRepique) {
-            const trimmed = this.trimBuffer(rawRepique, 0.02, 0.5);
-            this.audioBuffers.set('candombe_repique', trimmed);
-        }
-
-        const rawPiano = this.audioBuffers.get('candombe_piano_raw');
-        if (rawPiano) {
-            const trimmed = this.trimBuffer(rawPiano, 0.02, 0.8);
-            this.audioBuffers.set('candombe_piano', trimmed);
-        }
-    }
-
-    private trimBuffer(buffer: AudioBuffer, threshold: number, durationSec: number): AudioBuffer {
-        const sampleRate = buffer.sampleRate;
-        const numChannels = buffer.numberOfChannels;
-        const trimLength = Math.min(buffer.length, Math.floor(durationSec * sampleRate));
-        
-        // Find peak index in first channel
-        const firstChanData = buffer.getChannelData(0);
-        let peakIndex = 0;
-        for (let i = 0; i < firstChanData.length; i++) {
-            if (Math.abs(firstChanData[i]) > threshold) {
-                peakIndex = i;
-                break;
-            }
-        }
-
-        const trimmedBuffer = this.context.createBuffer(numChannels, trimLength, sampleRate);
-
-        for (let ch = 0; ch < numChannels; ch++) {
-            const srcData = buffer.getChannelData(ch);
-            const dstData = trimmedBuffer.getChannelData(ch);
-            
-            for (let i = 0; i < trimLength; i++) {
-                const srcIdx = peakIndex + i;
-                if (srcIdx < srcData.length) {
-                    dstData[i] = srcData[srcIdx];
-                } else {
-                    dstData[i] = 0;
-                }
-                
-                const decayStart = Math.floor(trimLength * 0.75);
-                if (i > decayStart) {
-                    const decayProgress = (i - decayStart) / (trimLength - decayStart);
-                    dstData[i] *= Math.exp(-decayProgress * 4.0);
-                }
-            }
-        }
-
-        return trimmedBuffer;
+        const shared = await loadSamples(this.context);
+        shared.forEach((buffer, name) => this.audioBuffers.set(name, buffer));
     }
 
     private playBuffer(bufferName: string, channelName: ChannelId, time: number, velocity: number, pitchRate: number = 1.0): boolean {

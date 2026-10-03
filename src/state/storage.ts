@@ -18,6 +18,20 @@ export function readStored<T>(key: string, fallback: T, validate?: (value: unkno
     }
 }
 
+/**
+ * Like readStored, but repairs instead of rejecting: `sanitize` keeps whatever is still
+ * valid (e.g. drops one corrupted entry of a map) and returns undefined only when nothing is.
+ */
+export function readSanitized<T>(key: string, fallback: T, sanitize: (value: unknown) => T | undefined): T {
+    try {
+        const raw = window.localStorage.getItem(STORAGE_PREFIX + key);
+        if (raw === null) return fallback;
+        return sanitize(JSON.parse(raw)) ?? fallback;
+    } catch {
+        return fallback;
+    }
+}
+
 export function writeStored<T>(key: string, value: T): void {
     try {
         window.localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));

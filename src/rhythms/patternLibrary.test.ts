@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
     CUSTOM_PATTERN_ID, DEFAULT_CUSTOM_PATTERN, METRONOME_PATTERN_ID, getBasePattern, isMetronomePattern,
-    isValidOverrides, isValidPattern, normalizePatternId, resolvePattern, withUsedInstruments
+    isValidOverrides, isValidPattern, normalizePatternId, resolvePattern, sanitizeOverrides, withUsedInstruments
 } from './patternLibrary';
 import { PRESET_PATTERNS } from './RhythmPatterns';
 
@@ -47,5 +47,25 @@ describe('patternLibrary', () => {
         const p = { ...DEFAULT_CUSTOM_PATTERN, steps: [{ step: 1, instrument: 'cajon' as const, velocity: 1 }] };
         expect(withUsedInstruments(p).instruments).toContain('cajon');
         expect(withUsedInstruments(DEFAULT_CUSTOM_PATTERN)).toBe(DEFAULT_CUSTOM_PATTERN);
+    });
+
+    it('validates optional fields that reach the audio engine', () => {
+        const base = PRESET_PATTERNS[0];
+        expect(isValidPattern({ ...base, recommendedTempo: 'fast' })).toBe(false);
+        expect(isValidPattern({ ...base, recommendedTempo: 5000 })).toBe(false);
+        expect(isValidPattern({ ...base, swingBase: 3 })).toBe(false);
+        expect(isValidPattern({ ...base, grooveType: 'polka' })).toBe(false);
+        expect(isValidPattern({ ...base, countingMode: 'abc' })).toBe(false);
+        expect(isValidPattern({ ...base, recommendedTempo: undefined, grooveType: undefined })).toBe(true);
+    });
+
+    it('drops only the broken stored edits and keeps the rest', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const good = { ...PRESET_PATTERNS[0], steps: [] };
+        const broken = { ...PRESET_PATTERNS[1], instruments: ['theremin'] };
+        expect(sanitizeOverrides({ [good.id]: good, [broken.id]: broken })).toEqual({ [good.id]: good });
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(sanitizeOverrides('nope')).toBeUndefined();
+        warn.mockRestore();
     });
 });

@@ -136,6 +136,7 @@ vi.mock('./AudioContextManager', () => {
 });
 
 import DrumSynthesizer from './DrumSynthesizer';
+import { addTrimmedSamples } from './sampleLibrary';
 import { PRESET_PATTERNS } from '../rhythms/RhythmPatterns';
 import { INSTRUMENT_CHANNEL } from './instrumentChannels';
 
@@ -232,7 +233,7 @@ describe('DrumSynthesizer', () => {
         (synth as any).audioBuffers.set('candombe_repique_raw', dummyBuffer);
         (synth as any).audioBuffers.set('candombe_piano_raw', dummyBuffer);
 
-        (synth as any).trimBomboAssets();
+        addTrimmedSamples((synth as any).context, (synth as any).audioBuffers);
 
         synth.play('bombo_leguero', 0.1, 0.8, 'parche');
         synth.play('bombo_leguero', 0.1, 0.8, 'aro');
@@ -267,7 +268,7 @@ describe('DrumSynthesizer', () => {
             'bombo_parche_raw', 'bombo_aro_raw', 'caja_raw', 'cajon_raw', 'palmas_raw', 'shaker_real_raw',
             'clave_raw', 'candombe_chico_raw', 'candombe_repique_raw', 'candombe_piano_raw']
             .forEach(name => (synth as any).audioBuffers.set(name, dummyBuffer));
-        (synth as any).trimBomboAssets();
+        addTrimmedSamples((synth as any).context, (synth as any).audioBuffers);
     };
 
     /** Follows connect() calls from a node and reports whether it reaches the given target. */

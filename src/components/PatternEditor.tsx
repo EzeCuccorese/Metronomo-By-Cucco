@@ -20,7 +20,7 @@ import { InstrumentIcons } from '../constants/instrumentIcons';
 import type { RhythmPattern, InstrumentType, RhythmStep } from '../rhythms/RhythmPatterns';
 import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
 import { getGroupCount } from '../rhythms/meter';
-import { TIME_SIGNATURES, remapSteps, sameSignature } from '../rhythms/patternEditing';
+import { TIME_SIGNATURES, changeTimeSignature, remapSteps, sameSignature } from '../rhythms/patternEditing';
 import { usePlaybackStore } from '../state/PlaybackContext';
 
 interface PatternEditorProps {
@@ -159,16 +159,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
     const handleTimeSignatureChange = (label: string) => {
         const ts = TIME_SIGNATURES.find(t => t.label === label);
         if (!ts || sameSignature(ts.value, pattern.timeSignature)) return;
-
-        // Same bar length (3/4 <-> 6/8): keep the grid, the hemiola lives in the accents.
-        const sameBarLength = ts.value[0] / ts.value[1] === num / den;
-        const newSub = sameBarLength ? sub : ts.value[0] * Math.max(1, Math.round(stepsPerPulse));
-        onPatternUpdate({
-            ...pattern,
-            timeSignature: ts.value,
-            subdivision: newSub,
-            steps: sameBarLength ? pattern.steps : pattern.steps.filter(s => s.step <= newSub),
-        });
+        onPatternUpdate({ ...pattern, ...changeTimeSignature(pattern, ts.value) });
     };
 
     const handleSubdivisionChange = (newStepsPerPulse: number) => {
@@ -426,7 +417,8 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
                                             }}
                                             onPointerEnter={() => { if (paintingRef.current) applyTool(idx, inst.type, true); }}
                                             onKeyDown={(e: React.KeyboardEvent) => {
-                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                // Enter paints; Space stays the global play/stop shortcut.
+                                                if (e.key === 'Enter') {
                                                     e.preventDefault();
                                                     applyTool(idx, inst.type, false);
                                                 }

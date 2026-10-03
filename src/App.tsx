@@ -12,9 +12,9 @@ import {
   CUSTOM_PATTERN_ID,
   DEFAULT_PATTERN_ID,
   getBasePattern,
-  isValidOverrides,
   normalizePatternId,
   resolvePattern,
+  sanitizeOverrides,
   withUsedInstruments,
 } from './rhythms/patternLibrary';
 import { clampBpm } from './rhythms/meter';
@@ -55,7 +55,7 @@ const isFormas = (v: unknown): v is FormasSettings =>
 function App() {
   const [bpm, setBpmRaw] = usePersistentState('bpm', 120, isBpm);
   const [selectedPatternId, setSelectedPatternId] = usePersistentState('pattern', DEFAULT_PATTERN_ID, isPatternId);
-  const [overrides, setOverrides] = usePersistentState<Record<string, RhythmPattern>>('patternOverrides', {}, isValidOverrides);
+  const [overrides, setOverrides] = usePersistentState<Record<string, RhythmPattern>>('patternOverrides', {}, { sanitize: sanitizeOverrides });
   const [trainer, setTrainer] = usePersistentState('trainer', DEFAULT_TRAINER, isTrainer);
   const [silence, setSilence] = usePersistentState('silence', DEFAULT_SILENCE, isSilence);
   const [formas, setFormas] = usePersistentState('formas', DEFAULT_FORMAS, isFormas);
@@ -112,13 +112,14 @@ function App() {
 
   const handleTap = useTapTempo(setBpm);
 
-  // While the speed trainer runs it owns the tempo: the visible controls are disabled,
-  // so the keyboard shortcuts must not change it either.
+  // While the speed trainer runs it owns the tempo: every manual path (controls,
+  // Tap button, keyboard) is locked the same way.
   const tempoLocked = trainer.active && isPlaying;
+  const guardedTap = useCallback(() => { if (!tempoLocked) handleTap(); }, [tempoLocked, handleTap]);
 
   useKeyboardShortcuts({
     onTogglePlay: toggle,
-    onTap: useCallback(() => { if (!tempoLocked) handleTap(); }, [tempoLocked, handleTap]),
+    onTap: guardedTap,
     onNudgeBpm: useCallback((delta: number) => {
       if (!tempoLocked) setBpmRaw(prev => clampBpm(prev + delta));
     }, [tempoLocked, setBpmRaw]),
@@ -140,7 +141,7 @@ function App() {
               timeSignature={currentPattern.timeSignature}
               onBpmChange={setBpm}
               onTogglePlay={toggle}
-              onTapTempo={handleTap}
+              onTapTempo={guardedTap}
               onOpenLibrary={() => setLibraryOpen(true)}
               selectedPatternId={currentPattern.id}
               availablePresets={PRESET_PATTERNS}

@@ -154,8 +154,8 @@ describe('PolyphonicSynth', () => {
         expect(startTimesOf()).toEqual([0.5, 1.5]);
     });
 
-    it('plays the "zamba_base" style: low bass first, chord on the remaining thirds', () => {
-        synth.playChord(['C4', 'E4', 'G4'], 1.5, 0, 'zamba_base');
+    it('plays the "zamba_base" style on a 3-beat bar: low bass on 1, chord on 2 and 3', () => {
+        synth.playChord(['C4', 'E4', 'G4'], 1.5, 0, 'zamba_base', [], 3);
         expect(startTimesOf()).toEqual([0, 0.5, 1]);
         const firstFundamental = mockAudioContext.createOscillator.mock.results[0].value as any;
         expect(firstFundamental.frequency.value).toBeCloseTo(130.81, 1); // C3: one octave below the root
@@ -176,5 +176,10 @@ describe('PolyphonicSynth', () => {
         mockAudioContext.createGain.mock.results.slice(0, 2).forEach(r => {
             expect((r.value as any).disconnect).toHaveBeenCalled();
         });
+    });
+
+    it('lands "quarters" on every beat of a 3/4 bar', () => {
+        synth.playChord(['C4', 'E4', 'G4'], 1.5, 0, 'quarters', [], 3);
+        expect(startTimesOf()).toEqual([0, 0.5, 1]);
     });
 });

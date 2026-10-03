@@ -3,7 +3,7 @@ import DrumSynthesizer from './DrumSynthesizer';
 import type { RhythmPattern, RhythmStep } from '../rhythms/RhythmPatterns';
 import { PolyphonicSynth } from './PolyphonicSynth';
 import type { AccompanimentStyle } from './PolyphonicSynth';
-import { getBarDurationSeconds, getClickVelocity } from '../rhythms/meter';
+import { getBarDurationSeconds, getClickVelocity, getGroupCount } from '../rhythms/meter';
 import ClockWorker from './clock.worker?worker'; // Vite Worker Import
 
 export const FORM_GENRES = ['Chacarera Simple', 'Chacarera Doble', 'Zamba', 'Cueca Norteña', 'Gato Norteño'] as const;
@@ -123,6 +123,7 @@ class Scheduler {
     private polySynth: PolyphonicSynth;
     private harmonyProgression: string[][] = [];
     private harmonyHalfBarIndex: number = 0;
+    private lastChord: string[] = [];
     private currentChordIndex: number = -1;
     private accompanimentStyle: AccompanimentStyle = 'pad';
 
@@ -213,6 +214,7 @@ class Scheduler {
         if (isDifferent) {
             this.harmonyProgression = chords;
             this.harmonyHalfBarIndex = 0;
+            this.lastChord = [];
         }
     }
 
@@ -223,6 +225,11 @@ class Scheduler {
     // --- Transport ---
     public getTempo(): number {
         return this.tempo;
+    }
+
+    /** Resolves when the instrument samples are decoded (or failed and will use synthesis). */
+    public whenReady(): Promise<void> {
+        return this.synthesizer.loadPromise ?? Promise.resolve();
     }
 
     public getIsPlaying(): boolean {
@@ -341,6 +348,7 @@ class Scheduler {
         this.isPlaying = true;
         this.currentStepIndex = 0;
         this.harmonyHalfBarIndex = 0;
+        this.lastChord = [];
         this.currentChordIndex = -1;
         this.visualQueue = [];
         this.formEndTime = null;
@@ -378,6 +386,7 @@ class Scheduler {
             this.applyPattern(this.queuedPattern);
         }
         this.harmonyHalfBarIndex = 0;
+        this.lastChord = [];
         this.currentChordIndex = -1;
     }
 
@@ -460,25 +469,27 @@ class Scheduler {
         const idx = this.currentStepIndex;
         const section = this.currentSection();
 
-        // --- HARMONY TRIGGER (start or middle of the bar) ---
-        const isStart = idx === 0;
-        const isMiddle = idx === Math.floor(sub / 2);
+        // --- HARMONY TRIGGER ---
+        // The progression is counted in half bars. Meters with an even number of beats
+        // (2/4, 4/4, 6/8, 12/8) change chord on each half; odd ones (3/4) can't be split
+        // on a beat, so each chord lasts the whole bar and consumes two half-bar units.
         const harmonyAllowed = !section || (section.audioId !== 'Precuenta' && section.audioId !== 'Silencio');
+        const groups = getGroupCount(ts);
+        const segments = groups % 2 === 0 && sub % 2 === 0 ? 2 : 1;
+        const isSegmentStart = idx === 0 || (segments === 2 && idx === sub / 2);
 
-        if (isStart || isMiddle) {
+        if (isSegmentStart) {
             if (this.harmonyProgression.length > 0 && harmonyAllowed) {
                 const chordIndex = this.harmonyHalfBarIndex % this.harmonyProgression.length;
                 this.currentChordIndex = chordIndex;
                 const chord = this.harmonyProgression[chordIndex];
-                const prevChord = this.harmonyHalfBarIndex > 0
-                    ? this.harmonyProgression[(this.harmonyHalfBarIndex - 1) % this.harmonyProgression.length]
-                    : [];
-                const chordDuration = getBarDurationSeconds(this.tempo, ts) / 2;
+                const segmentDuration = getBarDurationSeconds(this.tempo, ts) / segments;
 
                 if (chord && chord.length > 0 && !(this.silenceModeActive && this.isMutedBar)) {
-                    this.polySynth.playChord(chord, chordDuration, time, this.accompanimentStyle, prevChord);
+                    this.polySynth.playChord(chord, segmentDuration, time, this.accompanimentStyle, this.lastChord, groups / segments);
+                    this.lastChord = chord;
                 }
-                this.harmonyHalfBarIndex++;
+                this.harmonyHalfBarIndex += 2 / segments;
             } else {
                 this.currentChordIndex = -1;
             }

@@ -27,6 +27,7 @@ class FakeScheduler {
     stop() { this.playing = false; this.queued = null; this.record('stop', []); }
     dispose() { this.record('dispose', []); }
     resetPracticeStats() {}
+    whenReady() { return Promise.resolve(); }
     setOnPlaybackUpdate(cb: (e: PlaybackEvent) => void) { this.onUpdate = cb; }
     setOnStopped(cb: () => void) { this.onStopped = cb; }
     setChannelVolume(...a: unknown[]) { this.record('setChannelVolume', a); }
