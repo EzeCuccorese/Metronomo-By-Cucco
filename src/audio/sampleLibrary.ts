@@ -46,19 +46,12 @@ const TRIMS: { from: string; to: string; threshold: number; seconds: number }[] 
 const cache = new WeakMap<BaseAudioContext, Promise<Map<string, AudioBuffer>>>();
 
 /** Every sample ships as Opus-in-Ogg, which every supported browser decodes. */
-async function fetchAndDecode(context: BaseAudioContext, url: string): Promise<AudioBuffer> {
-    const baseUrl = typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null'
-        ? window.location.origin
-        : 'http://localhost';
-    const response = await fetch(new URL(url, baseUrl).href);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await context.decodeAudioData(await response.arrayBuffer());
-}
-
 async function loadSample(context: BaseAudioContext, base: string): Promise<AudioBuffer | null> {
     const url = `${base}.ogg`;
     try {
-        return await fetchAndDecode(context, url);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await context.decodeAudioData(await response.arrayBuffer());
     } catch (e) {
         console.error(`Failed to load sample ${url}`, e);
         // The synthesizer falls back to its synthesized voice for this instrument.
