@@ -257,12 +257,7 @@ function App() {
                 </Fill>
               </Grid>
 
-              {/* Piano panel slot: reserved for the upcoming PianoPanel (harmony + playable keyboard + melody). */}
-              <Grid size={{ xs: 12, md: 6, lg: 8 }} data-slot="piano-panel">
-                <Panel title="Piano" sx={{ borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', textAlign: 'center', minHeight: 160 }}>
-                  Próximamente: teclado, armonía y melodía.
-                </Panel>
-              </Grid>
+              {/* Piano panel slot: the upcoming PianoPanel goes here as <Grid size={{ xs: 12, md: 6, lg: 8 }}>. Intentionally empty (renders nothing) until then. */}
 
             </Grid>
           </Box>
