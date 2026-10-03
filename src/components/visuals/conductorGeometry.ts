@@ -168,7 +168,8 @@ export function smoothStepPosition(
     durationMs: number,
     reduceMotion: boolean,
 ): number {
-    const progress = reduceMotion ? 0 : Math.min(0.99, elapsedMs / durationMs);
+    const valid = durationMs > 0 && Number.isFinite(durationMs);
+    const progress = reduceMotion || !valid ? 0 : Math.min(0.99, elapsedMs / durationMs);
     return currentStepIndex + progress;
 }
 
@@ -204,10 +205,12 @@ export function conductorPath(beats: number, w: number, h: number): Point[] {
 
 /** Position of a spark travelling along a closed path of points at a fractional beat index. */
 export function pathPosition(points: Point[], smoothBeatIndex: number): Point {
+    if (points.length === 0) return { x: 0, y: 0 };
+    const len = points.length;
     const currentBeatIndex = Math.floor(smoothBeatIndex);
-    const eased = easeCosine(smoothBeatIndex % 1);
-    const from = points[currentBeatIndex % points.length];
-    const to = points[(currentBeatIndex + 1) % points.length];
+    const eased = easeCosine(((smoothBeatIndex % 1) + 1) % 1);
+    const from = points[((currentBeatIndex % len) + len) % len];
+    const to = points[(((currentBeatIndex + 1) % len) + len) % len];
     return {
         x: from.x + (to.x - from.x) * eased,
         y: from.y + (to.y - from.y) * eased,

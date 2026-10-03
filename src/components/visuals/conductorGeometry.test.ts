@@ -277,3 +277,29 @@ describe('trails', () => {
         expect(trailAlpha(9, 10)).toBeCloseTo(0.9);
     });
 });
+
+describe('robustness', () => {
+    it('smoothStepPosition ignores invalid durations', () => {
+        expect(smoothStepPosition(2, 50, 0, false)).toBe(2);
+        expect(smoothStepPosition(2, 50, -10, false)).toBe(2);
+        expect(smoothStepPosition(2, 50, Infinity, false)).toBe(2);
+        expect(smoothStepPosition(2, 50, NaN, false)).toBe(2);
+    });
+
+    it('pathPosition handles negative beat indexes', () => {
+        const pts = [
+            { x: 0, y: 0 },
+            { x: 10, y: 0 },
+            { x: 20, y: 0 },
+        ];
+        expect(pathPosition(pts, -1)).toEqual({ x: 20, y: 0 });
+        expect(pathPosition(pts, -3)).toEqual({ x: 0, y: 0 });
+        const mid = pathPosition(pts, -0.5); // halfway between index -1 (20) and 0 (0)
+        expect(mid.x).toBeCloseTo(10);
+        expect(Number.isNaN(mid.x)).toBe(false);
+    });
+
+    it('pathPosition returns the origin for an empty path', () => {
+        expect(pathPosition([], 3)).toEqual({ x: 0, y: 0 });
+    });
+});
