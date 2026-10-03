@@ -349,8 +349,8 @@ export default function InteractiveInstrumentVisual({
     useEffect(() => {
         const wrap = wrapRef.current;
         if (!wrap) return;
-        const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(applySize);
-        resizeObserver?.observe(wrap);
+        const resizeObserver = new ResizeObserver(applySize);
+        resizeObserver.observe(wrap);
         applySize();
         // Web fonts change text metrics: drop cached name sizes once they finish loading.
         const fonts = document.fonts;
@@ -359,7 +359,7 @@ export default function InteractiveInstrumentVisual({
         };
         fonts.addEventListener('loadingdone', invalidateNames);
         return () => {
-            resizeObserver?.disconnect();
+            resizeObserver.disconnect();
             fonts.removeEventListener('loadingdone', invalidateNames);
         };
     }, [applySize]);
