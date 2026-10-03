@@ -84,7 +84,11 @@ test.describe('piano', () => {
         await page.getByRole('button', { name: 'Grabar' }).click();
         const status = page.getByTestId('melody-status');
         await expect(status).toContainText('Grabando', { timeout: 5_000 });
-        await page.getByTestId('piano-key-64').dispatchEvent('pointerdown', { button: 0, pointerId: 7, pointerType: 'mouse' });
+        // Hit low on the key: full velocity, well above the probe's threshold.
+        const keyBox = (await page.getByTestId('piano-key-64').boundingBox())!;
+        await page.getByTestId('piano-key-64').dispatchEvent('pointerdown', {
+            button: 0, pointerId: 7, pointerType: 'mouse', clientX: keyBox.x + keyBox.width / 2, clientY: keyBox.y + keyBox.height - 2,
+        });
         await page.waitForTimeout(150);
         await page.getByTestId('piano-key-64').dispatchEvent('pointerup', { button: 0, pointerId: 7, pointerType: 'mouse' });
 
@@ -94,7 +98,9 @@ test.describe('piano', () => {
         // Nobody touches the keys now: what we hear is the loop.
         const t0 = await probe.now();
         await probe.listen(2.2);
-        const onsets = await probe.onsetsAbove(AUDIBLE, t0, t0 + 2.2);
+        // A piano note fluctuates while it rings: onsets closer than 0.3 s belong to the same note.
+        const onsets = (await probe.onsetsAbove(AUDIBLE, t0, t0 + 2.2))
+            .reduce<number[]>((kept, t) => (kept.length === 0 || t - kept[kept.length - 1] > 0.3 ? [...kept, t] : kept), []);
         expect(onsets.length).toBeGreaterThanOrEqual(2);
         const gaps = onsets.slice(1).map((t, i) => t - onsets[i]);
         gaps.forEach(g => expect(Math.abs(g - 1)).toBeLessThan(0.08)); // once per 1 s bar
