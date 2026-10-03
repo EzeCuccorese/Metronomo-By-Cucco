@@ -3,6 +3,8 @@ import { useEffect, useRef, useCallback } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
 import { usePlaybackStore } from '../state/PlaybackContext';
+import { isHighlighted, markHighlight } from './visuals/highlight';
+import type { HighlightMap } from './visuals/highlight';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 import {
     CLICK_BOOST,
@@ -71,18 +73,17 @@ export default function InteractiveInstrumentVisual({
 
     const ripplesRef = useRef<Ripple[]>([]);
 
-    const reduceMotionRef = useRef(false);
     const reduceMotion = usePrefersReducedMotion();
+    const reduceMotionRef = useRef(reduceMotion);
     useEffect(() => {
         reduceMotionRef.current = reduceMotion;
     }, [reduceMotion]);
     // Reduced motion: instruments are highlighted discretely (static enlarged state) instead of springing.
-    const highlightRef = useRef<Set<string>>(new Set());
+    const highlightUntilRef = useRef<HighlightMap>({});
 
     const bump = useCallback((key: string, amount: number) => {
         if (reduceMotionRef.current) {
-            highlightRef.current.add(key);
-            setTimeout(() => highlightRef.current.delete(key), 200);
+            markHighlight(highlightUntilRef.current, key, performance.now());
         } else {
             velocitiesRef.current[key] += amount;
         }
@@ -182,7 +183,7 @@ export default function InteractiveInstrumentVisual({
             Object.keys(scalesRef.current).forEach(key => {
                 if (reduceMotionRef.current) {
                     velocitiesRef.current[key] = 0;
-                    scalesRef.current[key] = reducedScale(highlightRef.current.has(key));
+                    scalesRef.current[key] = reducedScale(isHighlighted(highlightUntilRef.current, key, performance.now()));
                     return;
                 }
                 const next = springStep(scalesRef.current[key], velocitiesRef.current[key]);
