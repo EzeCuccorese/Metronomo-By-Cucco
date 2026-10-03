@@ -25,6 +25,7 @@ import HarmonyBuilder from './components/HarmonyBuilder';
 import InteractiveInstrumentVisual from './components/InteractiveInstrumentVisual';
 import { MixerConsole } from './components/MixerConsole';
 import { PracticeModes } from './components/PracticeModes';
+import PianoPanel from './components/PianoPanel';
 import type { FormasSettings, SilenceSettings } from './components/PracticeModes';
 import { darkTheme } from './theme/darkTheme';
 import { HeaderToolbar } from './components/HeaderToolbar';
@@ -211,6 +212,9 @@ function App() {
                 </Grid>
 
               </Grid>
+
+              {/* Piano panel slot */}
+              <PianoPanel engine={engine} isPlaying={isPlaying} />
             </Box>
           </Box>
         </Box>
