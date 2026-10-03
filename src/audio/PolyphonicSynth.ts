@@ -65,9 +65,16 @@ export class PolyphonicSynth {
         this.fade.disconnect();
     }
 
-    public playChord(notes: string[], duration: number, time: number, style: AccompanimentStyle = 'pad', prevNotes: string[] = []) {
+    /**
+     * @param duration length of the harmonic segment (seconds)
+     * @param beats counted beats inside the segment, so rhythmic styles land on the pulse in any meter
+     */
+    public playChord(notes: string[], duration: number, time: number, style: AccompanimentStyle = 'pad', prevNotes: string[] = [], beats: number = 2) {
         // 1. VOICE LEADING: Optimize inversions
         const optimizedNotes = this.applyVoiceLeading(notes, prevNotes);
+        const beatCount = Math.max(1, Math.round(beats));
+        const beat = duration / beatCount;
+        const onBeats = Array.from({ length: beatCount }, (_, i) => i * beat);
 
         // 2. STYLE SEQUENCER
         switch (style) {
@@ -75,17 +82,16 @@ export class PolyphonicSynth {
                 this.playPad(optimizedNotes, duration, time);
                 break;
             case 'quarters':
-                // `duration` is half a bar: two hits land on its beats regardless of tempo.
-                this.playRhythmic(optimizedNotes, duration, time, [0, 0.5].map(f => f * duration), Math.min(0.2, duration * 0.4));
+                this.playRhythmic(optimizedNotes, duration, time, onBeats, Math.min(0.2, beat * 0.8));
                 break;
             case 'offbeats':
-                this.playRhythmic(optimizedNotes, duration, time, [0.25, 0.75].map(f => f * duration), Math.min(0.2, duration * 0.2));
+                this.playRhythmic(optimizedNotes, duration, time, onBeats.map(t => t + beat / 2), Math.min(0.2, beat * 0.4));
                 break;
             case 'arpeggio_8':
-                this.playArpeggio(optimizedNotes, duration, time, 4);
+                this.playArpeggio(optimizedNotes, duration, time, beatCount * 2);
                 break;
             case 'zamba_base':
-                this.playZambaBase(optimizedNotes, duration, time);
+                this.playZambaBase(optimizedNotes, time, onBeats, beat);
                 break;
         }
 
@@ -127,13 +133,13 @@ export class PolyphonicSynth {
         }
     }
 
-    /** Bass note on the downbeat, chord on the remaining thirds of the half bar. */
-    private playZambaBase(notes: string[], duration: number, time: number) {
+    /** Bass on the downbeat, chord on every other beat (zamba: bass on 1, chord on 2 and 3). */
+    private playZambaBase(notes: string[], time: number, onBeats: number[], beat: number) {
         const [root, ...upper] = notes;
         const bass = root.replace(/(\d)$/, d => String(Math.max(1, Number(d) - 1)));
-        const third = duration / 3;
-        this.playVoice(bass, third * 0.9, time, 'short');
-        [1, 2].forEach(i => upper.forEach(n => this.playVoice(n, third * 0.8, time + i * third, 'short')));
+        this.playVoice(bass, beat * 0.9, time, 'short');
+        const chordTimes = onBeats.length > 1 ? onBeats.slice(1) : [beat / 2];
+        chordTimes.forEach(t => upper.forEach(n => this.playVoice(n, beat * 0.8, time + t, 'short')));
     }
 
     private playVoice(note: string, duration: number, time: number, type: 'long' | 'short' | 'pluck' = 'long') {

@@ -27,21 +27,46 @@ describe('useKeyboardShortcuts', () => {
         expect(h.onNudgeBpm).toHaveBeenNthCalledWith(2, -5);
     });
 
-    it('does not steal keys from interactive elements (no double toggle on a focused button)', () => {
+    it('leaves text fields, sliders and menus alone', () => {
         const h = setup();
-        const button = document.createElement('button');
+        const input = document.createElement('input');
         const slider = document.createElement('span');
         slider.setAttribute('role', 'slider');
-        const input = document.createElement('input');
-        document.body.append(button, slider, input);
+        const listbox = document.createElement('ul');
+        listbox.setAttribute('role', 'listbox');
+        document.body.append(input, slider, listbox);
 
-        press('Space', button);
-        press('ArrowUp', slider);
         press('KeyT', input);
+        press('Space', input);
+        press('ArrowUp', slider);
+        press('Space', listbox);
+        expect(h.onTap).not.toHaveBeenCalled();
         expect(h.onTogglePlay).not.toHaveBeenCalled();
         expect(h.onNudgeBpm).not.toHaveBeenCalled();
-        expect(h.onTap).not.toHaveBeenCalled();
-        button.remove(); slider.remove(); input.remove();
+        input.remove(); slider.remove(); listbox.remove();
+    });
+
+    it('still works when a plain button has focus, without letting the button click', () => {
+        const h = setup();
+        const button = document.createElement('button');
+        document.body.append(button);
+
+        expect(press('Space', button).defaultPrevented).toBe(true);
+        const keyup = new KeyboardEvent('keyup', { code: 'Space', bubbles: true, cancelable: true });
+        button.dispatchEvent(keyup);
+        expect(keyup.defaultPrevented).toBe(true); // the native keyup activation is cancelled
+        press('ArrowUp', button);
+        expect(h.onTogglePlay).toHaveBeenCalledTimes(1);
+        expect(h.onNudgeBpm).toHaveBeenCalledWith(1);
+        button.remove();
+    });
+
+    it('respects keys already handled by a component', () => {
+        const h = setup();
+        const event = new KeyboardEvent('keydown', { code: 'Space', bubbles: true, cancelable: true });
+        event.preventDefault();
+        document.body.dispatchEvent(event);
+        expect(h.onTogglePlay).not.toHaveBeenCalled();
     });
 
     it('ignores modified and auto-repeated Space presses', () => {

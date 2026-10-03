@@ -17,7 +17,10 @@ permissions:
 
 jobs:
   review:
-    uses: EzeCuccorese/ia-spec-ops-engine/.github/workflows/reusable-gemini-review.yml@main
+    # Pinned to a commit: this job gets pull-requests: write and the Gemini key, so a
+    # push to the engine's main branch must not change what runs here. Bump both SHAs
+    # together on purpose (Dependabot only proposes it when the engine publishes tags).
+    uses: EzeCuccorese/ia-spec-ops-engine/.github/workflows/reusable-gemini-review.yml@0e429590f98b7e24cb427f52e0909a699d518cc7 # main @ 2026-10-03
     secrets:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     with:
@@ -25,3 +28,5 @@ jobs:
       exclude: "*.lock,package-lock.json,dist/*,build/*,public/audio/*"
       standards: "SOLID, Clean Code, Resource Safety, Web Audio Timing Accuracy, React Performance"
       model: "gemini-flash-latest"
+      # The reusable workflow downloads its review script separately: pin that too.
+      engine-ref: "0e429590f98b7e24cb427f52e0909a699d518cc7"

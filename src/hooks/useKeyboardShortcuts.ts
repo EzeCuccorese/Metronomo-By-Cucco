@@ -6,19 +6,25 @@ interface Shortcuts {
     onNudgeBpm: (delta: number) => void;
 }
 
-/**
- * Elements that already react to Space/arrows on their own. Handling the key
- * globally there would double-trigger (e.g. a focused button "clicks" on Space).
- */
-const isInteractiveTarget = (target: EventTarget | null): boolean => {
-    if (!(target instanceof HTMLElement)) return false;
-    if (target.isContentEditable) return true;
-    if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(target.tagName)) return true;
-    return !!target.closest('[role="slider"], [role="button"], [role="option"], [role="listbox"], [role="menu"], [role="dialog"], [role="spinbutton"]');
+const TEXT_INPUT_TYPES = new Set(['text', 'search', 'email', 'url', 'tel', 'password', 'number', 'date', 'time']);
+
+/** Places where typing must never trigger shortcuts. */
+const isTextEditing = (el: HTMLElement): boolean => {
+    if (el.isContentEditable || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') return true;
+    return el instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(el.type);
+};
+
+/** Widgets that use Space and/or arrows themselves (sliders, menus, checkboxes, open dialogs…). */
+const ownsKeys = (el: HTMLElement): boolean => {
+    if (el instanceof HTMLInputElement) return true; // checkbox, radio, range, switch
+    return !!el.closest('[role="slider"], [role="spinbutton"], [role="combobox"], [role="listbox"], [role="option"], [role="menu"], [role="menuitem"], [role="radio"], [role="tab"], [role="dialog"]');
 };
 
 /**
  * Global shortcuts: Space = play/stop, T = tap tempo, ↑/↓ = ±1 BPM (Shift: ±5).
+ * They also work while a plain button has focus (after clicking Play, Tap, a grid cell…):
+ * for a metronome, Space must always mean play/stop. Buttons stay operable with Enter.
+ *
  * (ES) Atajos globales de teclado.
  */
 export function useKeyboardShortcuts(shortcuts: Shortcuts) {
@@ -28,17 +34,22 @@ export function useKeyboardShortcuts(shortcuts: Shortcuts) {
     });
 
     useEffect(() => {
+        let swallowSpaceKeyup = false;
+
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || (e.repeat && e.code === 'Space')) return;
-            if (isInteractiveTarget(e.target)) return;
+            if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+            const target = e.target instanceof HTMLElement ? e.target : null;
+            if (target && (isTextEditing(target) || ownsKeys(target))) return;
 
             switch (e.code) {
                 case 'Space':
+                    // Stop the focused button from also "clicking" (browsers activate it on keyup).
                     e.preventDefault();
-                    ref.current.onTogglePlay();
+                    swallowSpaceKeyup = true;
+                    if (!e.repeat) ref.current.onTogglePlay();
                     break;
                 case 'KeyT':
-                    ref.current.onTap();
+                    if (!e.repeat) ref.current.onTap();
                     break;
                 case 'ArrowUp':
                     e.preventDefault();
@@ -51,7 +62,18 @@ export function useKeyboardShortcuts(shortcuts: Shortcuts) {
             }
         };
 
+        const handleKeyUp = (e: KeyboardEvent) => {
+            if (e.code === 'Space' && swallowSpaceKeyup) {
+                swallowSpaceKeyup = false;
+                e.preventDefault();
+            }
+        };
+
         window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp, true);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp, true);
+        };
     }, []);
 }
