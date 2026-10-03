@@ -28,6 +28,12 @@ const isTask = (v: unknown): v is Task =>
 export const isTaskList = (v: unknown): v is Task[] => Array.isArray(v) && v.every(isTask);
 const isNullableString = (v: unknown): v is string | null => v === null || isString(v);
 
+/** Collision-free id; falls back to a timestamp scheme where randomUUID is unavailable. */
+const newId = (suffix: string | number): string =>
+    typeof globalThis.crypto?.randomUUID === 'function'
+        ? globalThis.crypto.randomUUID()
+        : Date.now() + '-' + suffix;
+
 /**
  * Persistent study plan: task list + the task that earns pomodoros.
  * (ES) Plan de estudio persistente.
@@ -39,17 +45,16 @@ export function useStudyTasks() {
     /** Adds a task; returns false (and changes nothing) when the title is blank. */
     const addTask = useCallback((title: string, pomodoros: number, subtasksText: string): boolean => {
         if (!title.trim()) return false;
-        const now = Date.now();
         const subtasks = subtasksText.split('\n').filter(s => s.trim()).map((s, idx) => ({
-            id: now + '-' + idx,
+            id: newId(idx),
             title: s.trim(),
             completed: false,
         }));
         const task: Task = {
-            id: now.toString(),
+            id: newId('t'),
             title: title.trim(),
             subtasks,
-            estimatedPomodoros: Math.max(1, pomodoros),
+            estimatedPomodoros: Number.isFinite(pomodoros) ? Math.max(1, Math.floor(pomodoros)) : 1,
             completedPomodoros: 0,
             isCompleted: false,
         };

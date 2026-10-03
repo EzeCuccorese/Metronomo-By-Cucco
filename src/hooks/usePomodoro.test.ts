@@ -152,4 +152,9 @@ describe('formatTime', () => {
         expect(formatTime(65)).toBe('01:05');
         expect(formatTime(1500)).toBe('25:00');
     });
+
+    it('clamps negatives and truncates fractions', () => {
+        expect(formatTime(-5)).toBe('00:00');
+        expect(formatTime(59.9)).toBe('00:59');
+    });
 });

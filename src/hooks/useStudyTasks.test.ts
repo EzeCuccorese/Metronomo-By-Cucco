@@ -24,18 +24,35 @@ describe('useStudyTasks', () => {
         expect(result.current.activeTaskId).toBeNull();
     });
 
-    it('adds a task with parsed subtasks and clamped estimate', () => {
+    it('adds a task with parsed subtasks and clamped estimate (timestamp ids without randomUUID)', () => {
+        vi.stubGlobal('crypto', {});
         const { result } = renderHook(() => useStudyTasks());
         let ok = false;
         act(() => { ok = result.current.addTask('Escalas', 0, 'Mayores\n\n  Arpegios  \n   '); });
+        vi.unstubAllGlobals();
         expect(ok).toBe(true);
         expect(result.current.tasks).toEqual([{
-            id: '1700000000000', title: 'Escalas', estimatedPomodoros: 1, completedPomodoros: 0, isCompleted: false,
+            id: '1700000000000-t', title: 'Escalas', estimatedPomodoros: 1, completedPomodoros: 0, isCompleted: false,
             subtasks: [
                 { id: '1700000000000-0', title: 'Mayores', completed: false },
                 { id: '1700000000000-1', title: 'Arpegios', completed: false },
             ],
         }]);
+    });
+
+    it('uses unique ids even within the same millisecond', () => {
+        const { result } = renderHook(() => useStudyTasks());
+        act(() => { result.current.addTask('A', 1, 'x\ny'); result.current.addTask('B', 1, ''); });
+        const ids = result.current.tasks.flatMap(t => [t.id, ...t.subtasks.map(s => s.id)]);
+        expect(new Set(ids).size).toBe(4);
+    });
+
+    it('sanitizes non-finite and fractional estimates', () => {
+        const { result } = renderHook(() => useStudyTasks());
+        act(() => { result.current.addTask('A', NaN, ''); });
+        act(() => { result.current.addTask('B', 2.7, ''); });
+        act(() => { result.current.addTask('C', Infinity, ''); });
+        expect(result.current.tasks.map(t => t.estimatedPomodoros)).toEqual([1, 2, 1]);
     });
 
     it('keeps the requested estimate when above 1', () => {
