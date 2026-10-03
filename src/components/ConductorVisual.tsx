@@ -125,7 +125,10 @@ export default function ConductorVisual({
             ctx.clearRect(0, 0, width, height);
 
             // 1. Draw glowing background beat pulse
-            if (pulseIntensityRef.current > 0) {
+            if (reduceMotionRef.current) {
+                // No beat-rate flashing with reduced motion (WCAG 2.3).
+                pulseIntensityRef.current = 0;
+            } else if (pulseIntensityRef.current > 0) {
                 const gradient = ctx.createRadialGradient(
                     width / 2, height / 2, 10,
                     width / 2, height / 2, Math.max(width, height) / 1.5
@@ -409,7 +412,7 @@ export default function ConductorVisual({
                 ctx.shadowBlur = 0;
                 trailRef.current.forEach((t, idx) => {
                     t.alpha = trailAlpha(idx, trailRef.current.length);
-                    const size = 1.5 + (idx / trailRef.current.length) * 5.5;
+                    const size = 1.5 + t.alpha * 5.5;
 
                     ctx.beginPath();
                     ctx.arc(t.x, t.y, size, 0, Math.PI * 2);
