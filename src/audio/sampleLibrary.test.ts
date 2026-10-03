@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { loadSamples, trimBuffer } from './sampleLibrary';
+import { loadSamples, trimBuffer, stripLeadingSilence } from './sampleLibrary';
 
 const makeBuffer = (length: number, fill = 0.5) => {
     const data = new Float32Array(length).fill(fill);
@@ -99,6 +99,26 @@ describe('sampleLibrary', () => {
         it('defaults to ogg when canPlayType answers nothing or throws', async () => {
             expect((await urlsFor(() => '')).every(u => u.endsWith('.ogg'))).toBe(true);
             expect((await urlsFor(() => { throw new Error('boom'); })).every(u => u.endsWith('.ogg'))).toBe(true);
+        });
+    });
+
+    describe('stripLeadingSilence', () => {
+        it('removes leading near-silence', () => {
+            const src = makeBuffer(1000, 0);
+            src.getChannelData(0).fill(0.5, 30);
+            const out = stripLeadingSilence(makeContext(), src);
+            expect(out.length).toBe(970);
+            expect(out.getChannelData(0)[0]).toBeCloseTo(0.5);
+        });
+
+        it('caps the amount removed at 50 ms', () => {
+            const out = stripLeadingSilence(makeContext(), makeBuffer(1000, 0));
+            expect(out.length).toBe(950); // sampleRate 1000 -> 50 samples
+        });
+
+        it('returns the same buffer when the attack is immediate', () => {
+            const src = makeBuffer(100, 0.5);
+            expect(stripLeadingSilence(makeContext(), src)).toBe(src);
         });
     });
 

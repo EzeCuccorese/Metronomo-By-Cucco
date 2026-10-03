@@ -24,21 +24,10 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       workbox: {
-        // Samples ship as ogg + m4a but each device only plays one of them, so they are not
-        // precached (that would download both). They are cached on first use instead.
-        globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2,webmanifest}'],
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/audio/'),
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'audio-samples',
-              expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] }
-            }
-          }
-        ]
+        // Both sample formats are precached (a few hundred KB each) so every instrument sounds
+        // offline right after install, whichever format the browser ends up picking.
+        globPatterns: ['**/*.{js,css,html,svg,png,webp,ogg,m4a,woff2,webmanifest}'],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024
       },
       manifest: {
         name: 'Metrónomo by Cucco',

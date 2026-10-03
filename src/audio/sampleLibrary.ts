@@ -124,6 +124,25 @@ export function trimBuffer(context: BaseAudioContext, buffer: AudioBuffer, thres
     return trimmedBuffer;
 }
 
+/**
+ * Removes leading near-silence (|x| < threshold across all channels), capped at `maxSeconds`.
+ * Guards against decoders that keep AAC encoder priming (~44 ms) instead of honouring the
+ * file's edit list: a drum hit must land on the grid, not a few tens of ms late.
+ * Returns the same buffer when there is nothing to strip.
+ */
+export function stripLeadingSilence(context: BaseAudioContext, buffer: AudioBuffer, threshold = 0.001, maxSeconds = 0.05): AudioBuffer {
+    const maxSkip = Math.min(buffer.length - 1, Math.floor(maxSeconds * buffer.sampleRate));
+    const channels: Float32Array[] = [];
+    for (let ch = 0; ch < buffer.numberOfChannels; ch++) channels.push(buffer.getChannelData(ch));
+    let skip = 0;
+    while (skip < maxSkip && channels.every(data => Math.abs(data[skip]) < threshold)) skip++;
+    if (skip === 0) return buffer;
+
+    const out = context.createBuffer(buffer.numberOfChannels, buffer.length - skip, buffer.sampleRate);
+    channels.forEach((data, ch) => out.getChannelData(ch).set(data.subarray(skip)));
+    return out;
+}
+
 /** Adds the trimmed versions of the raw recordings present in `buffers`. */
 export function addTrimmedSamples(context: BaseAudioContext, buffers: Map<string, AudioBuffer>): void {
     TRIMS.forEach(({ from, to, threshold, seconds }) => {
@@ -140,7 +159,12 @@ export function loadSamples(context: BaseAudioContext): Promise<Map<string, Audi
             const buffers = new Map<string, AudioBuffer>();
             const formats = sampleFormats();
             const decoded = await Promise.all(SAMPLE_ASSETS.map(a => loadSample(context, a.base, formats)));
-            decoded.forEach((buffer, i) => { if (buffer) buffers.set(SAMPLE_ASSETS[i].name, buffer); });
+            decoded.forEach((buffer, i) => {
+                if (!buffer) return;
+                const { name } = SAMPLE_ASSETS[i];
+                // Raw recordings are aligned to their attack by trimBuffer instead.
+                buffers.set(name, name.endsWith('_raw') ? buffer : stripLeadingSilence(context, buffer));
+            });
             addTrimmedSamples(context, buffers);
             return buffers;
         })();
