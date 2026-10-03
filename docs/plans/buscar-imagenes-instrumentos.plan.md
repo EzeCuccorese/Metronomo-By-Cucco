@@ -1,3 +1,5 @@
+> **Estado:** Completado (2026-10). Commits `5bdcc66`, `d55fb23`, `3ac9b2c`. Las imágenes viven en `public/instruments/` y `public/genres/` (no en `public/assets/...` como dice el plan), y `clave.webp` se llama hoy `claves.webp`. El mapeo está en `src/constants/instrumentAssets.ts`.
+
 # Plan: Imágenes Reales para el Metrónomo y Biblioteca Visual de Ritmos
 
 Este plan propone enriquecer visualmente el metrónomo interactivo reemplazando los gráficos vectoriales actuales por imágenes reales de alta calidad de los instrumentos musicales, y mejorando la interfaz general con portadas temáticas para los distintos géneros rítmicos.

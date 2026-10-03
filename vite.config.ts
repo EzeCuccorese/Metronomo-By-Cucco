@@ -59,8 +59,7 @@ export default defineConfig({
         codeSplitting: {
           groups: [
             { name: 'vendor', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
-            { name: 'mui', test: /node_modules[\\/](@mui|@emotion)[\\/]/ },
-            { name: 'lucide', test: /node_modules[\\/]lucide-react[\\/]/ }
+            { name: 'mui', test: /node_modules[\\/](@mui|@emotion)[\\/]/ }
           ]
         }
       }

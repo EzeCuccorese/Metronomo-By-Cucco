@@ -1,3 +1,5 @@
+> **Estado:** Completado (2026-10). Commit `b413173` (cuatro fases implementadas, con tests de regresión y E2E), más `63f51c7` (actualización de dependencias). Ver la tabla de implementación incluida en el plan. El Dockerfile usa Node 24, por encima de lo propuesto (`node:22`).
+
 # Auditoría crítica y plan de mejoras — Metrónomo by Cucco
 
 Fecha: 2026-10-02 · Rama base: `claude/nice-dirac-8kunr0` (commit `400fbe9`)

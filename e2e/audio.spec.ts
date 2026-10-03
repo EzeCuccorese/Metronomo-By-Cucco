@@ -2,7 +2,7 @@ import { test, expect, openApp, play, stop, selectPreset, setBpm, setMuted, AUDI
 
 /**
  * These tests listen to the real Web Audio output of the production bundle.
- * Each one maps to a bug found in the audit (see .plans/auditoria-critica-y-plan-de-mejoras.plan.md).
+ * Each one maps to a bug found in the audit (see docs/plans/auditoria-critica-y-plan-de-mejoras.plan.md).
  */
 test.describe('audio output', () => {
     test('C1 · the Metronome preset clicks on every beat', async ({ page, probe }) => {
@@ -14,12 +14,16 @@ test.describe('audio output', () => {
         await play(page);
         const t0 = await probe.now();
         await probe.listen(2.2);
+        // Every beat is heard...
         const onsets = await probe.onsetsAbove(AUDIBLE, t0, t0 + 2.2);
         expect(onsets.length).toBeGreaterThanOrEqual(4);
-        // Beats at ♩=120 are 0.5 s apart.
-        const gaps = onsets.slice(1).map((t, i) => t - onsets[i]);
-        gaps.forEach(g => expect(g).toBeGreaterThan(0.45));
-        gaps.forEach(g => expect(g).toBeLessThan(0.55));
+        // ...and scheduled exactly on the grid: beats at ♩=120 are 0.5 s apart. The timing is
+        // checked on the scheduled start times because the peak sampler only resolves onsets
+        // to ~±20 ms (5 ms polling of a 512-sample analyser window), which made a tight
+        // window on measured onsets flaky in CI.
+        const beats = await probe.startTimes('OscillatorNode', t0, t0 + 2.2);
+        expect(beats.length).toBeGreaterThanOrEqual(4);
+        beats.slice(1).forEach((t, i) => expect(t - beats[i]).toBeCloseTo(0.5, 3));
     });
 
     test('C4 · Candombe drums are audible even with the clave muted', async ({ page, probe }) => {
