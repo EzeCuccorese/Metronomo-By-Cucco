@@ -60,7 +60,6 @@ export function synthBomboAro(host: VoiceHost, time: number, velocity: number): 
 /** Clave: noise impulse exciting two narrow bandpass resonances. */
 export function synthClave(host: VoiceHost, time: number, velocity: number): void {
     if (!host.noiseBuffer) return;
-    if (!host.noiseBuffer) return;
 
     const impulseSource = host.context.createBufferSource();
     impulseSource.buffer = host.noiseBuffer;
