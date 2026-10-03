@@ -73,6 +73,8 @@ npm run test:e2e       # Playwright contra el build de producción
 npm run check          # todo lo anterior
 ```
 
+La app requiere un contexto seguro (`crypto.randomUUID`, Web Audio, service worker): funciona en HTTPS, en Capacitor (`capacitor://localhost`) y en `localhost`. Para probar en un teléfono por LAN, `http://192.168.x.x` no es un contexto seguro; usá la app dentro de Capacitor, un túnel HTTPS o el hosting HTTPS de la PWA.
+
 ### Tests
 
 - **Unitarios e integración (Vitest).** Cubren el Scheduler (timing, cambios de patrón, trainer, silencios y formas), los sintetizadores (ruteo, corte de voces), los hooks, la persistencia y la app completa con un motor simulado.

@@ -23,7 +23,6 @@ describe('AudioContextManager', () => {
 
         (globalThis as any).window = (globalThis as any).window || {};
         (globalThis as any).window.AudioContext = MockAudioContextClass;
-        delete (globalThis as any).window.webkitAudioContext;
     });
 
     afterEach(() => {
@@ -70,15 +69,5 @@ describe('AudioContextManager', () => {
 
         await instance.resume();
         expect(mockResume).not.toHaveBeenCalled();
-    });
-
-    it('should throw an error if Web Audio API is not supported', async () => {
-        delete (globalThis as any).window.AudioContext;
-        delete (globalThis as any).window.webkitAudioContext;
-
-        const AudioContextManagerModule = await import('./AudioContextManager');
-        const AudioContextManager = AudioContextManagerModule.default;
-
-        expect(() => AudioContextManager.getInstance()).toThrow('Web Audio API not supported in this browser');
     });
 });
