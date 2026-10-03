@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 export type TimerMode = 'pomodoro' | 'break';
 
@@ -6,7 +6,7 @@ export const DURATIONS = { pomodoro: 25 * 60, break: 5 * 60 } as const;
 const TICK_MS = 250;
 
 export const formatTime = (seconds: number) => {
-    const total = Math.max(0, Math.floor(seconds));
+    const total = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
     const m = Math.floor(total / 60);
     const s = total % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
@@ -24,7 +24,8 @@ export function usePomodoro(onComplete?: (mode: TimerMode) => void) {
     const [isActive, setIsActive] = useState(false);
     const endTimeRef = useRef(0);
     const latest = useRef({ timeLeft, mode, onComplete });
-    useEffect(() => {
+    // Layout effect: runs before any passive effect, so the interval effect never reads a stale snapshot.
+    useLayoutEffect(() => {
         latest.current = { timeLeft, mode, onComplete };
     });
 

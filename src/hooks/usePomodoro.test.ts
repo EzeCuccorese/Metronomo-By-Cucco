@@ -149,6 +149,7 @@ describe('usePomodoro', () => {
 describe('formatTime', () => {
     it('pads minutes and seconds', () => {
         expect(formatTime(0)).toBe('00:00');
+        expect(formatTime(NaN)).toBe('00:00');
         expect(formatTime(65)).toBe('01:05');
         expect(formatTime(1500)).toBe('25:00');
     });
