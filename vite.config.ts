@@ -52,6 +52,8 @@ export default defineConfig({
     headers: productionSecurityHeaders()
   },
   build: {
+    // Only the latest Safari (iOS/macOS) and Chrome are supported: no transpilation or polyfills.
+    target: 'esnext',
     // Vite 8 bundles with Rolldown: vendor splitting is declared as code-splitting groups.
     rolldownOptions: {
       output: {
