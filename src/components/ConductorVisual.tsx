@@ -294,7 +294,7 @@ export default function ConductorVisual({
             const smoothStep = smoothStepPosition(live.currentStepIndex, elapsedMs, durationMs, reduceMotionRef.current);
             const sub = live.pattern.subdivision;
 
-            if (liveRef.current.pattern.grooveType === 'chacarera_poliritmica') {
+            if (live.pattern.grooveType === 'chacarera_poliritmica') {
                 // --- CHACARERA POLIRITMICA DOUBLE-SPARK VISUALIZER (HEMIOLA) ---
 
                 // 1. 3/4 feel triangle path
@@ -384,7 +384,7 @@ export default function ConductorVisual({
 
             } else {
                 // --- STANDARD SINGLE-SPARK GEOMETRIC CONDUCTOR PATH ---
-                const points = conductorPath(liveRef.current.beats, w, h);
+                const points = conductorPath(live.beats, w, h);
 
                 // Draw full background geometric path (faint guide lines)
                 ctx.strokeStyle = 'rgba(229, 169, 95, 0.08)';
@@ -399,7 +399,7 @@ export default function ConductorVisual({
                 ctx.stroke();
                 ctx.setLineDash([]); // Reset dash
 
-                const stepsPerBeatLocal = sub / liveRef.current.beats;
+                const stepsPerBeatLocal = sub / live.beats;
                 const { x: particleX, y: particleY } = pathPosition(points, smoothStep / stepsPerBeatLocal);
 
                 // Add particle to trail
