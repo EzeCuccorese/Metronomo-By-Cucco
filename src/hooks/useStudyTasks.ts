@@ -29,10 +29,11 @@ export const isTaskList = (v: unknown): v is Task[] => Array.isArray(v) && v.eve
 const isNullableString = (v: unknown): v is string | null => v === null || isString(v);
 
 /** Collision-free id; falls back to a timestamp scheme where randomUUID is unavailable. */
+let fallbackCounter = 0;
 const newId = (suffix: string | number): string =>
     typeof globalThis.crypto?.randomUUID === 'function'
         ? globalThis.crypto.randomUUID()
-        : Date.now() + '-' + suffix;
+        : `${Date.now()}-${++fallbackCounter}-${suffix}`;
 
 /**
  * Persistent study plan: task list + the task that earns pomodoros.

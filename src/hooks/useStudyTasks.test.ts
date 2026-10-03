@@ -32,10 +32,10 @@ describe('useStudyTasks', () => {
         vi.unstubAllGlobals();
         expect(ok).toBe(true);
         expect(result.current.tasks).toEqual([{
-            id: '1700000000000-t', title: 'Escalas', estimatedPomodoros: 1, completedPomodoros: 0, isCompleted: false,
+            id: expect.stringMatching(/^1700000000000-\d+-t$/), title: 'Escalas', estimatedPomodoros: 1, completedPomodoros: 0, isCompleted: false,
             subtasks: [
-                { id: '1700000000000-0', title: 'Mayores', completed: false },
-                { id: '1700000000000-1', title: 'Arpegios', completed: false },
+                { id: expect.stringMatching(/^1700000000000-\d+-0$/), title: 'Mayores', completed: false },
+                { id: expect.stringMatching(/^1700000000000-\d+-1$/), title: 'Arpegios', completed: false },
             ],
         }]);
     });
