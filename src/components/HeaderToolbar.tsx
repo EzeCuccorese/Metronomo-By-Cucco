@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Button,
@@ -9,61 +9,120 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  TextField,
+  Tooltip
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import SpeedIcon from '@mui/icons-material/Speed';
 import LibraryMusicIcon from '@mui/icons-material/LibraryMusic';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
+import { CUSTOM_PATTERN_ID } from '../rhythms/patternLibrary';
+import { MAX_BPM, MIN_BPM, clampBpm, isCompoundMeter } from '../rhythms/meter';
+import type { TimeSignature } from '../rhythms/meter';
+import { usePlayback } from '../state/PlaybackContext';
 
 export interface HeaderToolbarProps {
   isPlaying: boolean;
   bpm: number;
+  timeSignature: TimeSignature;
   onBpmChange: (newBpm: number) => void;
   onTogglePlay: () => void;
   onTapTempo: () => void;
   onOpenLibrary: () => void;
   selectedPatternId: string;
-  queuedPatternId: string | null;
   availablePresets: RhythmPattern[];
   onSelectPreset: (patternId: string) => void;
+  /** The speed trainer owns the tempo while it runs. */
+  tempoLocked?: boolean;
 }
+
+/** Text field that only commits a BPM on blur/Enter, so typing "1" on the way to "120" is harmless. */
+const BpmInput: React.FC<{ bpm: number; disabled?: boolean; onCommit: (bpm: number) => void }> = ({ bpm, disabled, onCommit }) => {
+  const [draft, setDraft] = useState(String(bpm));
+  const [shownBpm, setShownBpm] = useState(bpm);
+  if (shownBpm !== bpm) {
+    // External tempo change (slider, tap, trainer): reflect it in the field.
+    setShownBpm(bpm);
+    setDraft(String(bpm));
+  }
+
+  const commit = () => {
+    const value = Number(draft);
+    if (draft.trim() !== '' && Number.isFinite(value)) {
+      onCommit(value);
+      setDraft(String(clampBpm(value)));
+    } else {
+      setDraft(String(bpm));
+    }
+  };
+
+  return (
+    <TextField
+      value={draft}
+      disabled={disabled}
+      onChange={(e) => setDraft(e.target.value.replace(/[^\d]/g, '').slice(0, 3))}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+      variant="standard"
+      slotProps={{
+        htmlInput: {
+          inputMode: 'numeric',
+          'aria-label': 'Tempo en BPM',
+          'data-testid': 'bpm-input',
+          style: { textAlign: 'center', width: '3.2ch' }
+        }
+      }}
+      sx={{
+        '& input': { fontWeight: 900, fontFamily: '"Share Tech Mono", monospace', color: '#e5a95f', fontSize: '1.5rem', lineHeight: 1, p: 0 },
+        '& .MuiInput-underline:before': { borderBottomColor: 'transparent' },
+      }}
+    />
+  );
+};
 
 export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
   isPlaying,
   bpm,
+  timeSignature,
   onBpmChange,
   onTogglePlay,
   onTapTempo,
   onOpenLibrary,
   selectedPatternId,
-  queuedPatternId,
   availablePresets,
-  onSelectPreset
+  onSelectPreset,
+  tempoLocked = false
 }) => {
+  const queuedPatternId = usePlayback(s => s.queuedPatternId);
+  const compound = isCompoundMeter(timeSignature);
+
   return (
-    <Paper 
-      className="brass-trim" 
-      elevation={6} 
-      sx={{ 
-        p: 1.5, 
-        mb: 1.5, 
-        borderRadius: 4, 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: 2.5, 
+    <Paper
+      component="header"
+      className="brass-trim"
+      elevation={6}
+      sx={{
+        p: 1.5,
+        mb: 1.5,
+        borderRadius: 4,
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: { xs: 1.5, md: 2.5 },
         bgcolor: '#13110f',
         boxShadow: '0 6px 16px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,255,255,0.02)'
       }}
     >
       {/* Title & Queue indicator */}
-      <Box sx={{ mr: 'auto', display: 'flex', flexDirection: 'column', gap: 0.2 }}>
-        <Stack direction="row" alignItems="center" spacing={1.5}>
-          <Typography 
-            variant="h6" 
-            fontWeight="900" 
-            sx={{ 
+      <Box sx={{ mr: 'auto', display: 'flex', flexDirection: 'column', gap: 0.2, minWidth: 0 }}>
+        <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap>
+          <Typography
+            variant="h6"
+            component="h1"
+            fontWeight="900"
+            sx={{
               background: 'linear-gradient(135deg, #ffd54f 0%, #e5a95f 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
@@ -75,9 +134,11 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           >
             METRÓNOMO PRO
           </Typography>
-          
+
           {queuedPatternId && (
             <Box
+              role="status"
+              data-testid="queued-pattern"
               sx={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -92,6 +153,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
                   '50%': { opacity: 1.0, transform: 'scale(1.02)', boxShadow: '0 0 10px rgba(255, 109, 0, 0.4)' }
                 },
                 animation: 'blinkQueue 0.8s infinite ease-in-out',
+                '@media (prefers-reduced-motion: reduce)': { animation: 'none' }
               }}
             >
               <Box sx={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: '#ff6d00' }} />
@@ -101,14 +163,14 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
             </Box>
           )}
         </Stack>
-        
+
         <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem', letterSpacing: '0.08em', fontWeight: 600 }}>
           ESTUDIO RÍTMICO & ENTRENADOR | BY CUCCO
         </Typography>
       </Box>
 
       {/* Preset Selector Dropdown & Visual Library Button */}
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
         <Button
           variant="outlined"
           color="primary"
@@ -137,6 +199,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
             value={selectedPatternId}
             label="Ritmo Predefinido"
             onChange={(e) => onSelectPreset(e.target.value)}
+            data-testid="preset-select"
             sx={{
               bgcolor: 'rgba(0,0,0,0.4)',
               borderRadius: 2,
@@ -146,8 +209,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
               '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(229,169,95,0.2)' }
             }}
           >
-            <MenuItem value="metronome"><em>Metrónomo Simple (4/4)</em></MenuItem>
-            <MenuItem value="custom"><em>Patrón Personalizado (Editor)</em></MenuItem>
+            <MenuItem value={CUSTOM_PATTERN_ID}><em>Patrón Personalizado (Editor)</em></MenuItem>
             {availablePresets.map((p) => (
               <MenuItem key={p.id} value={p.id}>
                 {p.name}
@@ -160,21 +222,23 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
       {/* BPM Controls & Tap Tempo */}
       <Stack direction="row" alignItems="center" spacing={2} sx={{ bgcolor: 'rgba(0,0,0,0.3)', px: 2, py: 0.8, borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 70 }}>
-          <Typography variant="h5" sx={{ fontWeight: 900, fontFamily: '"Share Tech Mono", monospace', color: '#e5a95f', lineHeight: 1 }}>
-            {bpm}
-          </Typography>
-          <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary', fontWeight: 700, letterSpacing: '0.1em' }}>
-            BPM
-          </Typography>
+          <BpmInput bpm={bpm} disabled={tempoLocked} onCommit={onBpmChange} />
+          <Tooltip title={compound ? `En ${timeSignature[0]}/${timeSignature[1]} el pulso con puntillo (♩.) va a ${Math.round(bpm * 2 / 3)}` : 'Pulsos de negra por minuto'}>
+            <Typography variant="caption" data-testid="bpm-unit" sx={{ fontSize: '0.6rem', color: 'text.secondary', fontWeight: 700, letterSpacing: '0.1em' }}>
+              ♩ BPM{compound ? ` · ♩.=${Math.round(bpm * 2 / 3)}` : ''}
+            </Typography>
+          </Tooltip>
         </Box>
 
         <Slider
           value={bpm}
-          min={40}
-          max={280}
+          min={MIN_BPM}
+          max={MAX_BPM}
+          disabled={tempoLocked}
           onChange={(_, val) => onBpmChange(val as number)}
+          aria-label="Tempo"
           sx={{
-            width: 110,
+            width: { xs: 90, sm: 110 },
             color: '#e5a95f',
             '& .MuiSlider-thumb': {
               width: 14,
@@ -188,7 +252,9 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           variant="contained"
           size="small"
           onClick={onTapTempo}
+          disabled={tempoLocked}
           startIcon={<SpeedIcon />}
+          aria-label="Tap tempo (tecla T)"
           sx={{
             bgcolor: 'rgba(229, 169, 95, 0.15)',
             color: '#e5a95f',
@@ -212,6 +278,9 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
       <Button
         variant="contained"
         onClick={onTogglePlay}
+        aria-pressed={isPlaying}
+        aria-label={isPlaying ? 'Detener (Espacio)' : 'Iniciar (Espacio)'}
+        data-testid="play-toggle"
         startIcon={isPlaying ? <StopIcon sx={{ fontSize: 28 }} /> : <PlayArrowIcon sx={{ fontSize: 28 }} />}
         sx={{
           height: 48,
@@ -220,23 +289,23 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           fontWeight: 900,
           fontSize: '0.95rem',
           letterSpacing: '0.08em',
-          background: isPlaying 
-            ? 'linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%)' 
+          background: isPlaying
+            ? 'linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%)'
             : 'linear-gradient(135deg, #ffd54f 0%, #e5a95f 100%)',
           color: isPlaying ? '#ffffff' : '#181512',
-          boxShadow: isPlaying 
-            ? '0 0 20px rgba(211, 47, 47, 0.5)' 
+          boxShadow: isPlaying
+            ? '0 0 20px rgba(211, 47, 47, 0.5)'
             : '0 0 20px rgba(229, 169, 95, 0.4)',
           transition: 'all 0.15s ease-in-out',
           '&:hover': {
             transform: 'scale(1.03)',
-            background: isPlaying 
-              ? 'linear-gradient(135deg, #f44336 0%, #c62828 100%)' 
+            background: isPlaying
+              ? 'linear-gradient(135deg, #f44336 0%, #c62828 100%)'
               : 'linear-gradient(135deg, #ffe082 0%, #ffb74d 100%)',
           }
         }}
       >
-        {isPlaying ? 'PAUSAR' : 'INICIAR'}
+        {isPlaying ? 'DETENER' : 'INICIAR'}
       </Button>
     </Paper>
   );

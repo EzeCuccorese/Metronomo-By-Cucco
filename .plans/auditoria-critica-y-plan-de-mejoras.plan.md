@@ -6,6 +6,24 @@ Estado medido: `npm run lint` limpio, `tsc -b` limpio, `vitest` 58/58 en verde c
 
 **Veredicto:** los indicadores verdes son engañosos. La cobertura excluye `App.tsx` y todo `src/components/**` (≈ 4.000 líneas), y los dos hooks con tests (`useMetronomeAudio`, `usePresetManager`) **no se usan en ninguna parte**. Los bugs más graves están justo en el código que no se testea: la integración UI ↔ Scheduler.
 
+## Estado de implementación
+
+Las cuatro fases están implementadas en la rama `claude/nice-dirac-8kunr0`. Cada bug crítico tiene un test de regresión: unitario en Vitest y/o E2E en Playwright, que escucha la salida real de Web Audio.
+
+| Ítem | Estado | Cómo se verifica |
+|------|--------|------------------|
+| C1 click muteado en Metrónomo | ✅ | `MixerConsole.test.tsx`, `e2e/audio.spec.ts` (onsets cada 0.5 s a ♩=120) |
+| C2/C3 ediciones ignoradas o revertidas | ✅ | `Scheduler.test.ts` (hot-swap), `useMetronomeEngine.test.ts`, E2E en vivo |
+| C4 candombe mudo | ✅ | `DrumSynthesizer.test.ts` (todo instrumento de preset llega a su canal), E2E |
+| C5 trainer/silencio/formas sin UI | ✅ | Nuevo `PracticeModes`, `App.test.tsx`, E2E |
+| C6 compases no contados | ✅ | `Scheduler.test.ts`, E2E |
+| C7 fugas (StrictMode, workers, rAF) | ✅ | `Scheduler.dispose()`, `App.test.tsx` (unmount libera el motor) |
+| A1 stop no corta | ✅ | `VoiceTracker` + fades, E2E (silencio < 80 ms tras detener) |
+| A2–A12 timing, compuestos, sampleRate, iOS, bus del click, mute, ruteo | ✅ | `Scheduler.test.ts`, `meter.test.ts`, `DrumSynthesizer.test.ts` |
+| Arquitectura, rendimiento, persistencia | ✅ | Store externo + `useSyncExternalStore`, `usePersistentState` validado |
+| PWA, nginx, Docker, CI, README | ✅ | E2E PWA, `nginx -t`, workflow `ci.yml` |
+| Bugs extra encontrados al implementar | ✅ | 6/8 del editor era `[2,8]`, "negras" ignoraba el tempo, `zamba_base` no sonaba, mutación de estado en la armonía, side effects dentro de `setState` en el Pomodoro, `alert()` bloqueantes |
+
 ---
 
 ## 1. Bugs críticos (rompen funcionalidad visible)

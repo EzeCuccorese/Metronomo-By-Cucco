@@ -6,9 +6,6 @@
  * Incluye preajustes para ritmos del currículo de la EMPA.
  */
 
-import React from 'react';
-import { Drum, CircleDot, Triangle, Music, Zap, Hexagon, Circle, Disc } from 'lucide-react';
-
 export type InstrumentType =
     'kick' | 'snare' | 'hihat' | 'ride' |
     'tom_high' | 'tom_low' | 'tom_floor' |
@@ -16,31 +13,6 @@ export type InstrumentType =
     'bombo_leguero' |
     'click' | 'shaker' | 'clave' | 'rim' | 'surdo' | 'hihat_foot' |
     'caja' | 'cajon' | 'palmas' | 'candombe_chico' | 'candombe_repique' | 'candombe_piano';
-
-// Map of Icons
-export const InstrumentIcons: Record<InstrumentType, React.ComponentType<{ className?: string; size?: number; strokeWidth?: number; color?: string }>> = {
-    kick: CircleDot,
-    snare: Drum,
-    hihat: Triangle,
-    ride: Disc,
-    tom_high: Circle,
-    tom_low: Circle,
-    tom_floor: Circle,
-    crash: Hexagon,
-    bombo_leguero: Drum,
-    click: Circle,
-    shaker: Zap,
-    clave: Music,
-    rim: CircleDot,
-    surdo: CircleDot,
-    hihat_foot: Triangle,
-    caja: Drum,
-    cajon: Hexagon,
-    palmas: CircleDot,
-    candombe_chico: Drum,
-    candombe_repique: Drum,
-    candombe_piano: Drum
-};
 
 export interface RhythmStep {
     step: number; // 1-indexed step in the grid

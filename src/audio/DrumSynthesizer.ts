@@ -1,4 +1,7 @@
 import AudioContextManager from './AudioContextManager';
+import { CHANNEL_IDS, INSTRUMENT_CHANNEL } from './instrumentChannels';
+import type { ChannelId } from './instrumentChannels';
+import { VoiceTracker } from './VoiceTracker';
 
 /**
  * Synthesizes drum sounds using oscillators and noise buffers.
@@ -13,11 +16,15 @@ class DrumSynthesizer {
     private masterGain: GainNode;
     private ambienceFilter: BiquadFilterNode;
     private saturator: WaveShaperNode;
+    // Transport gains sit between the mixer strips and the outputs so stop() can fade everything at once.
+    private drumTransport: GainNode;
+    private clickTransport: GainNode;
+    private voices = new VoiceTracker();
     private audioBuffers: Map<string, AudioBuffer> = new Map();
     public loadPromise: Promise<void> | null = null;
 
     // Multi-channel mixer strips
-    private channels: Record<string, { gain: GainNode; panner: StereoPannerNode; originalVolume: number; isMuted: boolean }> = {};
+    private channels = {} as Record<ChannelId, { gain: GainNode; panner: StereoPannerNode; originalVolume: number; isMuted: boolean }>;
 
     // Node Pools
     private gainPool: GainNode[] = [];
@@ -62,18 +69,25 @@ class DrumSynthesizer {
         this.saturator.connect(this.ambienceFilter);
         this.ambienceFilter.connect(this.context.destination);
 
+        this.drumTransport = this.context.createGain();
+        this.drumTransport.connect(this.masterGain);
+
+        // The guide click bypasses saturation/EQ: it must stay a clean, precise transient.
+        this.clickTransport = this.context.createGain();
+        this.clickTransport.gain.value = 0.85;
+        this.clickTransport.connect(this.context.destination);
+
         // Initialize Mixer Channels
-        const channelNames = ['bombo', 'clave', 'shaker', 'kick', 'snare', 'hihat', 'click', 'synth'];
-        channelNames.forEach(name => {
+        CHANNEL_IDS.forEach(name => {
             const gainNode = this.context.createGain();
             gainNode.gain.value = 1.0;
 
             const pannerNode = this.context.createStereoPanner();
             pannerNode.pan.value = 0.0;
 
-            // Route: gainNode -> pannerNode -> masterGain
+            // Route: gainNode -> pannerNode -> transport
             gainNode.connect(pannerNode);
-            pannerNode.connect(this.masterGain);
+            pannerNode.connect(name === 'click' ? this.clickTransport : this.drumTransport);
 
             this.channels[name] = {
                 gain: gainNode,
@@ -91,7 +105,7 @@ class DrumSynthesizer {
     }
 
     public getChannelNode(name: string): AudioNode {
-        const chan = this.channels[name];
+        const chan = this.channels[name as ChannelId];
         if (chan) {
             return chan.gain;
         }
@@ -99,7 +113,7 @@ class DrumSynthesizer {
     }
 
     public setChannelVolume(name: string, volume: number) {
-        const chan = this.channels[name];
+        const chan = this.channels[name as ChannelId];
         if (chan) {
             chan.originalVolume = volume;
             if (!chan.isMuted) {
@@ -109,21 +123,59 @@ class DrumSynthesizer {
     }
 
     public setChannelPan(name: string, pan: number) {
-        const chan = this.channels[name];
+        const chan = this.channels[name as ChannelId];
         if (chan) {
             chan.panner.pan.setValueAtTime(pan, this.context.currentTime);
         }
     }
 
     public setChannelMute(name: string, isMuted: boolean) {
-        const chan = this.channels[name];
+        const chan = this.channels[name as ChannelId];
         if (chan) {
             chan.isMuted = isMuted;
             chan.gain.gain.setValueAtTime(isMuted ? 0 : chan.originalVolume, this.context.currentTime);
         }
     }
 
-    private connectVoiceToChannel(voiceNode: AudioNode, channelName: string) {
+    /**
+     * Cuts every scheduled or ringing voice with a short fade (no clicks), then restores the transport.
+     * (ES) Corta todas las voces agendadas o sonando con un fade corto.
+     */
+    public silence(fadeSeconds: number = 0.012) {
+        const now = this.context.currentTime;
+        [this.drumTransport, this.clickTransport].forEach(t => {
+            const level = t === this.clickTransport ? 0.85 : 1.0;
+            t.gain.cancelScheduledValues(now);
+            t.gain.setValueAtTime(level, now);
+            t.gain.linearRampToValueAtTime(0, now + fadeSeconds);
+            t.gain.setValueAtTime(level, now + fadeSeconds + 0.005);
+        });
+        this.voices.stopAll(now + fadeSeconds);
+    }
+
+    public get activeVoiceCount(): number {
+        return this.voices.size;
+    }
+
+    public dispose() {
+        this.voices.stopAll(this.context.currentTime);
+        Object.values(this.channels).forEach(ch => {
+            ch.gain.disconnect();
+            ch.panner.disconnect();
+        });
+        this.drumTransport.disconnect();
+        this.clickTransport.disconnect();
+        this.masterGain.disconnect();
+        this.saturator.disconnect();
+        this.ambienceFilter.disconnect();
+    }
+
+    private startVoice(node: AudioScheduledSourceNode, time: number) {
+        node.start(time);
+        this.voices.add(node);
+    }
+
+    private connectVoiceToChannel(voiceNode: AudioNode, channelName: ChannelId) {
         const chanNode = this.getChannelNode(channelName);
         voiceNode.connect(chanNode);
     }
@@ -297,18 +349,18 @@ class DrumSynthesizer {
         return trimmedBuffer;
     }
 
-    private playBuffer(bufferName: string, channelName: string, time: number, velocity: number, pitchRate: number = 1.0): boolean {
+    private playBuffer(bufferName: string, channelName: ChannelId, time: number, velocity: number, pitchRate: number = 1.0): boolean {
         const buffer = this.audioBuffers.get(bufferName);
         if (!buffer) {
             return false;
         }
 
+        const channel = this.channels[channelName];
+        if (channel.isMuted) return true;
+
         const source = this.context.createBufferSource();
         source.buffer = buffer;
         source.playbackRate.setValueAtTime(pitchRate, time);
-
-        const channel = this.channels[channelName];
-        if (!channel || channel.isMuted) return true;
 
         const gainNode = this.context.createGain();
         const gainVal = Math.pow(velocity, 1.5); // Fixed: do not scale by channel.originalVolume twice!
@@ -317,7 +369,7 @@ class DrumSynthesizer {
         source.connect(gainNode);
         gainNode.connect(channel.gain);
 
-        source.start(time);
+        this.startVoice(source, time);
         return true;
     }
 
@@ -566,7 +618,7 @@ class DrumSynthesizer {
      * Plays a Rock Kick Drum (Tight, punchy).
      */
     public playRockKick(time: number, velocity: number = 1.0) {
-        if (this.playBuffer('kick', 'kick', time, velocity)) return;
+        if (this.playBuffer('kick', INSTRUMENT_CHANNEL.kick, time, velocity)) return;
         const osc = this.context.createOscillator();
         const gain = this.getGain();
 
@@ -585,7 +637,7 @@ class DrumSynthesizer {
             this.releaseGain(gain);
         };
 
-        osc.start(time);
+        this.startVoice(osc, time);
         osc.stop(time + 0.5);
     }
 
@@ -596,7 +648,7 @@ class DrumSynthesizer {
         let bufName = 'tom_low';
         if (pitch > 180) bufName = 'tom_high';
         else if (pitch < 120) bufName = 'tom_floor';
-        const channelName = pitch > 180 ? 'snare' : 'kick';
+        const channelName = pitch > 180 ? INSTRUMENT_CHANNEL.tom_high : (pitch < 120 ? INSTRUMENT_CHANNEL.tom_floor : INSTRUMENT_CHANNEL.tom_low);
         if (this.playBuffer(bufName, channelName, time, velocity)) return;
 
         const osc = this.context.createOscillator();
@@ -617,7 +669,7 @@ class DrumSynthesizer {
             this.releaseGain(gain);
         };
 
-        osc.start(time);
+        this.startVoice(osc, time);
         osc.stop(time + 0.25);
     }
 
@@ -625,7 +677,7 @@ class DrumSynthesizer {
     * Plays a Surdo (Deep samba drum).
     */
     public playSurdo(time: number, velocity: number) {
-        if (this.playBuffer('surdo', 'bombo', time, velocity)) return;
+        if (this.playBuffer('surdo', INSTRUMENT_CHANNEL.surdo, time, velocity)) return;
         const osc = this.context.createOscillator();
         const gain = this.context.createGain();
 
@@ -639,7 +691,7 @@ class DrumSynthesizer {
         gain.gain.setValueAtTime(velocity, time);
         gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
 
-        osc.start(time);
+        this.startVoice(osc, time);
         osc.stop(time + 0.45);
     }
 
@@ -648,7 +700,7 @@ class DrumSynthesizer {
      * Sweep dynamic bandpass filtered white noise with push/pull alternate acoustics.
      */
     public playShaker(time: number, velocity: number) {
-        if (this.playBuffer('shaker_real', 'shaker', time, velocity)) return;
+        if (this.playBuffer('shaker_real', INSTRUMENT_CHANNEL.shaker, time, velocity)) return;
         if (!this.noiseBuffer) return;
 
         const source = this.context.createBufferSource();
@@ -687,12 +739,12 @@ class DrumSynthesizer {
             this.releaseGain(gain);
         };
 
-        source.start(time);
+        this.startVoice(source, time);
         source.stop(time + decay + 0.02);
     }
 
     public playCrash(time: number, velocity: number) {
-        if (this.playBuffer('ride', 'hihat', time, velocity, 1.35)) return;
+        if (this.playBuffer('ride', INSTRUMENT_CHANNEL.ride, time, velocity, 1.35)) return;
         if (!this.noiseBuffer) return;
 
         const source = this.context.createBufferSource();
@@ -711,7 +763,7 @@ class DrumSynthesizer {
         gain.gain.setValueAtTime(velocity * 0.8, time);
         gain.gain.exponentialRampToValueAtTime(0.01, time + 1.5); // Long decay
 
-        source.start(time);
+        this.startVoice(source, time);
         source.stop(time + 1.5);
     }
 
@@ -720,7 +772,7 @@ class DrumSynthesizer {
     * Improved: More complex metallic wash + high frequency stick impact.
     */
     public playRide(time: number, velocity: number) {
-        if (this.playBuffer('ride', 'hihat', time, velocity, 1.0)) return;
+        if (this.playBuffer('ride', INSTRUMENT_CHANNEL.ride, time, velocity, 1.0)) return;
         // A. Stick Impact - Sharp, high-frequency "ping" (Dry)
         const impact = this.context.createOscillator();
         const impactGain = this.getGain();
@@ -735,7 +787,7 @@ class DrumSynthesizer {
 
         impact.onended = () => this.releaseGain(impactGain);
 
-        impact.start(time);
+        this.startVoice(impact, time);
         impact.stop(time + 0.05);
 
         // B. The "Body" wash - Simulated edge hit using band-pass filtered noise
@@ -768,7 +820,7 @@ class DrumSynthesizer {
                 this.releaseGain(noiseGain);
             };
 
-            noise.start(time);
+            this.startVoice(noise, time);
             noise.stop(time + 1.2);
         });
 
@@ -787,7 +839,7 @@ class DrumSynthesizer {
 
         hum.onended = () => this.releaseGain(humGain);
 
-        hum.start(time);
+        this.startVoice(hum, time);
         hum.stop(time + 0.35);
     }
 
@@ -796,7 +848,7 @@ class DrumSynthesizer {
      * @param snaresOn If true (default), plays noise. If false, timbal-like tone.
      */
     public playRockSnare(time: number, velocity: number = 1.0, snaresOn: boolean = true) {
-        if (this.playBuffer('snare', 'snare', time, velocity)) return;
+        if (this.playBuffer('snare', INSTRUMENT_CHANNEL.snare, time, velocity)) return;
         // 1. Tonal component (Body)
         const osc = this.context.createOscillator();
         const oscGain = this.getGain();
@@ -812,7 +864,7 @@ class DrumSynthesizer {
         oscGain.gain.exponentialRampToValueAtTime(0.01, time + (snaresOn ? 0.2 : 0.15));
 
         osc.onended = () => this.releaseGain(oscGain);
-        osc.start(time);
+        this.startVoice(osc, time);
         osc.stop(time + 0.25);
 
         // 2. Noise component (Snares)
@@ -836,7 +888,7 @@ class DrumSynthesizer {
                 this.releaseGain(noiseGain);
             };
 
-            noise.start(time);
+            this.startVoice(noise, time);
             noise.stop(time + 0.25);
         }
     }
@@ -874,7 +926,7 @@ class DrumSynthesizer {
             this.releaseGain(gain);
         };
 
-        source.start(time);
+        this.startVoice(source, time);
         source.stop(time + decay);
     }
 
@@ -882,7 +934,7 @@ class DrumSynthesizer {
      * Plays a Hi-Hat Foot (Pedal "Chick").
      */
     public playHiHatFoot(time: number, velocity: number = 1.0) {
-        if (this.playBuffer('hihat', 'hihat', time, velocity * 0.7)) return;
+        if (this.playBuffer('hihat', INSTRUMENT_CHANNEL.hihat_foot, time, velocity * 0.7)) return;
         if (!this.noiseBuffer) return;
 
         const source = this.context.createBufferSource();
@@ -909,7 +961,7 @@ class DrumSynthesizer {
             this.releaseGain(gain);
         };
 
-        source.start(time);
+        this.startVoice(source, time);
         source.stop(time + decay);
     }
 
@@ -917,7 +969,7 @@ class DrumSynthesizer {
      * Plays the "Parche" (Head) sound of a Bombo Legüero.
      */
     public playBomboLegueroParche(time: number, velocity: number = 1.0) {
-        if (this.playBuffer('bombo_parche', 'bombo', time, velocity)) return;
+        if (this.playBuffer('bombo_parche', INSTRUMENT_CHANNEL.bombo_leguero, time, velocity)) return;
         if (!this.bomboBuffer) return;
 
         const source = this.context.createBufferSource();
@@ -943,12 +995,12 @@ class DrumSynthesizer {
             this.releaseGain(gain);
         };
 
-        source.start(time);
+        this.startVoice(source, time);
         source.stop(time + 1.0);
     }
 
     public playBomboLegueroAro(time: number, velocity: number = 1.0) {
-        if (this.playBuffer('bombo_aro', 'bombo', time, velocity)) return;
+        if (this.playBuffer('bombo_aro', INSTRUMENT_CHANNEL.rim, time, velocity)) return;
         if (!this.aroBuffer) return;
 
         const source = this.context.createBufferSource();
@@ -971,7 +1023,7 @@ class DrumSynthesizer {
             this.releaseGain(gain);
         };
 
-        source.start(time);
+        this.startVoice(source, time);
         source.stop(time + 0.5);
     }
 
@@ -979,7 +1031,7 @@ class DrumSynthesizer {
      * Plays a Clave sound.
      */
     public playClave(time: number, velocity: number = 1.0) {
-        if (this.playBuffer('clave', 'clave', time, velocity)) return;
+        if (this.playBuffer('clave', INSTRUMENT_CHANNEL.clave, time, velocity)) return;
         // High quality physical modeling of hardwood rosewood claves
         // Mode 1: 1800 Hz (Bandpass Q=25)
         // Mode 2: 2200 Hz (Bandpass Q=25)
@@ -1025,7 +1077,7 @@ class DrumSynthesizer {
         bp2.connect(mixGain2);
         mixGain2.connect(this.getChannelNode('clave'));
 
-        impulseSource.start(time);
+        this.startVoice(impulseSource, time);
         impulseSource.stop(time + 0.08);
 
         impulseSource.onended = () => {
@@ -1055,41 +1107,41 @@ class DrumSynthesizer {
         gain.gain.exponentialRampToValueAtTime(0.01, time + (forte ? 0.08 : 0.05));
 
         osc.onended = () => this.releaseGain(gain);
-        osc.start(time);
+        this.startVoice(osc, time);
         osc.stop(time + 0.1);
     }
 
     public playCaja(time: number, velocity: number = 1.0, modifier?: string) {
         const isAro = modifier === 'aro' || modifier === 'open';
         const pitch = isAro ? 1.45 : 1.0;
-        if (this.playBuffer('caja', 'snare', time, velocity, pitch)) return;
+        if (this.playBuffer('caja', INSTRUMENT_CHANNEL.caja, time, velocity, pitch)) return;
         this.playRockSnare(time, velocity * (isAro ? 0.75 : 1.0), false);
     }
 
     public playCajon(time: number, velocity: number = 1.0, modifier?: string) {
         const isAro = modifier === 'aro' || modifier === 'open';
         const pitch = isAro ? 1.55 : 1.0;
-        if (this.playBuffer('cajon', 'kick', time, velocity, pitch)) return;
+        if (this.playBuffer('cajon', INSTRUMENT_CHANNEL.cajon, time, velocity, pitch)) return;
         this.playRockKick(time, velocity * (isAro ? 0.65 : 1.0));
     }
 
     public playPalmas(time: number, velocity: number = 1.0) {
-        if (this.playBuffer('palmas', 'snare', time, velocity)) return;
+        if (this.playBuffer('palmas', INSTRUMENT_CHANNEL.palmas, time, velocity)) return;
         this.playRockSnare(time, velocity * 0.5, false);
     }
 
     public playCandombeChico(time: number, velocity: number = 1.0) {
-        if (this.playBuffer('candombe_chico', 'tom_high', time, velocity)) return;
+        if (this.playBuffer('candombe_chico', INSTRUMENT_CHANNEL.candombe_chico, time, velocity)) return;
         this.playTom(time, velocity, 200);
     }
 
     public playCandombeRepique(time: number, velocity: number = 1.0) {
-        if (this.playBuffer('candombe_repique', 'tom_low', time, velocity)) return;
+        if (this.playBuffer('candombe_repique', INSTRUMENT_CHANNEL.candombe_repique, time, velocity)) return;
         this.playTom(time, velocity, 150);
     }
 
     public playCandombePiano(time: number, velocity: number = 1.0) {
-        if (this.playBuffer('candombe_piano', 'tom_floor', time, velocity)) return;
+        if (this.playBuffer('candombe_piano', INSTRUMENT_CHANNEL.candombe_piano, time, velocity)) return;
         this.playTom(time, velocity, 100);
     }
 }

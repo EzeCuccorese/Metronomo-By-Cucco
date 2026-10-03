@@ -4,8 +4,11 @@ import {
     CircularProgress, List, ListItem, ListItemText,
     TextField, Checkbox, Dialog, DialogTitle,
     DialogContent, DialogActions, Divider,
-    Collapse
+    Collapse, Snackbar
 } from '@mui/material';
+import { usePersistentState } from '../hooks/usePersistentState';
+import { usePlayback } from '../state/PlaybackContext';
+import { isBoolean, isNumber, isPlainObject, isString } from '../state/storage';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -56,18 +59,31 @@ const TomatoIcon = ({ filled, size = 16 }: { filled: boolean; size?: number }) =
 
 interface StudyToolsProps {
     onStopRequest?: () => void;
-    totalBarsPracticed?: number;
 }
 
-export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: StudyToolsProps) {
+const DURATIONS = { pomodoro: 25 * 60, break: 5 * 60 } as const;
+
+const isSubTask = (v: unknown): v is SubTask =>
+    isPlainObject(v) && isString(v.id) && isString(v.title) && isBoolean(v.completed);
+const isTask = (v: unknown): v is Task =>
+    isPlainObject(v) && isString(v.id) && isString(v.title) && Array.isArray(v.subtasks) && v.subtasks.every(isSubTask) &&
+    isNumber(v.estimatedPomodoros) && isNumber(v.completedPomodoros) && isBoolean(v.isCompleted);
+const isTaskList = (v: unknown): v is Task[] => Array.isArray(v) && v.every(isTask);
+const isNullableString = (v: unknown): v is string | null => v === null || isString(v);
+
+export default function StudyTools({ onStopRequest }: StudyToolsProps) {
+    const totalBarsPracticed = usePlayback(s => s.totalBars);
+
     // Timer State
     const [timerType, setTimerType] = useState<'pomodoro' | 'break'>('pomodoro');
-    const [timeLeft, setTimeLeft] = useState(25 * 60);
+    const [timeLeft, setTimeLeft] = useState<number>(DURATIONS.pomodoro);
     const [isActive, setIsActive] = useState(false);
+    const [notice, setNotice] = useState<string | null>(null);
+    const endTimeRef = useRef<number>(0);
 
     // Task State
-    const [tasks, setTasks] = useState<Task[]>([]);
-    const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+    const [tasks, setTasks] = usePersistentState<Task[]>('study.tasks', [], isTaskList);
+    const [activeTaskId, setActiveTaskId] = usePersistentState<string | null>('study.activeTask', null, isNullableString);
     const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
     // Dialog State
@@ -80,53 +96,44 @@ export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: St
 
     const handleTimerComplete = useCallback(() => {
         setIsActive(false);
-        // Play sound?
 
         if (timerType === 'pomodoro') {
-            // Deduct/Add progress to active task
             if (activeTaskId) {
-                setTasks(prev => prev.map(t => {
-                    if (t.id === activeTaskId) {
-                        return { ...t, completedPomodoros: t.completedPomodoros + 1 };
-                    }
-                    return t;
-                }));
+                setTasks(prev => prev.map(t => t.id === activeTaskId ? { ...t, completedPomodoros: t.completedPomodoros + 1 } : t));
             }
-            alert("¡Pomodoro Completado! Tomate un descanso.");
-            if (onStopRequest) onStopRequest(); // Stop Audio
+            setNotice('¡Pomodoro completado! Tomate un descanso.');
         } else {
-            alert("Descanso terminado. ¡A trabajar!");
-            if (onStopRequest) onStopRequest();
+            setNotice('Descanso terminado. ¡A practicar!');
         }
-    }, [timerType, activeTaskId, onStopRequest]);
+        onStopRequest?.();
+    }, [timerType, activeTaskId, onStopRequest, setTasks]);
 
-    // Timer Logic
+    // Timer Logic: counts against a wall-clock deadline so throttled background tabs don't drift.
     useEffect(() => {
-        if (isActive) {
-            intervalRef.current = window.setInterval(() => {
-                setTimeLeft((prev) => {
-                    if (prev <= 0) {
-                        handleTimerComplete();
-                        return 0;
-                    }
-                    return prev - 1;
-                });
-            }, 1000);
-        } else {
-            if (intervalRef.current) clearInterval(intervalRef.current);
-        }
+        if (!isActive) return;
+        endTimeRef.current = Date.now() + timeLeft * 1000;
+        intervalRef.current = window.setInterval(() => {
+            const remaining = Math.max(0, Math.round((endTimeRef.current - Date.now()) / 1000));
+            setTimeLeft(remaining);
+            if (remaining === 0) {
+                if (intervalRef.current) clearInterval(intervalRef.current);
+                handleTimerComplete();
+            }
+        }, 250);
         return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-    }, [isActive, timerType, handleTimerComplete]);
+        // timeLeft is read only when (re)starting the countdown.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isActive, handleTimerComplete]);
 
-    const toggleTimer = () => setIsActive(!isActive);
+    const toggleTimer = () => setIsActive(active => !active);
     const resetTimer = () => {
         setIsActive(false);
-        setTimeLeft(timerType === 'pomodoro' ? 25 * 60 : 5 * 60);
+        setTimeLeft(DURATIONS[timerType]);
     };
     const setMode = (mode: 'pomodoro' | 'break') => {
         setIsActive(false);
         setTimerType(mode);
-        setTimeLeft(mode === 'pomodoro' ? 25 * 60 : 5 * 60);
+        setTimeLeft(DURATIONS[mode]);
     };
 
     const formatTime = (seconds: number) => {
@@ -154,7 +161,7 @@ export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: St
             isCompleted: false
         };
 
-        setTasks([...tasks, newTask]);
+        setTasks(prev => [...prev, newTask]);
         setNewTaskTitle('');
         setNewTaskSubtasks('');
         setNewTaskPomodoros(1);
@@ -162,12 +169,12 @@ export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: St
     };
 
     const deleteTask = (id: string) => {
-        setTasks(tasks.filter(t => t.id !== id));
+        setTasks(prev => prev.filter(t => t.id !== id));
         if (activeTaskId === id) setActiveTaskId(null);
     };
 
     const toggleSubtask = (taskId: string, subId: string) => {
-        setTasks(tasks.map(t => {
+        setTasks(prev => prev.map(t => {
             if (t.id !== taskId) return t;
             return {
                 ...t,
@@ -177,7 +184,7 @@ export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: St
     };
 
     const toggleTaskComplete = (taskId: string) => {
-        setTasks(tasks.map(t => {
+        setTasks(prev => prev.map(t => {
             if (t.id !== taskId) return t;
             return {
                 ...t,
@@ -187,7 +194,7 @@ export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: St
         }));
     };
 
-    const progress = 100 - (timeLeft / (timerType === 'pomodoro' ? 25 * 60 : 5 * 60)) * 100;
+    const progress = 100 - (timeLeft / DURATIONS[timerType]) * 100;
 
     return (
         <Paper className="brass-trim" sx={{ p: 2.5, bgcolor: '#141210', borderRadius: 4, height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -230,8 +237,9 @@ export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: St
 
                 <Box sx={{ position: 'relative', display: 'inline-flex', mb: 2 }}>
                     {/* Background Track */}
-                    <CircularProgress variant="determinate" value={100} size={140} thickness={1.2} sx={{ color: '#27201b', position: 'absolute' }} />
+                    <CircularProgress variant="determinate" value={100} size={140} thickness={1.2} aria-hidden sx={{ color: '#27201b', position: 'absolute' }} />
                     <CircularProgress
+                        aria-label="Progreso del temporizador"
                         variant="determinate"
                         value={progress}
                         size={140}
@@ -255,7 +263,7 @@ export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: St
                 </Box>
 
                 <Stack direction="row" spacing={2} justifyContent="center">
-                    <IconButton onClick={toggleTimer} size="large" sx={{
+                    <IconButton onClick={toggleTimer} aria-label={isActive ? 'Pausar temporizador' : 'Iniciar temporizador'} size="large" sx={{
                         bgcolor: isActive ? 'rgba(255,255,255,0.1)' : (timerType === 'pomodoro' ? '#ef5350' : '#ffa726'),
                         color: 'white',
                         '&:hover': { transform: 'scale(1.1)' },
@@ -263,14 +271,14 @@ export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: St
                     }}>
                         {isActive ? <PauseIcon fontSize="large" /> : <PlayArrowIcon fontSize="large" />}
                     </IconButton>
-                    <IconButton onClick={resetTimer} sx={{ color: 'text.secondary' }}><RefreshIcon /></IconButton>
+                    <IconButton onClick={resetTimer} aria-label="Reiniciar temporizador" sx={{ color: 'text.secondary' }}><RefreshIcon /></IconButton>
                 </Stack>
             </Box>
 
             {/* STATS */}
             <Paper sx={{ p: 1, my: 1, bgcolor: '#1a1a1a', border: '1px solid #333', textAlign: 'center' }}>
                 <Typography variant="caption" color="text.secondary" display="block">COMPASES PRACTICADOS</Typography>
-                <Typography variant="h5" color="primary" fontWeight="bold">
+                <Typography variant="h5" color="primary" fontWeight="bold" data-testid="bars-practiced">
                     {totalBarsPracticed}
                 </Typography>
             </Paper>
@@ -280,7 +288,7 @@ export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: St
             {/* TASK LIST HEADER */}
             <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1} px={1}>
                 <Typography variant="overline" color="text.secondary">MI PLAN DE ESTUDIO</Typography>
-                <IconButton size="small" color="primary" onClick={() => setIsDialogOpen(true)}><AddIcon /></IconButton>
+                <IconButton size="small" color="primary" aria-label="Agregar tarea" onClick={() => setIsDialogOpen(true)}><AddIcon /></IconButton>
             </Stack>
 
             {/* TASK LIST */}
@@ -306,13 +314,13 @@ export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: St
                             }}>
                                 <ListItem
                                     secondaryAction={
-                                        <IconButton edge="end" size="small" onClick={() => deleteTask(task.id)}>
+                                        <IconButton edge="end" size="small" aria-label={`Eliminar ${task.title}`} onClick={() => deleteTask(task.id)}>
                                             <DeleteIcon fontSize="small" color="disabled" />
                                         </IconButton>
                                     }
                                     sx={{ opacity: task.isCompleted ? 0.5 : 1 }}
                                 >
-                                    <IconButton size="small" onClick={() => toggleTaskComplete(task.id)} sx={{ mr: 1, color: task.isCompleted ? 'success.main' : 'text.disabled' }}>
+                                    <IconButton size="small" aria-label={task.isCompleted ? `Reabrir ${task.title}` : `Completar ${task.title}`} onClick={() => toggleTaskComplete(task.id)} sx={{ mr: 1, color: task.isCompleted ? 'success.main' : 'text.disabled' }}>
                                         {task.isCompleted ? <CheckCircleIcon /> : <RadioButtonUncheckedIcon />}
                                     </IconButton>
 
@@ -337,7 +345,7 @@ export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: St
                                                     ))}
                                                 </Box>
                                                 {task.subtasks.length > 0 && (
-                                                    <IconButton size="small" onClick={() => setExpandedTaskId(isExpanded ? null : task.id)} sx={{ p: 0, ml: 1 }}>
+                                                    <IconButton size="small" aria-label={isExpanded ? 'Ocultar subtareas' : 'Ver subtareas'} aria-expanded={isExpanded} onClick={() => setExpandedTaskId(isExpanded ? null : task.id)} sx={{ p: 0, ml: 1 }}>
                                                         {isExpanded ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
                                                     </IconButton>
                                                 )}
@@ -406,6 +414,12 @@ export default function StudyTools({ onStopRequest, totalBarsPracticed = 0 }: St
                     <Button onClick={addTask} variant="contained" color="secondary">Agregar</Button>
                 </DialogActions>
             </Dialog>
+            <Snackbar
+                open={notice !== null}
+                autoHideDuration={6000}
+                onClose={() => setNotice(null)}
+                message={notice}
+            />
         </Paper>
     );
 }

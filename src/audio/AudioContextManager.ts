@@ -17,9 +17,9 @@ class AudioContextManager {
         if (!AudioContextClass) {
             throw new Error("Web Audio API not supported in this browser");
         }
+        // No forced sampleRate: using the device's native rate avoids resampling latency (most phones run at 48 kHz).
         this.audioContext = new AudioContextClass({
             latencyHint: 'interactive',
-            sampleRate: 44100,
         });
     }
 
@@ -47,7 +47,9 @@ class AudioContextManager {
      * (ES) Reanuda el contexto si está suspendido (ej. después de un gesto del usuario).
      */
     public async resume(): Promise<void> {
-        if (this.audioContext.state === 'suspended') {
+        // iOS Safari reports 'interrupted' after calls or lock screen; it also needs resume().
+        const state = this.audioContext.state as AudioContextState | 'interrupted';
+        if (state === 'suspended' || state === 'interrupted') {
             await this.audioContext.resume();
         }
     }

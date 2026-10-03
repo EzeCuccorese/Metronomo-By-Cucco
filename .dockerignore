@@ -7,3 +7,6 @@ docker-compose.yml
 .dockerignore
 npm-debug.log
 README.md
+coverage
+playwright-report
+test-results

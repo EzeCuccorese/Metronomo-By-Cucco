@@ -1,13 +1,25 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
 import { Box, Typography, Select, MenuItem, Stack, Slider, FormControl, InputLabel, Button, Divider, Chip } from '@mui/material';
 import { Music, Trash2, RotateCcw } from 'lucide-react';
+import type { AccompanimentStyle } from '../audio/PolyphonicSynth';
+import { usePersistentState } from '../hooks/usePersistentState';
+import { usePlayback } from '../state/PlaybackContext';
+import { isNumber, isPlainObject, isString } from '../state/storage';
 
 interface HarmonyBuilderProps {
     onUpdateProgression: (progression: string[][]) => void;
     onVolumeChange: (vol: number) => void;
-    onStyleChange: (style: string) => void;
-    activeHalfBarIndex?: number;
+    onStyleChange: (style: AccompanimentStyle) => void;
+    isPlaying?: boolean;
 }
+
+const STYLES: { id: AccompanimentStyle; label: string }[] = [
+    { id: 'pad', label: 'Pad (Sostenido)' },
+    { id: 'quarters', label: 'Negras (Marcato)' },
+    { id: 'offbeats', label: 'Contratiempos (Reggae/Ska)' },
+    { id: 'arpeggio_8', label: 'Arpegio (8 corcheas)' },
+    { id: 'zamba_base', label: 'Base Zamba' },
+];
 
 const KEYS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 const OCTAVES = [3, 4, 5];
@@ -51,15 +63,32 @@ const getChordType = (degreeIndex: number, m: ModeType) => {
     return map[m][degreeIndex];
 };
 
-export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, onStyleChange, activeHalfBarIndex }: HarmonyBuilderProps) {
-    const [rootKey, setRootKey] = useState('C');
-    const [mode, setMode] = useState<ModeType>('major');
-    const [octave, setOctave] = useState(4);
-    const [volume, setVolume] = useState(0.3);
-    const [style, setStyle] = useState('pad');
+const isChordStep = (v: unknown): v is ChordStep =>
+    isPlainObject(v) && isString(v.id) && isString(v.degree) && isNumber(v.durationUnits) && v.durationUnits >= 1 &&
+    Array.isArray(v.notes) && v.notes.every(n => isString(n) && /^[A-G][#b]?[0-8]$/.test(n));
+
+const isSequence = (v: unknown): v is ChordStep[] => Array.isArray(v) && v.every(isChordStep);
+const isKey = (v: unknown): v is string => isString(v) && KEYS.includes(v);
+const isMode = (v: unknown): v is ModeType => MODES.some(m => m.id === v);
+const isOctave = (v: unknown): v is number => isNumber(v) && OCTAVES.includes(v);
+const isVolume = (v: unknown): v is number => isNumber(v) && v >= 0 && v <= 1;
+const isStyle = (v: unknown): v is AccompanimentStyle => STYLES.some(s => s.id === v);
+
+export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, onStyleChange, isPlaying = false }: HarmonyBuilderProps) {
+    const [rootKey, setRootKey] = usePersistentState('harmony.key', 'C', isKey);
+    const [mode, setMode] = usePersistentState<ModeType>('harmony.mode', 'major', isMode);
+    const [octave, setOctave] = usePersistentState('harmony.octave', 4, isOctave);
+    const [volume, setVolume] = usePersistentState('harmony.volume', 0.3, isVolume);
+    const [style, setStyle] = usePersistentState<AccompanimentStyle>('harmony.style', 'pad', isStyle);
+    const chordIndex = usePlayback(s => s.chordIndex);
+    const activeHalfBarIndex = isPlaying ? chordIndex : -1;
 
     // Sequence
-    const [sequence, setSequence] = useState<ChordStep[]>([]);
+    const [sequence, setSequence] = usePersistentState<ChordStep[]>('harmony.sequence', [], isSequence);
+
+    // Restored settings must reach the audio engine too.
+    useEffect(() => { onStyleChange(style); }, [style, onStyleChange]);
+    useEffect(() => { onVolumeChange(volume); }, [volume, onVolumeChange]);
 
     const availableDegrees = [0, 1, 2, 3, 4, 5, 6].map(i => ({
         index: i,
@@ -95,18 +124,18 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
         ];
 
         const newChord: ChordStep = {
-            id: Math.random().toString(36).substr(2, 9),
+            id: Math.random().toString(36).slice(2, 11),
             degree: getChordType(degreeIndex, mode),
             durationUnits: 2, // Default to 1 Bar (2 half-bars)
             notes: notes
         };
 
         setSequence(prev => [...prev, newChord]);
-    }, [rootKey, mode, octave]);
+    }, [rootKey, mode, octave, setSequence]);
 
     const removeChord = useCallback((id: string) => {
         setSequence(prev => prev.filter(c => c.id !== id));
-    }, []);
+    }, [setSequence]);
 
     // Sync with Parent
     useEffect(() => {
@@ -124,14 +153,11 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
     }, [sequence, onUpdateProgression]);
 
     const handleVolume = (_: Event, val: number | number[]) => {
-        const v = val as number;
-        setVolume(v);
-        onVolumeChange(v);
+        setVolume(val as number);
     };
 
-    const handleStyleChange = (val: string) => {
+    const handleStyleChange = (val: AccompanimentStyle) => {
         setStyle(val);
-        onStyleChange(val);
     };
 
     // Find which sequence step corresponds to activeHalfBarIndex
@@ -166,15 +192,15 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
             {/* Global Settings */}
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 1 }}>
                 <FormControl size="small">
-                    <InputLabel>Tono</InputLabel>
-                    <Select value={rootKey} label="Tono" onChange={(e) => setRootKey(e.target.value)}>
+                    <InputLabel id="harmony-key-label">Tono</InputLabel>
+                    <Select value={rootKey} labelId="harmony-key-label" label="Tono" onChange={(e) => setRootKey(e.target.value)}>
                         {KEYS.map(k => <MenuItem key={k} value={k}>{k}</MenuItem>)}
                     </Select>
                 </FormControl>
 
                 <FormControl size="small">
-                    <InputLabel>Modo</InputLabel>
-                    <Select value={mode} label="Modo" onChange={(e) => setMode(e.target.value as ModeType)}>
+                    <InputLabel id="harmony-mode-label">Modo</InputLabel>
+                    <Select value={mode} labelId="harmony-mode-label" label="Modo" onChange={(e) => setMode(e.target.value as ModeType)}>
                         {MODES.map(m => <MenuItem key={m.id} value={m.id}>{m.label}</MenuItem>)}
                     </Select>
                 </FormControl>
@@ -182,19 +208,15 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
 
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: 1, mb: 2 }}>
                 <FormControl size="small">
-                    <InputLabel>Estilo</InputLabel>
-                    <Select value={style} label="Estilo" onChange={(e) => handleStyleChange(e.target.value)}>
-                        <MenuItem value="pad">Pad (Sostenido)</MenuItem>
-                        <MenuItem value="quarters">Negras (Marcato)</MenuItem>
-                        <MenuItem value="offbeats">Contratiempos (Reggae/Ska)</MenuItem>
-                        <MenuItem value="arpeggio_8">Arpegio (8 corcheas)</MenuItem>
-                        <MenuItem value="zamba_base">Base Zamba</MenuItem>
+                    <InputLabel id="harmony-style-label">Estilo</InputLabel>
+                    <Select value={style} labelId="harmony-style-label" label="Estilo" onChange={(e) => handleStyleChange(e.target.value as AccompanimentStyle)}>
+                        {STYLES.map(st => <MenuItem key={st.id} value={st.id}>{st.label}</MenuItem>)}
                     </Select>
                 </FormControl>
 
                 <FormControl size="small">
-                    <InputLabel>Oct</InputLabel>
-                    <Select value={octave} label="Oct" onChange={(e) => setOctave(Number(e.target.value))}>
+                    <InputLabel id="harmony-octave-label">Oct</InputLabel>
+                    <Select value={octave} labelId="harmony-octave-label" label="Oct" onChange={(e) => setOctave(Number(e.target.value))}>
                         {OCTAVES.map(o => <MenuItem key={o} value={o}>{o}</MenuItem>)}
                     </Select>
                 </FormControl>
@@ -226,7 +248,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
             </Typography>
             <Stack spacing={1} sx={{ mb: 3 }}>
                 {sequence.map((step, idx) => (
-                    <Box key={step.id} sx={{
+                    <Box key={step.id} data-testid="harmony-step" data-active={idx === activeSequenceIdx} sx={{
                         p: 1, borderRadius: 1,
                         bgcolor: idx === activeSequenceIdx ? 'rgba(229, 169, 95, 0.15)' : 'background.paper',
                         border: idx === activeSequenceIdx ? '1px solid #e5a95f' : '1px solid transparent',
@@ -254,10 +276,10 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
                                 size="small" variant="standard"
                                 value={step.durationUnits}
                                 onChange={(e) => {
-                                    const newSeq = [...sequence];
-                                    newSeq[idx].durationUnits = Number(e.target.value);
-                                    setSequence(newSeq);
+                                    const units = Number(e.target.value);
+                                    setSequence(prev => prev.map(c => c.id === step.id ? { ...c, durationUnits: units } : c));
                                 }}
+                                inputProps={{ 'aria-label': `Duración de ${step.degree}` }}
                                 sx={{ width: 100 }}
                             >
                                 <MenuItem value={1}>1/2 Compás</MenuItem>
@@ -269,6 +291,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
                             <Button
                                 size="small" sx={{ minWidth: 30, p: 0.5, color: 'error.main' }}
                                 onClick={() => removeChord(step.id)}
+                                aria-label={`Quitar ${step.degree}`}
                             >
                                 <Trash2 size={16} />
                             </Button>
@@ -290,6 +313,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
                         value={volume}
                         min={0} max={1} step={0.01}
                         onChange={handleVolume}
+                        aria-label="Volumen de la armonía"
                         size="small"
                         sx={{ flex: 1 }}
                     />

@@ -31,6 +31,7 @@ const mockAudioContext = {
         connect: vi.fn(),
         disconnect: vi.fn(),
         start: vi.fn(),
+        addEventListener: vi.fn(),
         stop: vi.fn(),
     })),
     destination: {},
@@ -133,5 +134,47 @@ describe('PolyphonicSynth', () => {
         const notes = ['Db3', 'F#4', 'A4', 'X9', 'Z1'];
         synth.playChord(notes, 0.5, 0, 'pad');
         expect(mockAudioContext.createOscillator).toHaveBeenCalled();
+    });
+
+    const startTimesOf = () => {
+        const times = new Set<number>();
+        mockAudioContext.createOscillator.mock.results.forEach(r => {
+            (r.value as any).start.mock.calls.forEach((c: number[]) => times.add(Math.round(c[0] * 1000) / 1000));
+        });
+        return [...times].sort((a, b) => a - b);
+    };
+
+    it('places "quarters" hits on the beats of the half bar at any tempo', () => {
+        synth.playChord(['C4', 'E4', 'G4'], 1.5, 10, 'quarters');
+        expect(startTimesOf()).toEqual([10, 10.75]);
+    });
+
+    it('places "offbeats" between the beats of the half bar', () => {
+        synth.playChord(['C4', 'E4', 'G4'], 2, 0, 'offbeats');
+        expect(startTimesOf()).toEqual([0.5, 1.5]);
+    });
+
+    it('plays the "zamba_base" style: low bass first, chord on the remaining thirds', () => {
+        synth.playChord(['C4', 'E4', 'G4'], 1.5, 0, 'zamba_base');
+        expect(startTimesOf()).toEqual([0, 0.5, 1]);
+        const firstFundamental = mockAudioContext.createOscillator.mock.results[0].value as any;
+        expect(firstFundamental.frequency.value).toBeCloseTo(130.81, 1); // C3: one octave below the root
+    });
+
+    it('silence() fades out and stops every voice', () => {
+        synth.playChord(['C4', 'E4', 'G4'], 2, 0, 'pad');
+        synth.silence();
+        mockAudioContext.createOscillator.mock.results.forEach(r => {
+            expect((r.value as any).stop).toHaveBeenCalled();
+        });
+    });
+
+    it('dispose() disconnects the output', () => {
+        const before = mockAudioContext.createGain.mock.results.length;
+        synth.dispose();
+        expect(before).toBeGreaterThan(0);
+        mockAudioContext.createGain.mock.results.slice(0, 2).forEach(r => {
+            expect((r.value as any).disconnect).toHaveBeenCalled();
+        });
     });
 });

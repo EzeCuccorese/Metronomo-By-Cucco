@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Box,
     Typography,
@@ -10,22 +10,31 @@ import {
     IconButton,
     Tooltip,
     Divider,
-    Avatar
+    Avatar,
+    Snackbar,
+    Button
 } from '@mui/material';
-import { Eraser, Pen, Circle, Trash2 } from 'lucide-react';
+import { Eraser, Pen, Circle, Trash2, RotateCcw } from 'lucide-react';
 
-import { InstrumentIcons } from '../rhythms/RhythmPatterns';
+import { InstrumentIcons } from '../constants/instrumentIcons';
 import type { RhythmPattern, InstrumentType, RhythmStep } from '../rhythms/RhythmPatterns';
+import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
+import { getGroupCount } from '../rhythms/meter';
+import { TIME_SIGNATURES, remapSteps, sameSignature } from '../rhythms/patternEditing';
+import { usePlaybackStore } from '../state/PlaybackContext';
 
 interface PatternEditorProps {
     pattern: RhythmPattern;
     onPatternUpdate: (newPattern: RhythmPattern) => void;
-    currentStepIndex?: number;
-    onPreviewInstrument?: (instrument: string) => void;
+    isPlaying?: boolean;
+    onPreviewInstrument?: (instrument: string, modifier?: string) => void;
+    /** The pattern is an edited preset that can be restored to its original. */
+    canRestore?: boolean;
+    onRestore?: () => void;
 }
 
 const INSTRUMENTS_DISPLAY: { type: InstrumentType; label: string; group: string }[] = [
-    { type: 'bombo_leguero', label: 'Bombo', group: 'bombo' },
+    { type: 'bombo_leguero', label: 'Bombo', group: 'latino' },
     { type: 'caja', label: 'Caja Coplera', group: 'latino' },
     { type: 'cajon', label: 'Cajón', group: 'latino' },
     { type: 'palmas', label: 'Palmas', group: 'latino' },
@@ -48,183 +57,176 @@ const INSTRUMENTS_DISPLAY: { type: InstrumentType; label: string; group: string 
     { type: 'click', label: 'Click', group: 'metronome' },
 ];
 
-import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
+/** Steps per pulse (per denominator note). Labels depend on the pulse unit. */
+const SUBDIVISION_OPTIONS: Record<4 | 8, { value: number; label: string; icon: string }[]> = {
+    4: [
+        { value: 1, label: 'Negras', icon: '♩' },
+        { value: 2, label: 'Corcheas', icon: '♪' },
+        { value: 3, label: 'Tresillos', icon: '♪₃' },
+        { value: 4, label: 'Semicorcheas', icon: '𝅘𝅥𝅯' },
+        { value: 6, label: 'Sextillos', icon: '𝅘𝅥𝅯₆' },
+    ],
+    8: [
+        { value: 1, label: 'Corcheas', icon: '♪' },
+        { value: 2, label: 'Semicorcheas', icon: '𝅘𝅥𝅯' },
+        { value: 3, label: 'Tresillos', icon: '𝅘𝅥𝅯₃' },
+        { value: 4, label: 'Fusas', icon: '𝅘𝅥𝅰' },
+    ],
+};
 
-const TIME_SIGNATURES = [
-    { label: '4/4', beats: 4, accum: 4 },
-    { label: '3/4', beats: 3, accum: 4 },
-    { label: '6/8', beats: 2, accum: 8 },
-    { label: '12/8', beats: 4, accum: 8 },
-];
+const VELOCITIES: Record<Exclude<ToolType, 'eraser'>, number> = { ghost: 0.2, piano: 0.4, pen: 0.7, forte: 0.9, accent: 1.0 };
 
-const SUBDIVISION_OPTIONS = [
-    { value: 2, label: 'Corchea (1/2)', icon: '♪' },
-    { value: 3, label: 'Tresillo (1/3)', icon: '♪₃' },
-    { value: 4, label: 'Semicorchea (1/4)', icon: '𝅘𝅥𝅯' },
-    { value: 6, label: 'Sextillo (1/6)', icon: '𝅘𝅥𝅯₆' },
-];
-
-// Tools for "Painting" steps
 type ToolType = 'ghost' | 'piano' | 'pen' | 'forte' | 'accent' | 'eraser';
 
-export default function PatternEditor({ pattern, onPatternUpdate, currentStepIndex = 0, onPreviewInstrument }: PatternEditorProps) {
+const getIntensityColor = (v: number) => {
+    if (v > 0.95) return 'error.main';
+    if (v > 0.85) return 'secondary.main';
+    if (v > 0.6) return 'primary.main';
+    if (v > 0.3) return 'primary.light';
+    return 'text.disabled';
+};
 
-    // UI State
-    const [prevSubdivision, setPrevSubdivision] = useState(pattern.subdivision);
-    const [viewSubdivision, setViewSubdivision] = useState(pattern.subdivision);
-    const [activeFilter, setActiveFilter] = useState('all');
-    const [selectedIntensity, setSelectedIntensity] = useState<ToolType>('pen');
+const getNoteSymbol = (stepsPerPulse: number, den: number) => {
+    const perQuarter = stepsPerPulse * (4 / den);
+    if (perQuarter <= 1) return '♩';
+    if (perQuarter <= 3) return '♪';
+    return '𝅘𝅥𝅯';
+};
+
+export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = false, onPreviewInstrument, canRestore = false, onRestore }: PatternEditorProps) {
+    const [activeFilter, setActiveFilter] = useState<'used' | 'all' | 'drums' | 'latino'>('used');
+    const [selectedTool, setSelectedTool] = useState<ToolType>('pen');
     const [selectedModifier, setSelectedModifier] = useState<'open' | 'closed'>('closed');
-    const [isMouseDown, setIsMouseDown] = useState(false);
+    const [undoSteps, setUndoSteps] = useState<RhythmStep[] | null>(null);
+    const paintingRef = useRef(false);
+    const gridRef = useRef<HTMLDivElement | null>(null);
+    const store = usePlaybackStore();
 
-    // Sync subdivision if pattern changes externally (render-phase state adjustment)
-    if (pattern.subdivision !== prevSubdivision) {
-        setPrevSubdivision(pattern.subdivision);
-        if (viewSubdivision > pattern.subdivision || (pattern.subdivision % viewSubdivision !== 0)) {
-            setViewSubdivision(pattern.subdivision);
-        }
-    }
+    const sub = pattern.subdivision;
+    const [num, den] = pattern.timeSignature;
+    const stepsPerPulse = sub / num;
+    const groupCount = getGroupCount(pattern.timeSignature);
+    const cellsPerGroup = sub / groupCount;
+    const pulseOptions = SUBDIVISION_OPTIONS[den === 8 ? 8 : 4];
 
-    const handleFilterChange = (_: React.MouseEvent<HTMLElement>, newFilter: string) => {
-        if (newFilter) setActiveFilter(newFilter);
-    };
+    const stepIndex = useMemo(() => {
+        const map = new Map<string, RhythmStep>();
+        pattern.steps.forEach(s => map.set(`${s.step}:${s.instrument}`, s));
+        return map;
+    }, [pattern.steps]);
+
+    // Highlight the playing column imperatively: avoids re-rendering hundreds of cells per step.
+    useEffect(() => {
+        const grid = gridRef.current;
+        if (!grid) return;
+        let lastCol = -1;
+        const paint = (col: number) => {
+            if (col === lastCol) return;
+            grid.querySelectorAll('.is-current').forEach(el => el.classList.remove('is-current'));
+            if (col >= 0) grid.querySelectorAll(`[data-col="${col}"]`).forEach(el => el.classList.add('is-current'));
+            lastCol = col;
+        };
+        paint(isPlaying ? store.getSnapshot().step : -1);
+        if (!isPlaying) return;
+        const unsubscribe = store.subscribe(() => paint(store.getSnapshot().step));
+        return () => {
+            unsubscribe();
+            paint(-1);
+        };
+    }, [store, isPlaying, sub, activeFilter]);
+
+    useEffect(() => {
+        const stopPainting = () => { paintingRef.current = false; };
+        window.addEventListener('pointerup', stopPainting);
+        window.addEventListener('pointercancel', stopPainting);
+        return () => {
+            window.removeEventListener('pointerup', stopPainting);
+            window.removeEventListener('pointercancel', stopPainting);
+        };
+    }, []);
 
     const clearPattern = () => {
-        if (window.confirm('¿Borrar todo el patrón actual?')) {
-            onPatternUpdate({ ...pattern, steps: [] });
-        }
+        if (pattern.steps.length === 0) return;
+        setUndoSteps(pattern.steps);
+        onPatternUpdate({ ...pattern, steps: [] });
     };
 
-    const handleTimeSignatureChange = (val: string) => {
-        const ts = TIME_SIGNATURES.find(t => t.label === val);
-        if (!ts) return;
+    const undoClear = () => {
+        if (undoSteps) onPatternUpdate({ ...pattern, steps: undoSteps });
+        setUndoSteps(null);
+    };
 
-        let newSub = pattern.subdivision;
-        const oldBeats = pattern.timeSignature[0];
-        const newBeats = ts.beats;
+    const handleTimeSignatureChange = (label: string) => {
+        const ts = TIME_SIGNATURES.find(t => t.label === label);
+        if (!ts || sameSignature(ts.value, pattern.timeSignature)) return;
 
-        // Maintain subdivision ratio per beat if possible
-        const subPerBeat = pattern.subdivision / oldBeats;
-        newSub = newBeats * subPerBeat;
-
-        // SPECIAL HEMIOLA RULE: Preserve 12 steps when switching between 6/8 (beats: 2) and 3/4 (beats: 3)
-        if ((oldBeats === 2 && newBeats === 3) || (oldBeats === 3 && newBeats === 2)) {
-            if (pattern.subdivision % 6 === 0) {
-                newSub = pattern.subdivision;
-            }
-        }
-
+        // Same bar length (3/4 <-> 6/8): keep the grid, the hemiola lives in the accents.
+        const sameBarLength = ts.value[0] / ts.value[1] === num / den;
+        const newSub = sameBarLength ? sub : ts.value[0] * Math.max(1, Math.round(stepsPerPulse));
         onPatternUpdate({
             ...pattern,
-            timeSignature: [ts.beats, ts.accum] as [number, number],
+            timeSignature: ts.value,
             subdivision: newSub,
-            // Keep all steps for "memory"
+            steps: sameBarLength ? pattern.steps : pattern.steps.filter(s => s.step <= newSub),
         });
-        setViewSubdivision(newSub);
     };
 
-    const handleSubdivisionChange = (newSub: number) => {
-        // Rhythmic Mapping logic for Binary <-> Ternary
-        const oldSub = pattern.subdivision;
-        const beats = pattern.timeSignature[0];
-        const oldStepsPerBeat = oldSub / beats;
-        const newStepsPerBeat = newSub / beats;
-
-        const mappedSteps = pattern.steps.map(step => {
-            const beatIdx = Math.floor((step.step - 1) / oldStepsPerBeat);
-            const stepInBeat = (step.step - 1) % oldStepsPerBeat;
-            const posInBeat = stepInBeat / oldStepsPerBeat;
-
-            let newStepInBeat = Math.round(posInBeat * newStepsPerBeat);
-
-            // SPECIAL MAPPING RULE: 
-            // Binary 2nd 8th (pos 0.5) -> Ternary 3rd triplet (pos 0.66)
-            if (oldStepsPerBeat === 4 && newStepsPerBeat === 3) {
-                if (stepInBeat === 2) newStepInBeat = 2; // pos 2/3 = 0.66
-            }
-            // Ternary 3rd triplet (pos 0.66) -> Binary 2nd 8th (pos 0.5)
-            if (oldStepsPerBeat === 3 && newStepsPerBeat === 4) {
-                if (stepInBeat === 2) newStepInBeat = 2; // pos 2/4 = 0.5
-            }
-
-            return { ...step, step: (beatIdx * newStepsPerBeat) + newStepInBeat + 1 };
-        });
-
-        onPatternUpdate({ ...pattern, subdivision: newSub, steps: mappedSteps });
-        setViewSubdivision(newSub);
+    const handleSubdivisionChange = (newStepsPerPulse: number) => {
+        const newSub = num * newStepsPerPulse;
+        if (newSub === sub) return;
+        onPatternUpdate({ ...pattern, subdivision: newSub, steps: remapSteps(pattern.steps, sub, newSub) });
     };
 
-    const handleSubdivisionSelection = (stepsPerBeat: number) => {
-        const b = pattern.timeSignature[0];
-        handleSubdivisionChange(b * stepsPerBeat);
+    const modifierFor = (instrument: InstrumentType): RhythmStep['modifier'] => {
+        if (instrument === 'hihat') return selectedModifier === 'open' ? 'open' : 'closed';
+        if (instrument === 'snare') return selectedModifier === 'open' ? 'snares_off' : undefined;
+        if (instrument === 'bombo_leguero' || instrument === 'caja' || instrument === 'cajon') {
+            return selectedModifier === 'open' ? 'aro' : 'parche';
+        }
+        return undefined;
     };
 
-    const currentStepsPerBeat = pattern.subdivision / pattern.timeSignature[0];
+    /**
+     * @param dragging painting across cells only adds/erases; a single click on an identical note toggles it off.
+     */
+    const applyTool = (col: number, instrument: InstrumentType, dragging: boolean) => {
+        const stepNum = col + 1;
+        const existing = stepIndex.get(`${stepNum}:${instrument}`);
+        const others = pattern.steps.filter(s => !(s.step === stepNum && s.instrument === instrument));
 
-    const gridCols = viewSubdivision;
-    const stepsPerViewStep = pattern.subdivision / viewSubdivision;
-    const beats = pattern.timeSignature[0];
-    const notesPerBeat = gridCols / beats;
-
-    const getStepAtViewCol = (colIdx: number, instrument: InstrumentType) => {
-        const stepNum = Math.round(colIdx * stepsPerViewStep) + 1;
-        // Memory: only return if it's within current subdivision bounds
-        return pattern.steps.find(s => s.step === stepNum && s.instrument === instrument && s.step <= pattern.subdivision);
-    };
-
-    // Main Interaction Logic
-    const handleCellInteraction = (viewColIndex: number, instrument: InstrumentType, forceErase = false) => {
-        const stepNum = Math.round(viewColIndex * stepsPerViewStep) + 1;
-        const newSteps = [...pattern.steps];
-        const existingStep = newSteps.find(s => s.step === stepNum && s.instrument === instrument);
-
-        if (selectedIntensity === 'eraser' || forceErase) {
-            if (!existingStep) return;
-            onPatternUpdate({ ...pattern, steps: newSteps.filter(s => !(s.step === stepNum && s.instrument === instrument)) });
+        if (selectedTool === 'eraser') {
+            if (existing) onPatternUpdate({ ...pattern, steps: others });
             return;
         }
 
-        // Intensity mapping
-        const velocities: Record<string, number> = { ghost: 0.2, piano: 0.4, pen: 0.7, forte: 0.9, accent: 1.0 };
-        const velocity = velocities[selectedIntensity] || 0.7;
-
-        // Modifier logic
-        let modifier: RhythmStep['modifier'] = undefined;
-        if (instrument === 'hihat') modifier = selectedModifier === 'open' ? 'open' : 'closed';
-        if (instrument === 'snare') modifier = selectedModifier === 'open' ? 'snares_off' : undefined;
-        if (instrument === 'bombo_leguero' || instrument === 'caja' || instrument === 'cajon') {
-            modifier = selectedModifier === 'open' ? 'aro' : 'parche';
+        const velocity = VELOCITIES[selectedTool];
+        const modifier = modifierFor(instrument);
+        if (existing && existing.velocity === velocity && existing.modifier === modifier) {
+            if (!dragging) onPatternUpdate({ ...pattern, steps: others });
+            return;
         }
 
-        const newStep: RhythmStep = { step: stepNum, instrument, velocity, modifier };
-
-        const filtered = newSteps.filter(s => !(s.step === stepNum && s.instrument === instrument));
-        filtered.push(newStep);
-        onPatternUpdate({ ...pattern, steps: filtered });
-
-        if (onPreviewInstrument && !isMouseDown) onPreviewInstrument(instrument);
+        onPatternUpdate({ ...pattern, steps: [...others, { step: stepNum, instrument, velocity, modifier }] });
+        if (!dragging && !isPlaying) onPreviewInstrument?.(instrument, modifier);
     };
 
-    const noteChar = getNoteSymbol(viewSubdivision);
-
-    const visibleInstruments = activeFilter === 'all'
-        ? INSTRUMENTS_DISPLAY
-        : INSTRUMENTS_DISPLAY.filter(i => {
-            if (activeFilter === 'latino') return i.group === 'latino' || i.group === 'bombo';
-            return i.group === activeFilter;
-        });
+    const instrumentsInUse = new Set(pattern.steps.map(s => s.instrument));
+    const visibleInstruments = INSTRUMENTS_DISPLAY.filter(i => {
+        if (activeFilter === 'all') return true;
+        if (activeFilter === 'used') return instrumentsInUse.has(i.type) || pattern.instruments.includes(i.type);
+        return i.group === activeFilter;
+    });
+    const rows = visibleInstruments.length > 0 ? visibleInstruments : INSTRUMENTS_DISPLAY.filter(i => i.group === 'drums');
+    const noteChar = getNoteSymbol(stepsPerPulse, den);
+    const currentTs = TIME_SIGNATURES.find(t => sameSignature(t.value, pattern.timeSignature));
 
     return (
-        <Box
-            sx={{ width: '100%', mt: 2 }}
-            onMouseDown={() => setIsMouseDown(true)}
-            onMouseUp={() => setIsMouseDown(false)}
-            onMouseLeave={() => setIsMouseDown(false)}
-        >
+        <Box component="section" aria-label="Editor de patrón" sx={{ width: '100%', mt: 2 }}>
             {/* Toolbar Row 1: Filters & TimeSig */}
             <Box sx={{ display: 'flex', gap: 2, mb: 2, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', width: '100%' }}>
                 <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <ToggleButtonGroup value={activeFilter} exclusive onChange={handleFilterChange} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)' }}>
+                    <ToggleButtonGroup value={activeFilter} exclusive onChange={(_, v) => v && setActiveFilter(v)} size="small" aria-label="Filtrar instrumentos" sx={{ bgcolor: 'rgba(255,255,255,0.05)' }}>
+                        <ToggleButton value="used">En uso</ToggleButton>
                         <ToggleButton value="all">Todos</ToggleButton>
                         <ToggleButton value="drums">Batería</ToggleButton>
                         <ToggleButton value="latino">Latino</ToggleButton>
@@ -232,38 +234,38 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
 
                     <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
 
-                    {/* Intensities Section */}
                     <ToggleButtonGroup
-                        value={selectedIntensity}
+                        value={selectedTool}
                         exclusive
-                        onChange={(_, v) => v && setSelectedIntensity(v)}
+                        onChange={(_, v) => v && setSelectedTool(v)}
                         size="small"
+                        aria-label="Intensidad"
                         sx={{ bgcolor: 'rgba(255,255,255,0.05)', '& .Mui-selected': { bgcolor: 'primary.main !important', color: 'white !important' } }}
                     >
-                        <ToggleButton value="ghost" title="Ghost (pp)"><Typography variant="caption" sx={{ fontSize: '0.6rem' }}>pp</Typography></ToggleButton>
-                        <ToggleButton value="piano" title="Piano (p)"><Typography variant="caption">p</Typography></ToggleButton>
-                        <ToggleButton value="pen" title="Normal (m)"><Pen size={14} /></ToggleButton>
-                        <ToggleButton value="forte" title="Forte (f)"><Typography variant="button">f</Typography></ToggleButton>
-                        <ToggleButton value="accent" title="Accent (ff)"><Typography variant="button" fontWeight="bold">ff</Typography></ToggleButton>
-                        <ToggleButton value="eraser" title="Goma / Borrar"><Eraser size={14} /></ToggleButton>
+                        <ToggleButton value="ghost" aria-label="Ghost (pp)" title="Ghost (pp)"><Typography variant="caption" sx={{ fontSize: '0.6rem' }}>pp</Typography></ToggleButton>
+                        <ToggleButton value="piano" aria-label="Piano (p)" title="Piano (p)"><Typography variant="caption">p</Typography></ToggleButton>
+                        <ToggleButton value="pen" aria-label="Normal (mf)" title="Normal (mf)"><Pen size={14} /></ToggleButton>
+                        <ToggleButton value="forte" aria-label="Forte (f)" title="Forte (f)"><Typography variant="button">f</Typography></ToggleButton>
+                        <ToggleButton value="accent" aria-label="Acento (ff)" title="Acento (ff)"><Typography variant="button" fontWeight="bold">ff</Typography></ToggleButton>
+                        <ToggleButton value="eraser" aria-label="Goma de borrar" title="Goma / Borrar"><Eraser size={14} /></ToggleButton>
                     </ToggleButtonGroup>
 
                     <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
 
-                    {/* Modifiers Section (Open/Closed selection) */}
                     <Box sx={{ bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1, p: 0.2, display: 'flex' }}>
                         <ToggleButtonGroup
                             value={selectedModifier}
                             exclusive
                             onChange={(_, v) => v && setSelectedModifier(v)}
                             size="small"
+                            aria-label="Articulación"
                             sx={{ '& .Mui-selected': { bgcolor: 'secondary.main !important', color: 'white !important' } }}
                         >
                             <Tooltip title="Cerrado / Parche / Bordonas ON">
-                                <ToggleButton value="closed"><Circle size={8} fill="currentColor" /></ToggleButton>
+                                <ToggleButton value="closed" aria-label="Cerrado o parche"><Circle size={8} fill="currentColor" /></ToggleButton>
                             </Tooltip>
                             <Tooltip title="Abierto / Aro / Bordonas OFF">
-                                <ToggleButton value="open"><Circle size={12} strokeWidth={3} /></ToggleButton>
+                                <ToggleButton value="open" aria-label="Abierto o aro"><Circle size={12} strokeWidth={3} /></ToggleButton>
                             </Tooltip>
                         </ToggleButtonGroup>
                     </Box>
@@ -272,15 +274,17 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                     <Select
                         size="small"
-                        value={currentStepsPerBeat}
-                        onChange={(e) => handleSubdivisionSelection(Number(e.target.value))}
-                        sx={{ bgcolor: 'rgba(255,255,255,0.05)', fontSize: '0.8rem', minWidth: 100 }}
+                        value={Number.isInteger(stepsPerPulse) && pulseOptions.some(o => o.value === stepsPerPulse) ? stepsPerPulse : ''}
+                        displayEmpty
+                        onChange={(e) => handleSubdivisionChange(Number(e.target.value))}
+                        inputProps={{ 'aria-label': 'Subdivisión' }}
+                        sx={{ bgcolor: 'rgba(255,255,255,0.05)', fontSize: '0.8rem', minWidth: 120 }}
                         renderValue={(val) => {
-                            const opt = SUBDIVISION_OPTIONS.find(o => o.value === val);
-                            return opt ? `${opt.icon} ${opt.label.split(' ')[0]}` : val;
+                            const opt = pulseOptions.find(o => o.value === val);
+                            return opt ? `${opt.icon} ${opt.label}` : `${sub} pasos`;
                         }}
                     >
-                        {SUBDIVISION_OPTIONS.map(opt => (
+                        {pulseOptions.map(opt => (
                             <MenuItem key={opt.value} value={opt.value}>
                                 <Stack direction="row" spacing={1} alignItems="center">
                                     <Typography sx={{ fontSize: '1.2rem', minWidth: 24 }}>{opt.icon}</Typography>
@@ -290,51 +294,76 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                         ))}
                     </Select>
 
-                    <Select size="small" value={TIME_SIGNATURES.find(ts => ts.beats === pattern.timeSignature[0] && ts.accum === pattern.timeSignature[1])?.label || '4/4'}
-                        onChange={(e) => handleTimeSignatureChange(e.target.value)} sx={{ width: 80, bgcolor: 'rgba(255,255,255,0.05)' }}>
+                    <Select
+                        size="small"
+                        value={currentTs?.label ?? ''}
+                        displayEmpty
+                        renderValue={(v) => v || `${num}/${den}`}
+                        onChange={(e) => handleTimeSignatureChange(e.target.value)}
+                        inputProps={{ 'aria-label': 'Compás' }}
+                        sx={{ width: 84, bgcolor: 'rgba(255,255,255,0.05)' }}
+                    >
                         {TIME_SIGNATURES.map(ts => <MenuItem key={ts.label} value={ts.label}>{ts.label}</MenuItem>)}
                     </Select>
 
-                    <IconButton size="small" color="error" onClick={clearPattern} sx={{ ml: 1, opacity: 0.6 }}><Trash2 size={18} /></IconButton>
+                    {canRestore && (
+                        <Tooltip title="Restaurar el ritmo original">
+                            <IconButton size="small" onClick={onRestore} aria-label="Restaurar ritmo original"><RotateCcw size={18} /></IconButton>
+                        </Tooltip>
+                    )}
+                    <Tooltip title="Borrar todo el patrón">
+                        <span>
+                            <IconButton size="small" color="error" onClick={clearPattern} disabled={pattern.steps.length === 0} aria-label="Borrar patrón" sx={{ ml: 0.5, opacity: 0.7 }}><Trash2 size={18} /></IconButton>
+                        </span>
+                    </Tooltip>
                 </Box>
             </Box>
 
             {/* Grid */}
             <Box sx={{ overflowX: 'auto', pb: 2 }}>
-                <Box sx={{ display: 'grid', gridTemplateColumns: `140px repeat(${gridCols}, 1fr)`, gap: '1px', minWidth: 600 }}>
-
+                <Box
+                    ref={gridRef}
+                    role="group"
+                    aria-label={`Grilla de ${sub} pasos en ${num}/${den}`}
+                    data-testid="pattern-grid"
+                    sx={{
+                        display: 'grid',
+                        gridTemplateColumns: `120px repeat(${sub}, minmax(22px, 1fr))`,
+                        gap: '1px',
+                        minWidth: 120 + sub * 24,
+                        '& .is-current': { boxShadow: 'inset 0 0 0 1px #f48fb1' }
+                    }}
+                >
                     {/* Beats Header */}
-                    <Box sx={{ p: 1 }}><Typography variant="caption" color="text.secondary">TIEMPO</Typography></Box>
-                    {Array.from({ length: gridCols }).map((_, idx) => {
-                        const isBeatStart = (idx % notesPerBeat) === 0;
-                        const beatNum = Math.floor(idx / notesPerBeat) + 1;
-                        return (
-                            <Box key={idx} sx={{
-                                display: 'flex', justifyContent: 'center', alignItems: 'flex-end', pb: 0.5,
-                                bgcolor: isBeatStart ? 'rgba(255,255,255,0.05)' : 'transparent',
-                                borderBottom: '1px solid #444'
-                            }}>
-                                {isBeatStart ? <Typography variant="caption" fontWeight="bold" color="text.primary">{beatNum}</Typography> : <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.6rem' }}>•</Typography>}
-                            </Box>
-                        );
-                    })}
+                    <Box sx={{ display: 'contents' }} aria-hidden>
+                        <Box sx={{ p: 1 }}><Typography variant="caption" color="text.secondary">TIEMPO</Typography></Box>
+                        {Array.from({ length: sub }).map((_, idx) => {
+                            const isGroupStart = Number.isInteger(cellsPerGroup) ? idx % cellsPerGroup === 0 : idx === 0;
+                            return (
+                                <Box key={idx} data-col={idx} sx={{
+                                    display: 'flex', justifyContent: 'center', alignItems: 'flex-end', pb: 0.5,
+                                    bgcolor: isGroupStart ? 'rgba(255,255,255,0.05)' : 'transparent',
+                                    borderBottom: '1px solid #444'
+                                }}>
+                                    {isGroupStart
+                                        ? <Typography variant="caption" fontWeight="bold" color="text.primary">{Math.floor(idx / cellsPerGroup) + 1}</Typography>
+                                        : <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.6rem' }}>•</Typography>}
+                                </Box>
+                            );
+                        })}
+                    </Box>
 
-                    {visibleInstruments.map((inst) => {
+                    {rows.map((inst) => {
                         const Icon = InstrumentIcons[inst.type];
 
                         return (
-                            <React.Fragment key={inst.type}>
-                                <Stack direction="row" alignItems="center" spacing={1} sx={{ p: 1, bgcolor: 'rgba(255,255,255,0.02)', borderRight: '1px solid #333' }}>
+                            <Box key={inst.type} sx={{ display: 'contents' }}>
+                                <Stack direction="row" alignItems="center" spacing={1} sx={{ p: 1, bgcolor: 'rgba(255,255,255,0.02)', borderRight: '1px solid #333', minWidth: 0 }}>
                                     {INSTRUMENT_IMAGES[inst.type] ? (
-                                        <Avatar 
-                                            src={INSTRUMENT_IMAGES[inst.type]} 
-                                            alt={inst.label} 
-                                            sx={{ 
-                                                width: 18, 
-                                                height: 18, 
-                                                border: '1px solid rgba(229, 169, 95, 0.4)',
-                                                boxShadow: '0 0 4px rgba(229, 169, 95, 0.2)'
-                                            }} 
+                                        <Avatar
+                                            src={INSTRUMENT_IMAGES[inst.type]}
+                                            alt=""
+                                            sx={{ width: 18, height: 18, border: '1px solid rgba(229, 169, 95, 0.4)', boxShadow: '0 0 4px rgba(229, 169, 95, 0.2)' }}
                                         />
                                     ) : (
                                         Icon && <Icon size={16} strokeWidth={1.5} color="#888" />
@@ -342,62 +371,75 @@ export default function PatternEditor({ pattern, onPatternUpdate, currentStepInd
                                     <Typography variant="body2" noWrap sx={{ fontSize: '0.8rem', color: '#ccc' }}>{inst.label}</Typography>
                                 </Stack>
 
-                                {Array.from({ length: gridCols }).map((_, idx) => {
-                                    const currentStep = getStepAtViewCol(idx, inst.type);
-                                    const isCurrent = currentStepIndex !== undefined && Math.floor(currentStepIndex / stepsPerViewStep) === idx;
-                                    const hasNote = !!currentStep;
-                                    const isBeatStart = (idx % notesPerBeat) === 0;
+                                {Array.from({ length: sub }).map((_, idx) => {
+                                    const note = stepIndex.get(`${idx + 1}:${inst.type}`);
+                                    const isGroupStart = Number.isInteger(cellsPerGroup) ? idx % cellsPerGroup === 0 : idx === 0;
+                                    const isPulseStart = Number.isInteger(stepsPerPulse) ? idx % stepsPerPulse === 0 : false;
 
-                                    let noteVisual: React.ReactNode = hasNote ? noteChar : null;
-                                    if (hasNote) {
-                                        if (inst.type === 'hihat') noteVisual = currentStep?.modifier === 'open' ? <Circle size={10} strokeWidth={3} /> : noteChar;
-                                        else if (inst.type === 'hihat_foot') noteVisual = <Typography variant="caption" sx={{ fontSize: '1.2rem', lineHeight: 1 }}>△</Typography>;
-                                        else if (inst.type === 'snare') noteVisual = currentStep?.modifier === 'snares_off' ? <Typography variant="caption" sx={{ fontSize: '0.7rem', border: '1px solid', px: 0.3, borderRadius: '2px' }}>T</Typography> : noteChar;
-                                        else if (inst.type === 'bombo_leguero' || inst.type === 'caja' || inst.type === 'cajon' || inst.type === 'rim') noteVisual = (currentStep?.modifier === 'aro' || inst.type === 'rim') ? '×' : noteChar;
+                                    let noteVisual: React.ReactNode = note ? noteChar : null;
+                                    if (note) {
+                                        if (inst.type === 'hihat') noteVisual = note.modifier === 'open' ? <Circle size={10} strokeWidth={3} /> : noteChar;
+                                        else if (inst.type === 'hihat_foot') noteVisual = '△';
+                                        else if (inst.type === 'snare' && note.modifier === 'snares_off') noteVisual = 'T';
+                                        else if (inst.type === 'rim' || note.modifier === 'aro') noteVisual = '×';
                                     }
-
-                                    const getIntensityColor = (v: number) => {
-                                        if (v > 0.95) return 'error.main';
-                                        if (v > 0.85) return 'secondary.main';
-                                        if (v > 0.6) return 'primary.main';
-                                        if (v > 0.3) return 'primary.light';
-                                        return 'text.disabled';
-                                    };
 
                                     return (
                                         <Box
                                             key={idx}
-                                            onMouseDown={(e) => { e.preventDefault(); handleCellInteraction(idx, inst.type); }}
-                                            onMouseEnter={() => isMouseDown && handleCellInteraction(idx, inst.type, selectedIntensity === 'eraser')}
+                                            component="button"
+                                            type="button"
+                                            data-col={idx}
+                                            data-testid={`cell-${inst.type}-${idx + 1}`}
+                                            aria-label={`${inst.label}, paso ${idx + 1}${note ? `, intensidad ${Math.round(note.velocity * 100)}%` : ''}`}
+                                            aria-pressed={!!note}
+                                            onPointerDown={(e: React.PointerEvent) => {
+                                                if (e.button !== 0) return;
+                                                e.preventDefault();
+                                                paintingRef.current = true;
+                                                applyTool(idx, inst.type, false);
+                                            }}
+                                            onPointerEnter={() => { if (paintingRef.current) applyTool(idx, inst.type, true); }}
+                                            onKeyDown={(e: React.KeyboardEvent) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    applyTool(idx, inst.type, false);
+                                                }
+                                            }}
                                             sx={{
+                                                all: 'unset',
+                                                boxSizing: 'border-box',
                                                 height: 40,
-                                                bgcolor: isBeatStart ? 'rgba(255,255,255,0.015)' : 'transparent',
-                                                borderRight: isBeatStart ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,255,255,0.03)',
+                                                bgcolor: isGroupStart ? 'rgba(255,255,255,0.03)' : isPulseStart ? 'rgba(255,255,255,0.015)' : 'transparent',
+                                                borderRight: isGroupStart ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,255,255,0.03)',
                                                 borderBottom: '1px solid rgba(255,255,255,0.03)',
-                                                border: isCurrent ? '1px solid #f48fb1' : undefined,
                                                 cursor: 'pointer',
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                 fontSize: '1.2rem',
-                                                color: hasNote ? getIntensityColor(currentStep?.velocity || 0.7) : 'transparent',
+                                                touchAction: 'none',
+                                                color: note ? getIntensityColor(note.velocity) : 'transparent',
                                                 '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' },
+                                                '&:focus-visible': { outline: '2px solid #ffd54f', outlineOffset: '-2px' },
                                                 userSelect: 'none'
                                             }}
                                         >
-                                            {hasNote && <Box sx={{ filter: (inst.type === 'hihat' && currentStep?.modifier === 'open') ? 'drop-shadow(0 0 4px rgba(244, 143, 177, 0.5))' : 'none', transform: (currentStep?.velocity ?? 1.0) < 0.6 ? 'scale(0.8)' : 'scale(1)' }}>{noteVisual}</Box>}
+                                            {note && <Box component="span" aria-hidden sx={{ transform: note.velocity < 0.6 ? 'scale(0.8)' : 'scale(1)' }}>{noteVisual}</Box>}
                                         </Box>
                                     );
                                 })}
-                            </React.Fragment>
+                            </Box>
                         );
                     })}
                 </Box>
             </Box>
+
+            <Snackbar
+                open={undoSteps !== null}
+                autoHideDuration={6000}
+                onClose={(_, reason) => { if (reason !== 'clickaway') setUndoSteps(null); }}
+                message="Patrón borrado"
+                action={<Button color="primary" size="small" onClick={undoClear}>Deshacer</Button>}
+            />
         </Box>
     );
 }
-
-const getNoteSymbol = (subdivision: number) => {
-    if (subdivision <= 4) return '♩';
-    if (subdivision <= 12) return '♪';
-    return '𝅘𝅥𝅯';
-};
