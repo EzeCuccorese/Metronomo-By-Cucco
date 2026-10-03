@@ -1,4 +1,5 @@
 import type { VoiceHost } from './types';
+import { scheduleFilter } from './filterSetup';
 
 /** Highpassed-noise hi-hat, short when closed and longer when open. */
 export function synthHiHat(host: VoiceHost, time: number, velocity: number, open: boolean): void {
@@ -8,7 +9,7 @@ export function synthHiHat(host: VoiceHost, time: number, velocity: number, open
 
     const filter = host.getFilter();
     filter.type = 'highpass';
-    filter.frequency.value = 7000;
+    scheduleFilter(filter, time, 7000);
 
     const gain = host.getGain();
 
@@ -39,7 +40,7 @@ export function synthHiHatFoot(host: VoiceHost, time: number, velocity: number):
 
     const filter = host.getFilter();
     filter.type = 'highpass';
-    filter.frequency.value = 5000; // Lower than stick hit for more "chunk"
+    scheduleFilter(filter, time, 5000); // Lower than stick hit for more "chunk"
 
     const gain = host.getGain();
 
@@ -120,8 +121,7 @@ export function synthRide(host: VoiceHost, time: number, velocity: number): void
 
         const filter = host.getFilter();
         filter.type = 'bandpass';
-        filter.frequency.value = freq;
-        filter.Q.value = 5;
+        scheduleFilter(filter, time, freq, 5);
 
         const noiseGain = host.getGain();
 

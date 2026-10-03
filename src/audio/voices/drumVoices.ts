@@ -1,5 +1,6 @@
 import type { ChannelId } from '../instrumentChannels';
 import type { VoiceHost } from './types';
+import { scheduleFilter } from './filterSetup';
 
 /** Rock kick: sine sweep with exponential amplitude decay. */
 export function synthKick(host: VoiceHost, time: number, velocity: number): void {
@@ -96,7 +97,7 @@ export function synthSnare(host: VoiceHost, time: number, velocity: number, snar
         noise.buffer = host.noiseBuffer;
         const noiseFilter = host.getFilter();
         noiseFilter.type = 'highpass';
-        noiseFilter.frequency.value = 1000;
+        scheduleFilter(noiseFilter, time, 1000);
         const noiseGain = host.getGain();
 
         noise.connect(noiseFilter);

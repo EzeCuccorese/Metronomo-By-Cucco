@@ -1,4 +1,5 @@
 import type { VoiceHost } from './types';
+import { scheduleFilter } from './filterSetup';
 
 /** Bombo legüero head hit from the pre-rendered buffer. */
 export function synthBomboParche(host: VoiceHost, time: number, velocity: number): void {
@@ -10,7 +11,7 @@ export function synthBomboParche(host: VoiceHost, time: number, velocity: number
     const dynamicsFilter = host.getFilter();
     dynamicsFilter.type = 'lowpass';
     // 0.1 vel -> ~200Hz, 1.0 vel -> ~12000Hz (Exponential-ish)
-    dynamicsFilter.frequency.value = 150 + (12000 * Math.pow(velocity, 3));
+    scheduleFilter(dynamicsFilter, time, 150 + (12000 * Math.pow(velocity, 3)));
 
     const gain = host.getGain();
 
@@ -38,7 +39,7 @@ export function synthBomboAro(host: VoiceHost, time: number, velocity: number): 
 
     const dynamicsFilter = host.getFilter();
     dynamicsFilter.type = 'lowpass';
-    dynamicsFilter.frequency.value = 2000 + (10000 * Math.pow(velocity, 2));
+    scheduleFilter(dynamicsFilter, time, 2000 + (10000 * Math.pow(velocity, 2)));
 
     const gain = host.getGain();
     source.connect(dynamicsFilter);
