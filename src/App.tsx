@@ -145,7 +145,7 @@ function App() {
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
       <PlaybackContext.Provider value={engine.store}>
-        <Box component="main" sx={{ minHeight: '100vh', width: '100%', display: 'flex', flexDirection: 'column', p: { xs: 0.5, sm: 1, md: 2 }, bgcolor: '#070605', overflowX: 'hidden', alignItems: 'center', boxSizing: 'border-box' }}>
+        <Box component="main" sx={{ minHeight: '100dvh', width: '100%', display: 'flex', flexDirection: 'column', p: { xs: 0.5, sm: 1, md: 2 }, bgcolor: '#070605', overflowX: 'hidden', alignItems: 'center', boxSizing: 'border-box' }}>
 
           <Box className="studio-chassis console-wood-edge" sx={{ width: '100%', maxWidth: '1440px', display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 2 }, p: { xs: 1, md: 2 }, boxSizing: 'border-box' }}>
 

@@ -284,7 +284,6 @@ html, body {
     overflow-y: hidden;
     scroll-snap-type: x proximity;
     overscroll-behavior-x: contain;
-    -webkit-overflow-scrolling: touch;
   }
   .mixer-channel-strip { scroll-snap-align: start; }
   .mute-button { min-height: 40px; min-width: 52px; font-size: 0.55rem; }
