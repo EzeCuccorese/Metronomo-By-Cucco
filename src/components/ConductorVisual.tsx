@@ -154,7 +154,10 @@ export default function ConductorVisual({
             ctx.clearRect(0, 0, width, height);
 
             // 1. Draw glowing background beat pulse
-            if (pulseIntensityRef.current > 0) {
+            if (reduceMotionRef.current) {
+                // No beat-rate flashing with reduced motion (WCAG 2.3).
+                pulseIntensityRef.current = 0;
+            } else if (pulseIntensityRef.current > 0) {
                 const gradient = ctx.createRadialGradient(
                     width / 2, height / 2, 10,
                     width / 2, height / 2, Math.max(width, height) / 1.5
@@ -164,7 +167,7 @@ export default function ConductorVisual({
                 gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
                 ctx.fillStyle = gradient;
                 ctx.fillRect(0, 0, width, height);
-                pulseIntensityRef.current = reduceMotionRef.current ? 0 : pulseIntensityRef.current - 0.05; // Decay pulse (single-frame flash when reduced)
+                pulseIntensityRef.current -= 0.05; // Decay pulse
             }
 
             // Lerp pendulum angle for super smooth movement
