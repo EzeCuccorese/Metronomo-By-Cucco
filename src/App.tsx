@@ -167,7 +167,7 @@ function App() {
             <Grid container spacing={{ xs: 1.5, md: 2 }} sx={{ width: '100%' }}>
 
               {/* Row 1: pulse (primary) + instruments */}
-              <Grid size={{ xs: 12, md: 5 }}>
+              <Grid size={{ xs: 12, md: 5, lg: 4 }}>
                 <Panel title="Pulso">
                   <ConductorVisual
                     pattern={currentPattern}
@@ -178,7 +178,7 @@ function App() {
                   />
                 </Panel>
               </Grid>
-              <Grid size={{ xs: 12, md: 7 }}>
+              <Grid size={{ xs: 12, md: 7, lg: 8 }}>
                 <Fill>
                   <InteractiveInstrumentVisual
                     pattern={currentPattern}
