@@ -14,7 +14,12 @@ import {
     Snackbar,
     Button
 } from '@mui/material';
-import { Eraser, Pen, Circle, Trash2, RotateCcw } from 'lucide-react';
+import BackspaceIcon from '@mui/icons-material/Backspace';
+import EditIcon from '@mui/icons-material/Edit';
+import CircleIcon from '@mui/icons-material/Circle';
+import CircleOutlinedIcon from '@mui/icons-material/CircleOutlined';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ReplayIcon from '@mui/icons-material/Replay';
 
 import { InstrumentIcons } from '../constants/instrumentIcons';
 import type { RhythmPattern, InstrumentType, RhythmStep } from '../rhythms/RhythmPatterns';
@@ -235,12 +240,12 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
                     >
                         <ToggleButton value="ghost" aria-label="Ghost (pp)" title="Ghost (pp)"><Typography variant="caption" sx={{ fontSize: '0.6rem' }}>pp</Typography></ToggleButton>
                         <ToggleButton value="piano" aria-label="Piano (p)" title="Piano (p)"><Typography variant="caption">p</Typography></ToggleButton>
-                        <ToggleButton value="pen" aria-label="Normal (mf)" title="Normal (mf)"><Pen size={14} /></ToggleButton>
+                        <ToggleButton value="pen" aria-label="Normal (mf)" title="Normal (mf)"><EditIcon sx={{ fontSize: 14 }} /></ToggleButton>
                         <ToggleButton value="forte" aria-label="Forte (f)" title="Forte (f)"><Typography variant="button">f</Typography></ToggleButton>
                         <ToggleButton value="accent" aria-label="Acento (ff)" title="Acento (ff)"><Typography variant="button" sx={{
                             fontWeight: "bold"
                         }}>ff</Typography></ToggleButton>
-                        <ToggleButton value="eraser" aria-label="Goma de borrar" title="Goma / Borrar"><Eraser size={14} /></ToggleButton>
+                        <ToggleButton value="eraser" aria-label="Goma de borrar" title="Goma / Borrar"><BackspaceIcon sx={{ fontSize: 14 }} /></ToggleButton>
                     </ToggleButtonGroup>
 
                     <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
@@ -255,10 +260,10 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
                             sx={{ '& .Mui-selected': { bgcolor: 'secondary.main !important', color: 'white !important' } }}
                         >
                             <Tooltip title="Cerrado / Parche / Bordonas ON">
-                                <ToggleButton value="closed" aria-label="Cerrado o parche"><Circle size={8} fill="currentColor" /></ToggleButton>
+                                <ToggleButton value="closed" aria-label="Cerrado o parche"><CircleIcon sx={{ fontSize: 8 }} /></ToggleButton>
                             </Tooltip>
                             <Tooltip title="Abierto / Aro / Bordonas OFF">
-                                <ToggleButton value="open" aria-label="Abierto o aro"><Circle size={12} strokeWidth={3} /></ToggleButton>
+                                <ToggleButton value="open" aria-label="Abierto o aro"><CircleOutlinedIcon sx={{ fontSize: 12 }} /></ToggleButton>
                             </Tooltip>
                         </ToggleButtonGroup>
                     </Box>
@@ -303,12 +308,12 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
 
                     {canRestore && (
                         <Tooltip title="Restaurar el ritmo original">
-                            <IconButton size="small" onClick={onRestore} aria-label="Restaurar ritmo original"><RotateCcw size={18} /></IconButton>
+                            <IconButton size="small" onClick={onRestore} aria-label="Restaurar ritmo original"><ReplayIcon sx={{ fontSize: 18 }} /></IconButton>
                         </Tooltip>
                     )}
                     <Tooltip title="Borrar todo el patrón">
                         <span>
-                            <IconButton size="small" color="error" onClick={clearPattern} disabled={pattern.steps.length === 0} aria-label="Borrar patrón" sx={{ ml: 0.5, opacity: 0.7 }}><Trash2 size={18} /></IconButton>
+                            <IconButton size="small" color="error" onClick={clearPattern} disabled={pattern.steps.length === 0} aria-label="Borrar patrón" sx={{ ml: 0.5, opacity: 0.7 }}><DeleteIcon sx={{ fontSize: 18 }} /></IconButton>
                         </span>
                     </Tooltip>
                 </Box>
@@ -382,7 +387,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
                                             sx={{ width: 18, height: 18, border: '1px solid rgba(229, 169, 95, 0.4)', boxShadow: '0 0 4px rgba(229, 169, 95, 0.2)' }}
                                         />
                                     ) : (
-                                        Icon && <Icon size={16} strokeWidth={1.5} color="#888" />
+                                        Icon && <Icon sx={{ fontSize: 16, color: '#888' }} />
                                     )}
                                     <Typography variant="body2" noWrap sx={{ fontSize: '0.8rem', color: '#ccc' }}>{inst.label}</Typography>
                                 </Stack>
@@ -394,7 +399,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
 
                                     let noteVisual: React.ReactNode = note ? noteChar : null;
                                     if (note) {
-                                        if (inst.type === 'hihat') noteVisual = note.modifier === 'open' ? <Circle size={10} strokeWidth={3} /> : noteChar;
+                                        if (inst.type === 'hihat') noteVisual = note.modifier === 'open' ? <CircleOutlinedIcon sx={{ fontSize: 10 }} /> : noteChar;
                                         else if (inst.type === 'hihat_foot') noteVisual = '△';
                                         else if (inst.type === 'snare' && note.modifier === 'snares_off') noteVisual = 'T';
                                         else if (inst.type === 'rim' || note.modifier === 'aro') noteVisual = '×';
