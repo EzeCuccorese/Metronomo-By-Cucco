@@ -47,7 +47,7 @@ const cache = new WeakMap<BaseAudioContext, Promise<Map<string, AudioBuffer>>>()
 
 async function loadSample(context: BaseAudioContext, url: string): Promise<AudioBuffer | null> {
     try {
-        const response = await fetch(new URL(url, document.baseURI).href);
+        const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return await context.decodeAudioData(await response.arrayBuffer());
     } catch (e) {
