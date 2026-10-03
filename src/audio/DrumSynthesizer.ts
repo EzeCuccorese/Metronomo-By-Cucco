@@ -264,8 +264,7 @@ class DrumSynthesizer {
      * Pre-renders complex sounds using OfflineAudioContext to save CPU.
      */
     private async initPreRenderedSounds() {
-        this.bomboBuffer = await renderBomboParche();
-        this.aroBuffer = await renderBomboAro();
+        [this.bomboBuffer, this.aroBuffer] = await Promise.all([renderBomboParche(), renderBomboAro()]);
     }
 
     /** Adapter handed to the synthesized voices (see ./voices). */

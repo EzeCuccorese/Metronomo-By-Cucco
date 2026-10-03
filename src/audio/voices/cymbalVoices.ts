@@ -68,11 +68,12 @@ export function synthCrash(host: VoiceHost, time: number, velocity: number): voi
     const source = host.context.createBufferSource();
     source.buffer = host.noiseBuffer;
 
-    const filter = host.context.createBiquadFilter();
+    const filter = host.getFilter();
     filter.type = 'highpass';
-    filter.frequency.value = 2000;
+    filter.frequency.setValueAtTime(2000, time);
+    filter.Q.setValueAtTime(1, time); // pooled filters may carry a previous voice's Q
 
-    const gain = host.context.createGain();
+    const gain = host.getGain();
 
     source.connect(filter);
     filter.connect(gain);
@@ -80,6 +81,11 @@ export function synthCrash(host: VoiceHost, time: number, velocity: number): voi
 
     gain.gain.setValueAtTime(velocity * 0.8, time);
     gain.gain.exponentialRampToValueAtTime(0.01, time + 1.5); // Long decay
+
+    source.onended = () => {
+        host.releaseFilter(filter);
+        host.releaseGain(gain);
+    };
 
     host.startVoice(source, time);
     source.stop(time + 1.5);
