@@ -266,7 +266,10 @@ export const MAX_TRAIL_LENGTH = 25;
 
 /** Appends a point to a trail (mutates), clearing it first when reduced; keeps at most 25 points. */
 export function pushTrailPoint(trail: TrailPoint[], p: Point, reduceMotion: boolean): void {
-    if (reduceMotion) trail.length = 0;
+    if (reduceMotion) {
+        trail.length = 0;
+        return;
+    }
     trail.push({ x: p.x, y: p.y, alpha: 1.0 });
     if (trail.length > MAX_TRAIL_LENGTH) trail.shift();
 }

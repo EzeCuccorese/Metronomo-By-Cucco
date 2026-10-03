@@ -187,10 +187,11 @@ export default function InteractiveInstrumentVisual({
 
             // --- A. ELASTIC SPRING PHYSICS ---
 
+            const frameNow = performance.now();
             Object.keys(scalesRef.current).forEach(key => {
                 if (reduceMotionRef.current) {
                     velocitiesRef.current[key] = 0;
-                    scalesRef.current[key] = reducedScale(isHighlighted(highlightUntilRef.current, key, performance.now()));
+                    scalesRef.current[key] = reducedScale(isHighlighted(highlightUntilRef.current, key, frameNow));
                     return;
                 }
                 const next = springStep(scalesRef.current[key], velocitiesRef.current[key]);

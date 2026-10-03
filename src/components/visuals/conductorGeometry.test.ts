@@ -264,11 +264,11 @@ describe('trails', () => {
         expect(trail.at(-1)).toEqual({ x: MAX_TRAIL_LENGTH + 4, y: 0, alpha: 1 });
     });
 
-    it('keeps only the latest point when motion is reduced', () => {
+    it('keeps the trail empty when motion is reduced', () => {
         const trail: TrailPoint[] = [];
         pushTrailPoint(trail, { x: 1, y: 1 }, true);
         pushTrailPoint(trail, { x: 2, y: 2 }, true);
-        expect(trail).toEqual([{ x: 2, y: 2, alpha: 1 }]);
+        expect(trail).toEqual([]);
     });
 
     it('fades older points', () => {
