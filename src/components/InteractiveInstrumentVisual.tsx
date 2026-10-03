@@ -1,5 +1,5 @@
 import { Box, Typography } from '@mui/material';
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
 import { usePlaybackStore } from '../state/PlaybackContext';
@@ -49,8 +49,9 @@ const PREVIEW_BUTTONS: { instrument: string; modifier?: string; label: string }[
 
 /** useRef whose initial value is computed once (not on every render). */
 function useLazyRef<T>(init: () => T): { current: T } {
-    const [ref] = useState(() => ({ current: init() }));
-    return ref;
+    const ref = useRef<T | null>(null);
+    if (ref.current === null) ref.current = init();
+    return ref as { current: T };
 }
 
 export default function InteractiveInstrumentVisual({
