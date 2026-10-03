@@ -28,6 +28,8 @@ import { PracticeModes } from './components/PracticeModes';
 import type { FormasSettings, SilenceSettings } from './components/PracticeModes';
 import { darkTheme } from './theme/darkTheme';
 import { HeaderToolbar } from './components/HeaderToolbar';
+import { Fill, Panel } from './components/Panel';
+import type { SxProps, Theme } from '@mui/material/styles';
 import { GenreSelectorModal } from './components/GenreSelectorModal';
 import { useMetronomeEngine } from './hooks/useMetronomeEngine';
 import { usePersistentState } from './hooks/usePersistentState';
@@ -51,6 +53,34 @@ const isSilence = (v: unknown): v is SilenceSettings =>
 const isFormas = (v: unknown): v is FormasSettings =>
   isPlainObject(v) && isBoolean(v.enabled) && FORM_GENRES.includes(v.genre as FormGenre) &&
   isNumber(v.introBars) && v.introBars >= 1;
+
+const CARD_BORDER = '1px solid rgba(229, 169, 95, 0.14)';
+
+/** Components that draw their own card get the same chrome as {@link Panel}. */
+const cardChildSx: SxProps<Theme> = {
+  '& > .MuiBox-root': {
+    bgcolor: '#141210',
+    border: CARD_BORDER,
+    borderRadius: '16px',
+    boxShadow: '0 6px 20px rgba(0, 0, 0, 0.35)',
+  },
+};
+
+/**
+ * The instrument canvas draws in a fixed 380x175 coordinate space and scales X and Y
+ * independently, so its box must keep that aspect ratio or the drawing is stretched.
+ */
+const instrumentsSx: SxProps<Theme> = [
+  cardChildSx,
+  {
+    '& > .MuiBox-root': { p: { xs: 1.5, md: 2 }, justifyContent: 'center', boxShadow: '0 6px 20px rgba(0, 0, 0, 0.35)' },
+    '& > .MuiBox-root > div:has(> canvas)': {
+      height: 'auto',
+      aspectRatio: '380 / 175',
+      maxWidth: 760,
+    },
+  },
+];
 
 function App() {
   const [bpm, setBpmRaw] = usePersistentState('bpm', 120, isBpm);
@@ -131,9 +161,9 @@ function App() {
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
       <PlaybackContext.Provider value={engine.store}>
-        <Box component="main" sx={{ minHeight: '100vh', width: '100%', display: 'flex', flexDirection: 'column', p: { xs: 1, md: 2 }, bgcolor: '#070605', overflowX: 'hidden', alignItems: 'center' }}>
+        <Box component="main" sx={{ minHeight: '100vh', width: '100%', display: 'flex', flexDirection: 'column', p: { xs: 0.5, sm: 1, md: 2 }, bgcolor: '#070605', overflowX: 'hidden', alignItems: 'center', boxSizing: 'border-box' }}>
 
-          <Box className="studio-chassis console-wood-edge" sx={{ width: '100%', maxWidth: '1440px', display: 'flex', flexDirection: 'column', p: { xs: 1, md: 1.5 }, boxSizing: 'border-box' }}>
+          <Box className="studio-chassis console-wood-edge" sx={{ width: '100%', maxWidth: '1440px', display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 2 }, p: { xs: 1, md: 2 }, boxSizing: 'border-box' }}>
 
             <HeaderToolbar
               isPlaying={isPlaying}
@@ -149,30 +179,12 @@ function App() {
               tempoLocked={tempoLocked}
             />
 
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5, minHeight: 0, width: '100%' }}>
-              <Grid container spacing={1.5} sx={{ width: '100%' }}>
+            {/* Rows of an aligned 12-column grid; every cell stretches to the row height. */}
+            <Grid container spacing={{ xs: 1.5, md: 2 }} sx={{ width: '100%' }}>
 
-                {/* LEFT COLUMN: Visualizer & Mixer */}
-                <Grid size={{ xs: 12, lg: 7 }} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, minWidth: 0 }}>
-                  <InteractiveInstrumentVisual
-                    pattern={currentPattern}
-                    isPlaying={isPlaying}
-                    onPreviewInstrument={engine.previewInstrument}
-                  />
-
-                  <Box sx={{ flex: 1, minHeight: 320, minWidth: 0 }}>
-                    <MixerConsole
-                      pattern={currentPattern}
-                      isPlaying={isPlaying}
-                      onVolumeChange={engine.setChannelVolume}
-                      onPanChange={engine.setChannelPan}
-                      onMuteChange={engine.setChannelMute}
-                    />
-                  </Box>
-                </Grid>
-
-                {/* RIGHT COLUMN: Sequencer & Practice Tools */}
-                <Grid size={{ xs: 12, lg: 5 }} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, minWidth: 0 }}>
+              {/* Row 1: pulse (primary) + instruments */}
+              <Grid size={{ xs: 12, md: 5 }}>
+                <Panel title="Pulso">
                   <ConductorVisual
                     pattern={currentPattern}
                     isPlaying={isPlaying}
@@ -180,17 +192,21 @@ function App() {
                     totalBarsInterval={trainer.barsPerStep}
                     bpm={bpm}
                   />
-
-                  <PracticeModes
-                    trainer={trainer}
-                    onTrainerChange={setTrainer}
-                    silence={silence}
-                    onSilenceChange={setSilence}
-                    formas={formas}
-                    onFormasChange={setFormas}
+                </Panel>
+              </Grid>
+              <Grid size={{ xs: 12, md: 7 }}>
+                <Fill sx={instrumentsSx}>
+                  <InteractiveInstrumentVisual
+                    pattern={currentPattern}
                     isPlaying={isPlaying}
+                    onPreviewInstrument={engine.previewInstrument}
                   />
+                </Fill>
+              </Grid>
 
+              {/* Row 2: step sequencer, full width */}
+              <Grid size={12}>
+                <Panel title="Secuenciador" sx={{ '& > section': { mt: 0 } }}>
                   <PatternEditor
                     pattern={currentPattern}
                     onPatternUpdate={handlePatternUpdate}
@@ -199,19 +215,56 @@ function App() {
                     canRestore={canRestore}
                     onRestore={handleRestorePattern}
                   />
+                </Panel>
+              </Grid>
 
+              {/* Row 3: mixer + practice modes */}
+              <Grid size={{ xs: 12, lg: 8 }}>
+                <Fill>
+                  <MixerConsole
+                    pattern={currentPattern}
+                    isPlaying={isPlaying}
+                    onVolumeChange={engine.setChannelVolume}
+                    onPanChange={engine.setChannelPan}
+                    onMuteChange={engine.setChannelMute}
+                  />
+                </Fill>
+              </Grid>
+              <Grid size={{ xs: 12, lg: 4 }} sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 2 } }}>
+                <PracticeModes
+                  trainer={trainer}
+                  onTrainerChange={setTrainer}
+                  silence={silence}
+                  onSilenceChange={setSilence}
+                  formas={formas}
+                  onFormasChange={setFormas}
+                  isPlaying={isPlaying}
+                />
+                <Fill sx={cardChildSx}>
                   <HarmonyBuilder
                     onUpdateProgression={engine.setHarmonyProgression}
                     onVolumeChange={engine.setHarmonyVolume}
                     onStyleChange={engine.setAccompanimentStyle}
                     isPlaying={isPlaying}
                   />
-
-                  <StudyTools onStopRequest={engine.stop} />
-                </Grid>
-
+                </Fill>
               </Grid>
-            </Box>
+
+              {/* Row 4: study tools + piano slot */}
+              <Grid size={{ xs: 12, md: 6, lg: 4 }}>
+                <Fill>
+                  <StudyTools onStopRequest={engine.stop} />
+                </Fill>
+              </Grid>
+
+              {/* Piano panel slot: reserved for the upcoming PianoPanel (harmony + playable keyboard + melody). */}
+              <Grid size={{ xs: 12, md: 6, lg: 8 }} data-slot="piano-panel">
+                <Panel title="Piano" sx={{ borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', textAlign: 'center', minHeight: 160 }}>
+                  Próximamente: teclado, armonía y melodía.
+                </Panel>
+              </Grid>
+
+            </Grid>
           </Box>
         </Box>
 
