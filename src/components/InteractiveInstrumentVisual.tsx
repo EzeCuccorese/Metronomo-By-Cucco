@@ -389,7 +389,8 @@ export default function InteractiveInstrumentVisual({
         let animationFrameId: number;
 
         const render = () => {
-            applySize(); // picks up devicePixelRatio changes (zoom, moving between displays)
+            // ResizeObserver handles width changes; only a DPR change (zoom, other display) needs a re-measure.
+            if ((window.devicePixelRatio || 1) !== lastDprRef.current) applySize();
             const layout = layoutRef.current;
             const dpr = window.devicePixelRatio || 1;
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -435,14 +436,13 @@ export default function InteractiveInstrumentVisual({
             ctx.save();
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
-            ctx.fontVariantCaps = 'small-caps';
             ctx.fillStyle = 'rgba(240, 222, 196, 0.82)';
             layout.items.forEach(it => {
                 let fs = layout.mode === 'stack' ? 12 : 11;
-                ctx.font = `600 ${fs}px Outfit, sans-serif`;
+                ctx.font = `small-caps 600 ${fs}px Outfit, sans-serif`;
                 while (fs > 8 && ctx.measureText(it.name).width > it.nameMaxW) {
                     fs -= 0.5;
-                    ctx.font = `600 ${fs}px Outfit, sans-serif`;
+                    ctx.font = `small-caps 600 ${fs}px Outfit, sans-serif`;
                 }
                 ctx.fillText(it.name, it.nameX, it.nameY);
             });
