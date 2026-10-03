@@ -16,6 +16,7 @@ const makeContext = () => ({
 
 describe('sampleLibrary', () => {
     beforeEach(() => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
         vi.spyOn(console, 'error').mockImplementation(() => {});
     });
     afterEach(() => vi.restoreAllMocks());
@@ -46,6 +47,8 @@ describe('sampleLibrary', () => {
         const ctx = makeContext();
         const buffers = await loadSamples(ctx);
         expect(buffers.has('kick')).toBe(true); // recovered through the m4a fallback
+        expect(console.warn).toHaveBeenCalledTimes(1);
+        expect(console.error).not.toHaveBeenCalled();
         expect(ctx.decodeAudioData).toHaveBeenCalledTimes(19);
         vi.unstubAllGlobals();
     });
@@ -61,6 +64,8 @@ describe('sampleLibrary', () => {
         expect(buffers.has('kick')).toBe(false);
         expect(buffers.has('snare')).toBe(true);
         expect(ctx.decodeAudioData).toHaveBeenCalledTimes(18);
+        expect(console.warn).toHaveBeenCalledTimes(1);
+        expect(console.error).toHaveBeenCalledTimes(1);
         vi.unstubAllGlobals();
     });
 

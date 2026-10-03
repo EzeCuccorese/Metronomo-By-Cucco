@@ -72,12 +72,14 @@ async function fetchAndDecode(context: BaseAudioContext, url: string): Promise<A
 }
 
 async function loadSample(context: BaseAudioContext, base: string, formats: SampleFormat[]): Promise<AudioBuffer | null> {
-    for (const format of formats) {
-        const url = `${base}.${format}`;
+    for (let i = 0; i < formats.length; i++) {
+        const url = `${base}.${formats[i]}`;
         try {
             return await fetchAndDecode(context, url);
         } catch (e) {
-            console.error(`Failed to load sample ${url}`, e);
+            // Only an error once every format has failed; otherwise the next one is tried.
+            if (i < formats.length - 1) console.warn(`Failed to load sample ${url}, trying ${base}.${formats[i + 1]}`, e);
+            else console.error(`Failed to load sample ${url}`, e);
         }
     }
     // The synthesizer falls back to its synthesized voice for this instrument.
@@ -135,7 +137,12 @@ export function stripLeadingSilence(context: BaseAudioContext, buffer: AudioBuff
     const channels: Float32Array[] = [];
     for (let ch = 0; ch < buffer.numberOfChannels; ch++) channels.push(buffer.getChannelData(ch));
     let skip = 0;
-    while (skip < maxSkip && channels.every(data => Math.abs(data[skip]) < threshold)) skip++;
+    scan: while (skip < maxSkip) {
+        for (const data of channels) {
+            if (Math.abs(data[skip]) >= threshold) break scan;
+        }
+        skip++;
+    }
     if (skip === 0) return buffer;
 
     const out = context.createBuffer(buffer.numberOfChannels, buffer.length - skip, buffer.sampleRate);
