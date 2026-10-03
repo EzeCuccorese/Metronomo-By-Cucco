@@ -2,7 +2,7 @@ import { test, expect, openApp, play, stop, selectPreset, setBpm, setMuted, AUDI
 
 /**
  * These tests listen to the real Web Audio output of the production bundle.
- * Each one maps to a bug found in the audit (see .plans/auditoria-critica-y-plan-de-mejoras.plan.md).
+ * Each one maps to a bug found in the audit (see docs/plans/auditoria-critica-y-plan-de-mejoras.plan.md).
  */
 test.describe('audio output', () => {
     test('C1 · the Metronome preset clicks on every beat', async ({ page, probe }) => {
