@@ -23,7 +23,6 @@ export interface VoiceHost {
     startVoice(node: AudioScheduledSourceNode, time: number): void;
     /** Connects a voice output to a mixer channel strip (master bus for unknown names). */
     connectVoiceToChannel(voiceNode: AudioNode, channel: ChannelId): void;
-    getChannelNode(name: string): AudioNode;
     /** Returns the current shaker direction and flips it for the next hit (push/pull alternation). */
     nextShakerPush(): boolean;
 }

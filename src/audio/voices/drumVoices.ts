@@ -52,7 +52,7 @@ export function synthTom(host: VoiceHost, time: number, velocity: number, pitch:
 /** Deep, muffled samba surdo. */
 export function synthSurdo(host: VoiceHost, time: number, velocity: number): void {
     const osc = host.context.createOscillator();
-    const gain = host.context.createGain();
+    const gain = host.getGain();
 
     osc.connect(gain);
     host.connectVoiceToChannel(gain, 'bombo');
@@ -63,6 +63,8 @@ export function synthSurdo(host: VoiceHost, time: number, velocity: number): voi
 
     gain.gain.setValueAtTime(velocity, time);
     gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
+
+    osc.onended = () => host.releaseGain(gain);
 
     host.startVoice(osc, time);
     osc.stop(time + 0.45);

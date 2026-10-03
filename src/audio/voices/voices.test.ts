@@ -48,7 +48,6 @@ function makeHost(withBuffers: boolean) {
         releaseFilter: vi.fn(),
         startVoice: (n) => { started.push(n); },
         connectVoiceToChannel: vi.fn(),
-        getChannelNode: () => node() as unknown as AudioNode,
         nextShakerPush: () => { const p = push; push = !push; return p; },
     };
     return { host, started };

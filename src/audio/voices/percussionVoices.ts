@@ -93,11 +93,11 @@ export function synthClave(host: VoiceHost, time: number, velocity: number): voi
     
     impulseGain.connect(bp1);
     bp1.connect(mixGain1);
-    mixGain1.connect(host.getChannelNode('clave'));
+    host.connectVoiceToChannel(mixGain1, 'clave');
 
     impulseGain.connect(bp2);
     bp2.connect(mixGain2);
-    mixGain2.connect(host.getChannelNode('clave'));
+    host.connectVoiceToChannel(mixGain2, 'clave');
 
     host.startVoice(impulseSource, time);
     impulseSource.stop(time + 0.08);

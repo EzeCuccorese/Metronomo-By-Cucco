@@ -283,7 +283,6 @@ class DrumSynthesizer {
             releaseFilter: (node) => self.releaseFilter(node),
             startVoice: (node, time) => self.startVoice(node, time),
             connectVoiceToChannel: (node, channel) => self.connectVoiceToChannel(node, channel),
-            getChannelNode: (name) => self.getChannelNode(name),
             nextShakerPush: () => {
                 const isPush = self.shakerState;
                 self.shakerState = !self.shakerState;
