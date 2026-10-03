@@ -3,7 +3,7 @@ import {
     Box, Typography, Button, Stack, Paper, IconButton,
     CircularProgress, List, ListItem, ListItemText,
     TextField, Checkbox, Dialog, DialogTitle,
-    DialogContent, DialogActions, Divider,
+    DialogContent, DialogActions,
     Collapse, Snackbar
 } from '@mui/material';
 import { usePomodoro, formatTime } from '../hooks/usePomodoro';
@@ -82,14 +82,25 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
     };
 
     return (
-        <Paper className="brass-trim" sx={{ p: 2.5, bgcolor: '#141210', borderRadius: 4, height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Paper className="brass-trim" sx={{
+            p: { xs: 1.5, md: 2.5 }, bgcolor: '#141210', borderRadius: 4, height: '100%',
+            display: 'grid', gap: { xs: 1.5, md: 2 }, alignContent: 'start',
+            // Stacked on phones; timer | stats on tablets with the plan below; three columns on desktop.
+            gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))', lg: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr)' },
+            gridTemplateAreas: {
+                xs: '"timer" "stats" "head" "list"',
+                md: '"timer stats" "head head" "list list"',
+                lg: '"timer stats head" "timer stats list"',
+            },
+            gridTemplateRows: { lg: 'auto minmax(0, 1fr)' },
+        }}>
 
             {/* TIMER VISUAL */}
             <Box 
                 className="retro-monospaced-screen" 
                 sx={{ 
                     textAlign: 'center', 
-                    mb: 2.5, 
+                    gridArea: 'timer',
                     position: 'relative', 
                     p: 3, 
                     borderRadius: 3,
@@ -161,23 +172,21 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
             </Box>
 
             {/* STATS */}
-            <Paper sx={{ p: 1, my: 1, bgcolor: '#1a1a1a', border: '1px solid #333', textAlign: 'center' }}>
+            <Paper sx={{ gridArea: 'stats', p: 1, bgcolor: '#1a1a1a', border: '1px solid #333', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>COMPASES PRACTICADOS</Typography>
                 <Typography variant="h5" color="primary" sx={{ fontWeight: 'bold' }} data-testid="bars-practiced">
                     {totalBarsPracticed}
                 </Typography>
             </Paper>
 
-            <Divider sx={{ my: 1, borderColor: '#333' }} />
-
             {/* TASK LIST HEADER */}
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1, px: 1 }}>
+            <Stack direction="row" sx={{ gridArea: 'head', justifyContent: 'space-between', alignItems: 'center', px: 1 }}>
                 <Typography variant="overline" sx={{ color: 'text.secondary' }}>MI PLAN DE ESTUDIO</Typography>
                 <IconButton size="small" color="primary" aria-label="Agregar tarea" onClick={() => setIsDialogOpen(true)}><AddIcon /></IconButton>
             </Stack>
 
             {/* TASK LIST */}
-            <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+            <Box sx={{ gridArea: 'list', overflowY: 'auto', minHeight: 0, maxHeight: { lg: 320 } }}>
                 {tasks.length === 0 && (
                     <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', textAlign: 'center', mt: 4 }}>
                         Agrega tareas (ej: "Escalas") y asígnales 🍅

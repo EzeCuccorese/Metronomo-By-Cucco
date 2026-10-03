@@ -34,7 +34,6 @@ html, body {
   border-radius: 24px;
   padding: 16px;
   position: relative;
-  height: 100%;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -42,8 +41,8 @@ html, body {
 }
 
 .console-wood-edge {
-  border: 10px solid #28170e;
-  border-image: linear-gradient(135deg, #422617 0%, #211109 50%, #422617 100%) 10;
+  border: 6px solid #28170e;
+  border-image: linear-gradient(135deg, #422617 0%, #211109 50%, #422617 100%) 6;
   border-radius: 28px;
   box-shadow: 
     inset 0 4px 20px rgba(0, 0, 0, 0.8), 
@@ -52,7 +51,7 @@ html, body {
 }
 
 .brass-trim {
-  border: 1px solid rgba(229, 169, 95, 0.25) !important;
+  border: 1px solid rgba(229, 169, 95, 0.14) !important;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6) !important;
 }
 
@@ -133,9 +132,9 @@ html, body {
     0 10px 25px rgba(0, 0, 0, 0.8),
     inset 0 1px 1px rgba(255, 255, 255, 0.05);
   padding: 8px 12px;
-  margin-top: auto;
+  margin-top: 0;
   width: 100%;
-  height: 190px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background-image: 
@@ -260,29 +259,80 @@ html, body {
 /* Mixer Channels Layout */
 .mixer-channels-container {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 6px;
+  /* Fits as many strips per row as the card allows (8 wide, 4 on tablets, 3-4 on phones). */
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  gap: 8px;
+  flex: 1;
   background-color: #0b0908;
   border-radius: 8px;
   padding: 10px 8px;
   border: 1px solid rgba(229, 169, 95, 0.05);
   box-shadow: inset 0 6px 15px rgba(0,0,0,0.85);
   overflow-x: auto;
-  min-height: 250px;
+  min-height: 0;
 }
 
-@media (max-width: 900px) {
+.mixer-console-rack { padding: 8px; }
+
+/* Phones and small tablets: one horizontally scrollable row that scrolls inside its own container. */
+@media (max-width: 899px) {
   .mixer-channels-container {
-    grid-template-columns: repeat(4, 1fr);
-    row-gap: 12px;
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 84px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-x: contain;
   }
+  .mixer-channel-strip { scroll-snap-align: start; }
+  .mute-button { min-height: 40px; min-width: 52px; font-size: 0.55rem; }
 }
 
-@media (max-width: 600px) {
-  .mixer-channels-container {
-    grid-template-columns: repeat(2, 1fr);
-    row-gap: 12px;
-  }
+.mixer-title-screen {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.mixer-title-screen .vfd-glow {
+  font-size: clamp(0.55rem, 2.4vw, 0.75rem);
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brass-brand {
+  font-size: clamp(0.5rem, 2.4vw, 0.75rem);
+  letter-spacing: 0.18em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.channel-label-holder {
+  max-width: 100%;
+}
+
+.channel-label-screen {
+  max-width: 100%;
+}
+
+.channel-label-screen .vfd-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The knob rotates, so its bounding box is wider than 20px: reserve the room. */
+.channel-pan-section {
+  min-width: 32px;
+}
+
+.pan-value-display {
+  min-width: 3ch;
+  text-align: center;
 }
 
 /* Individual Channel Strip */
@@ -294,13 +344,14 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 10px;
   box-shadow: 
     1px 1px 4px rgba(0,0,0,0.4),
     inset 0 1px 0 rgba(255,255,255,0.02);
   position: relative;
   transition: opacity 0.2s ease;
-  min-height: 230px;
+  min-height: 0;
 }
 
 .mixer-channel-strip.muted {
@@ -399,7 +450,9 @@ html, body {
 .channel-fader-section {
   display: flex;
   width: auto;
-  height: 80px;
+  /* Takes the spare height of a stretched strip, so desktop strips have no empty band. */
+  flex: 1 1 80px;
+  min-height: 80px;
   justify-content: center;
   position: relative;
   margin-bottom: 0;
