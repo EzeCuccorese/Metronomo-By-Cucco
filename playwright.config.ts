@@ -16,6 +16,8 @@ export default defineConfig({
     serviceWorkers: 'block',
     launchOptions: {
       args: ['--autoplay-policy=no-user-gesture-required'],
+      // Optional: reuse a locally installed Chromium instead of the one bundled with this Playwright version.
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
     },
   },
   projects: [

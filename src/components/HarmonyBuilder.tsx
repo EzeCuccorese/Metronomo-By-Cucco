@@ -182,9 +182,18 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
             height: '100%',
             overflow: 'auto'
         }}>
-            <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+            <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                    alignItems: "center",
+                    mb: 2
+                }}>
                 <Music size={20} color="#c0c0c0" />
-                <Typography variant="subtitle1" fontWeight="bold" color="white">
+                <Typography variant="subtitle1" sx={{
+                    color: 'white',
+                    fontWeight: "bold"
+                }}>
                     Constructor Armónico
                 </Typography>
             </Stack>
@@ -225,10 +234,22 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
             <Divider sx={{ mb: 2, borderColor: '#333' }} />
 
             {/* Chord Palette */}
-            <Typography variant="caption" color="text.secondary" mb={1} display="block">
+            <Typography
+                variant="caption"
+                sx={{
+                    color: "text.secondary",
+                    mb: 1,
+                    display: "block"
+                }}>
                 AGREGAR ACORDE (GRADO)
             </Typography>
-            <Stack direction="row" flexWrap="wrap" gap={1} mb={3}>
+            <Stack
+                direction="row"
+                sx={{
+                    flexWrap: "wrap",
+                    gap: 1,
+                    mb: 3
+                }}>
                 {availableDegrees.map(d => (
                     <Chip
                         key={d.index}
@@ -243,7 +264,13 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
             </Stack>
 
             {/* Sequencer List */}
-            <Typography variant="caption" color="text.secondary" mb={1} display="block">
+            <Typography
+                variant="caption"
+                sx={{
+                    color: "text.secondary",
+                    mb: 1,
+                    display: "block"
+                }}>
                 SECUENCIA (LOOP)
             </Typography>
             <Stack spacing={1} sx={{ mb: 3 }}>
@@ -256,7 +283,9 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
                         transition: 'all 0.2s ease-in-out',
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                     }}>
-                        <Stack direction="row" alignItems="center" spacing={2}>
+                        <Stack direction="row" spacing={2} sx={{
+                            alignItems: "center"
+                        }}>
                             <Box sx={{
                                 width: 24, height: 24, borderRadius: '50%',
                                 bgcolor: 'secondary.main', color: 'white',
@@ -265,13 +294,19 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
                             }}>
                                 {idx + 1}
                             </Box>
-                            <Typography fontWeight="bold" variant="body1">{step.degree}</Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="body1" sx={{
+                                fontWeight: "bold"
+                            }}>{step.degree}</Typography>
+                            <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                            }}>
                                 {step.notes.join(', ')}
                             </Typography>
                         </Stack>
 
-                        <Stack direction="row" alignItems="center" spacing={1}>
+                        <Stack direction="row" spacing={1} sx={{
+                            alignItems: "center"
+                        }}>
                             <Select
                                 size="small" variant="standard"
                                 value={step.durationUnits}
@@ -279,7 +314,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
                                     const units = Number(e.target.value);
                                     setSequence(prev => prev.map(c => c.id === step.id ? { ...c, durationUnits: units } : c));
                                 }}
-                                inputProps={{ 'aria-label': `Duración de ${step.degree}` }}
+                                slotProps={{ input: { 'aria-label': `Duración de ${step.degree}` } }}
                                 sx={{ width: 100 }}
                             >
                                 <MenuItem value={1}>1/2 Compás</MenuItem>
@@ -300,14 +335,23 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
                 ))}
 
                 {sequence.length === 0 && (
-                    <Typography variant="caption" color="text.disabled" sx={{ fontStyle: 'italic', textAlign: 'center', p: 2 }}>
+                    <Typography
+                        variant="caption"
+                        sx={{
+                            color: "text.disabled",
+                            fontStyle: 'italic',
+                            textAlign: 'center',
+                            p: 2
+                        }}>
                         No hay acordes. Agrega uno arriba.
                     </Typography>
                 )}
             </Stack>
 
             <Box sx={{ mt: 'auto' }}>
-                <Stack direction="row" spacing={2} alignItems="center">
+                <Stack direction="row" spacing={2} sx={{
+                    alignItems: "center"
+                }}>
                     <Typography variant="caption">Volumen</Typography>
                     <Slider
                         value={volume}

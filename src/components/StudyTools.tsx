@@ -212,7 +212,7 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
                     boxShadow: 'inset 0 0 15px rgba(0,0,0,0.9), 0 0 10px rgba(229, 169, 95, 0.15) !important'
                 }}
             >
-                <Stack direction="row" spacing={1} justifyContent="center" mb={2}>
+                <Stack direction="row" spacing={1} sx={{ justifyContent: 'center', mb: 2 }}>
                     <Button size="small" variant={timerType === 'pomodoro' ? "contained" : "text"}
                         onClick={() => setMode('pomodoro')}
                         sx={{ 
@@ -253,7 +253,7 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
                     />
                     <Box sx={{ top: 0, left: 0, bottom: 0, right: 0, position: 'absolute', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
                         <TomatoIcon filled={true} size={28} />
-                        <Typography variant="h4" fontWeight="bold" sx={{ fontFamily: '"Share Tech Mono", monospace', mt: 1, color: '#e5a95f', textShadow: '0 0 6px rgba(229, 169, 95, 0.6)' }}>
+                        <Typography variant="h4" sx={{ fontWeight: 'bold', fontFamily: '"Share Tech Mono", monospace', mt: 1, color: '#e5a95f', textShadow: '0 0 6px rgba(229, 169, 95, 0.6)' }}>
                             {formatTime(timeLeft)}
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'rgba(229, 169, 95, 0.5)', fontWeight: 'bold', letterSpacing: '0.08em', fontSize: '0.65rem' }}>
@@ -262,7 +262,7 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
                     </Box>
                 </Box>
 
-                <Stack direction="row" spacing={2} justifyContent="center">
+                <Stack direction="row" spacing={2} sx={{ justifyContent: 'center' }}>
                     <IconButton onClick={toggleTimer} aria-label={isActive ? 'Pausar temporizador' : 'Iniciar temporizador'} size="large" sx={{
                         bgcolor: isActive ? 'rgba(255,255,255,0.1)' : (timerType === 'pomodoro' ? '#ef5350' : '#ffa726'),
                         color: 'white',
@@ -277,8 +277,8 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
 
             {/* STATS */}
             <Paper sx={{ p: 1, my: 1, bgcolor: '#1a1a1a', border: '1px solid #333', textAlign: 'center' }}>
-                <Typography variant="caption" color="text.secondary" display="block">COMPASES PRACTICADOS</Typography>
-                <Typography variant="h5" color="primary" fontWeight="bold" data-testid="bars-practiced">
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>COMPASES PRACTICADOS</Typography>
+                <Typography variant="h5" color="primary" sx={{ fontWeight: 'bold' }} data-testid="bars-practiced">
                     {totalBarsPracticed}
                 </Typography>
             </Paper>
@@ -286,15 +286,15 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
             <Divider sx={{ my: 1, borderColor: '#333' }} />
 
             {/* TASK LIST HEADER */}
-            <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1} px={1}>
-                <Typography variant="overline" color="text.secondary">MI PLAN DE ESTUDIO</Typography>
+            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1, px: 1 }}>
+                <Typography variant="overline" sx={{ color: 'text.secondary' }}>MI PLAN DE ESTUDIO</Typography>
                 <IconButton size="small" color="primary" aria-label="Agregar tarea" onClick={() => setIsDialogOpen(true)}><AddIcon /></IconButton>
             </Stack>
 
             {/* TASK LIST */}
             <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
                 {tasks.length === 0 && (
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 4 }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', textAlign: 'center', mt: 4 }}>
                         Agrega tareas (ej: "Escalas") y asígnales 🍅
                     </Typography>
                 )}
@@ -338,7 +338,7 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
                                             </Typography>
                                         }
                                         secondary={
-                                            <Stack direction="row" spacing={0} alignItems="center" mt={0.5}>
+                                            <Stack direction="row" spacing={0} sx={{ alignItems: 'center', mt: 0.5 }}>
                                                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                                     {Array.from({ length: task.estimatedPomodoros }).map((_, i) => (
                                                         <TomatoIcon key={i} filled={i < task.completedPomodoros} size={14} />
@@ -357,7 +357,7 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
                                     <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                                         <List component="div" disablePadding sx={{ pl: 6, pr: 2, pb: 1 }}>
                                             {task.subtasks.map(sub => (
-                                                <Stack key={sub.id} direction="row" alignItems="center" spacing={1} sx={{ py: 0.5 }}>
+                                                <Stack key={sub.id} direction="row" spacing={1} sx={{ alignItems: 'center', py: 0.5 }}>
                                                     <Checkbox
                                                         size="small"
                                                         checked={sub.completed}
@@ -394,7 +394,7 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
                             label="Estimación (Pomodoros)"
                             type="number"
                             fullWidth
-                            inputProps={{ min: 1, max: 10 }}
+                            slotProps={{ htmlInput: { min: 1, max: 10 } }}
                             value={newTaskPomodoros}
                             onChange={(e) => setNewTaskPomodoros(Number(e.target.value))}
                         />

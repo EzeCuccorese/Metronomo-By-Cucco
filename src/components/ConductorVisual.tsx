@@ -449,7 +449,7 @@ export default function ConductorVisual({
 
             } else {
                 // --- STANDARD SINGLE-SPARK GEOMETRIC CONDUCTOR PATH ---
-                let points: { x: number; y: number }[] = [];
+                let points: { x: number; y: number }[];
 
                 if (liveRef.current.beats === 3) {
                     // 3/4 Pattern: 1 (Down), 2 (Right), 3 (Up-Left return)
@@ -584,10 +584,24 @@ export default function ConductorVisual({
 
     // Speed Trainer progress bars
     const barIndicators = trainerActive && totalBarsInterval > 1 ? (
-        <Stack spacing={1} alignItems="center" sx={{ mt: 1.5, width: '100%' }}>
-            <Stack direction="row" spacing={0.5} alignItems="center">
+        <Stack
+            spacing={1}
+            sx={{
+                alignItems: "center",
+                mt: 1.5,
+                width: '100%'
+            }}>
+            <Stack direction="row" spacing={0.5} sx={{
+                alignItems: "center"
+            }}>
                 <SpeedIcon sx={{ fontSize: '0.9rem', color: 'secondary.main' }} />
-                <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.65rem', letterSpacing: '0.1em' }}>
+                <Typography
+                    variant="overline"
+                    sx={{
+                        color: "text.secondary",
+                        fontSize: '0.65rem',
+                        letterSpacing: '0.1em'
+                    }}>
                     PROGRESO DEL ENTRENADOR ({currentBarProgress + 1} / {totalBarsInterval})
                 </Typography>
             </Stack>
@@ -682,7 +696,14 @@ export default function ConductorVisual({
             </Box>
 
             {/* Beat indicators bar */}
-            <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center" sx={{ width: '100%' }}>
+            <Stack
+                direction="row"
+                spacing={0.5}
+                sx={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: '100%'
+                }}>
                 {beatDots}
             </Stack>
 

@@ -55,7 +55,7 @@ src/
 
 ## Desarrollo
 
-Requiere Node 20.19+ o 22.12+.
+Requiere Node 22.12+ (CI y Docker usan Node 24 LTS).
 
 ```bash
 npm install

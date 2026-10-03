@@ -74,9 +74,16 @@ const FormStatus: React.FC = () => {
     if (!formState) return null;
     return (
         <Box role="status" data-testid="form-status" sx={{ mt: 1, p: 1, borderRadius: 2, bgcolor: 'rgba(229,169,95,0.08)', border: '1px solid rgba(229,169,95,0.25)' }}>
-            <Typography variant="subtitle2" color="primary.main" fontWeight={800}>{formState.sectionName}</Typography>
+            <Typography
+                variant="subtitle2"
+                sx={{
+                    color: "primary.main",
+                    fontWeight: 800
+                }}>{formState.sectionName}</Typography>
             {!formState.finished && (
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                }}>
                     Compás {formState.sectionBar + 1} / {formState.sectionTotalBars} · Parte {formState.part}
                 </Typography>
             )}
@@ -87,7 +94,9 @@ const FormStatus: React.FC = () => {
 const TrainerStatus: React.FC<{ barsPerStep: number }> = ({ barsPerStep }) => {
     const trainerBar = usePlayback(s => s.trainerBar);
     return (
-        <Typography variant="caption" color="text.secondary" data-testid="trainer-status">
+        <Typography variant="caption" data-testid="trainer-status" sx={{
+            color: "text.secondary"
+        }}>
             Compás {Math.min(trainerBar + 1, barsPerStep)} de {barsPerStep} hasta el próximo cambio
         </Typography>
     );
@@ -113,8 +122,12 @@ export const PracticeModes: React.FC<PracticeModesProps> = ({
         <Paper className="brass-trim" sx={{ bgcolor: '#141210', borderRadius: 4, overflow: 'hidden' }}>
             <Accordion disableGutters defaultExpanded={activeCount > 0} sx={{ bgcolor: 'transparent', backgroundImage: 'none' }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls="practice-modes-content" id="practice-modes-header">
-                    <Stack direction="row" spacing={1} alignItems="center">
-                        <Typography variant="subtitle1" fontWeight="bold">Modos de práctica</Typography>
+                    <Stack direction="row" spacing={1} sx={{
+                        alignItems: "center"
+                    }}>
+                        <Typography variant="subtitle1" sx={{
+                            fontWeight: "bold"
+                        }}>Modos de práctica</Typography>
                         {activeCount > 0 && <Chip size="small" color="primary" label={`${activeCount} activo${activeCount > 1 ? 's' : ''}`} />}
                     </Stack>
                 </AccordionSummary>
@@ -124,9 +137,18 @@ export const PracticeModes: React.FC<PracticeModesProps> = ({
                         <Box>
                             <FormControlLabel
                                 control={<Switch checked={trainer.active} onChange={(e) => updateTrainer({ active: e.target.checked })} />}
-                                label={<Typography fontWeight={700}>Entrenador de velocidad</Typography>}
+                                label={<Typography sx={{
+                                    fontWeight: 700
+                                }}>Entrenador de velocidad</Typography>}
                             />
-                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                            <Stack
+                                direction="row"
+                                spacing={1}
+                                useFlexGap
+                                sx={{
+                                    flexWrap: "wrap",
+                                    mt: 1
+                                }}>
                                 <NumberField label="BPM inicial" value={trainer.startBpm} min={MIN_BPM} max={MAX_BPM} disabled={isPlaying && trainer.active}
                                     onChange={(v) => updateTrainer({ startBpm: clampBpm(v) })} />
                                 <NumberField label="BPM objetivo" value={trainer.targetBpm} min={MIN_BPM} max={MAX_BPM}
@@ -154,12 +176,22 @@ export const PracticeModes: React.FC<PracticeModesProps> = ({
                         <Box>
                             <FormControlLabel
                                 control={<Switch checked={silence.active} onChange={(e) => onSilenceChange({ ...silence, active: e.target.checked })} />}
-                                label={<Typography fontWeight={700}>Compases en silencio</Typography>}
+                                label={<Typography sx={{
+                                    fontWeight: 700
+                                }}>Compases en silencio</Typography>}
                             />
-                            <Typography variant="caption" color="text.secondary" component="p">
+                            <Typography variant="caption" component="p" sx={{
+                                color: "text.secondary"
+                            }}>
                                 Silencia compases al azar para que sostengas el tempo solo.
                             </Typography>
-                            <Stack direction="row" spacing={2} alignItems="center" sx={{ px: 1 }}>
+                            <Stack
+                                direction="row"
+                                spacing={2}
+                                sx={{
+                                    alignItems: "center",
+                                    px: 1
+                                }}>
                                 <Typography variant="body2" sx={{ minWidth: 90 }}>Probabilidad</Typography>
                                 <Slider
                                     value={Math.round(silence.chance * 100)}
@@ -178,9 +210,18 @@ export const PracticeModes: React.FC<PracticeModesProps> = ({
                         <Box>
                             <FormControlLabel
                                 control={<Switch checked={formas.enabled} disabled={isPlaying} onChange={(e) => onFormasChange({ ...formas, enabled: e.target.checked })} />}
-                                label={<Typography fontWeight={700}>Formas folclóricas</Typography>}
+                                label={<Typography sx={{
+                                    fontWeight: 700
+                                }}>Formas folclóricas</Typography>}
                             />
-                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                            <Stack
+                                direction="row"
+                                spacing={1}
+                                useFlexGap
+                                sx={{
+                                    flexWrap: "wrap",
+                                    mt: 1
+                                }}>
                                 <FormControl size="small" sx={{ minWidth: 180 }}>
                                     <InputLabel id="formas-genre-label">Forma</InputLabel>
                                     <Select

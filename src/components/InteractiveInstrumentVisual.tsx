@@ -944,7 +944,15 @@ export default function InteractiveInstrumentVisual({
             border: '1px solid rgba(229, 169, 95, 0.08)',
             boxShadow: 'inset 0 0 25px rgba(0,0,0,0.6)'
         }}>
-            <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.62rem', mb: 1, letterSpacing: '0.15em', fontWeight: 'bold' }}>
+            <Typography
+                variant="overline"
+                sx={{
+                    color: "text.secondary",
+                    fontSize: '0.62rem',
+                    mb: 1,
+                    letterSpacing: '0.15em',
+                    fontWeight: 'bold'
+                }}>
                 INSTRUMENTOS RÍTMICOS TÁCTILES (HAZ CLIC PARA PROBAR)
             </Typography>
 
