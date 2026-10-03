@@ -11,7 +11,7 @@ interface PanelProps {
   sx?: SxProps<Theme>;
 }
 
-const asArray = (sx?: SxProps<Theme>) => (Array.isArray(sx) ? sx : [sx]);
+const asArray = (sx?: SxProps<Theme>) => (sx ? (Array.isArray(sx) ? sx : [sx]) : []);
 
 /** The single card used by every section of the console, so spacing and chrome stay consistent. */
 export const Panel: React.FC<PanelProps> = ({ title, action, children, sx }) => (
