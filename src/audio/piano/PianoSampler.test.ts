@@ -44,7 +44,7 @@ class FakeContext {
         return g;
     }
     createBiquadFilter() {
-        const f = { type: '', frequency: param(0), Q: param(0), connect: vi.fn() };
+        const f = { type: '', frequency: param(0), Q: param(0), connect: vi.fn(), disconnect: vi.fn() };
         this.filters.push(f);
         return f;
     }
@@ -207,6 +207,18 @@ describe('PianoSampler', () => {
         expect(sampler.activeVoiceCount).toBe(1);
         src.end();
         expect(sampler.activeVoiceCount).toBe(0);
+        expect(ctx.filters.at(-1)).toMatchObject({ disconnect: expect.any(Function) });
+        expect((ctx.filters.at(-1) as unknown as { disconnect: ReturnType<typeof vi.fn> }).disconnect).toHaveBeenCalled();
+        expect(env.disconnect).toHaveBeenCalled();
+    });
+
+    it('never schedules the attack in the past', async () => {
+        await ready();
+        ctx.currentTime = 5;
+        sampler.noteOn(60, 4.99, 1);
+        const env = ctx.gains.at(-1)!;
+        expect(env.gain.setValueAtTime).toHaveBeenCalledWith(0, 5);
+        expect(ctx.sources.at(-1)!.start).toHaveBeenCalledWith(5);
     });
 
     it('releases a note with a damper fade and stops the source afterwards', async () => {

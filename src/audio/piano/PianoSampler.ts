@@ -229,10 +229,12 @@ export class PianoSampler {
         filter.frequency.value = velocityToCutoff(velocity);
         filter.Q.value = 0.5;
 
+        // A note asked for a moment ago starts now: ramps can't be scheduled in the past.
+        const start = Math.max(time, ctx.currentTime);
         const env = ctx.createGain();
         const peak = velocityToGain(velocity);
-        env.gain.setValueAtTime(0, time);
-        env.gain.linearRampToValueAtTime(peak, time + ATTACK);
+        env.gain.setValueAtTime(0, start);
+        env.gain.linearRampToValueAtTime(peak, start + ATTACK);
 
         source.connect(filter);
         filter.connect(env);
@@ -243,9 +245,10 @@ export class PianoSampler {
         this.voices.set(id, voice);
         source.addEventListener('ended', () => {
             this.voices.delete(id);
+            filter.disconnect();
             env.disconnect();
         }, { once: true });
-        source.start(time);
+        source.start(start);
         return id;
     }
 
