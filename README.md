@@ -48,7 +48,7 @@ Mientras el piano toca, `T` es Fa♯ y no tap tempo. `Espacio` y las flechas `�
 src/
 ├── audio/            Motor de audio (sin React)
 │   ├── Scheduler.ts         Agendado lookahead, cola visual, trainer, silencios, formas
-│   ├── DrumSynthesizer.ts   Samples (WAV/OGG) + síntesis de respaldo, mixer por canales
+│   ├── DrumSynthesizer.ts   Samples (Opus/OGG) + síntesis de respaldo, mixer por canales
 │   ├── PolyphonicSynth.ts   Acompañamiento armónico
 │   ├── piano/               Piano sampleado, patrones de acompañamiento, grabación y loop de melodías
 │   ├── VoiceTracker.ts      Corte inmediato de voces agendadas al detener

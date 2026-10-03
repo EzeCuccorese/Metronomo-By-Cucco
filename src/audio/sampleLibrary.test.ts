@@ -16,6 +16,7 @@ const makeContext = () => ({
 
 describe('sampleLibrary', () => {
     beforeEach(() => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
         vi.spyOn(console, 'error').mockImplementation(() => {});
     });
     afterEach(() => vi.restoreAllMocks());
@@ -37,17 +38,42 @@ describe('sampleLibrary', () => {
         vi.unstubAllGlobals();
     });
 
-    it('skips samples whose download fails instead of decoding an error page', async () => {
+    it('skips a sample whose download fails instead of decoding an error page', async () => {
         vi.stubGlobal('fetch', vi.fn(async (url: string) => ({
-            ok: !url.endsWith('/audio/kick.wav'),
+            ok: !url.endsWith('/audio/kick.ogg'),
             status: 404,
             arrayBuffer: async () => new ArrayBuffer(8),
         })));
         const ctx = makeContext();
         const buffers = await loadSamples(ctx);
-        expect(buffers.has('kick')).toBe(false);
+        expect(buffers.has('kick')).toBe(false); // the synthesizer uses its synthesized voice
         expect(buffers.has('snare')).toBe(true);
+        expect(console.error).toHaveBeenCalledTimes(1);
         expect(ctx.decodeAudioData).toHaveBeenCalledTimes(18);
+        vi.unstubAllGlobals();
+    });
+
+    it('skips a sample whose decoding fails', async () => {
+        const fetchMock = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }));
+        vi.stubGlobal('fetch', fetchMock);
+        const ctx = makeContext();
+        ctx.decodeAudioData.mockRejectedValueOnce(new Error('EncodingError'));
+        const buffers = await loadSamples(ctx);
+        expect(buffers.size).toBeGreaterThanOrEqual(18);
+        expect(fetchMock).toHaveBeenCalledTimes(19);
+        expect(console.error).toHaveBeenCalledTimes(1);
+        vi.unstubAllGlobals();
+    });
+
+    it('only requests .ogg files', async () => {
+        const urls: string[] = [];
+        vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+            urls.push(url);
+            return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) };
+        }));
+        await loadSamples(makeContext());
+        expect(urls.length).toBe(19);
+        expect(urls.every(u => u.endsWith('.ogg'))).toBe(true);
         vi.unstubAllGlobals();
     });
 
