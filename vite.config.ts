@@ -52,12 +52,15 @@ export default defineConfig({
     headers: productionSecurityHeaders()
   },
   build: {
-    rollupOptions: {
+    // Vite 8 bundles with Rolldown: vendor splitting is declared as code-splitting groups.
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          mui: ['@mui/material', '@mui/icons-material', '@emotion/react', '@emotion/styled'],
-          lucide: ['lucide-react']
+        codeSplitting: {
+          groups: [
+            { name: 'vendor', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+            { name: 'mui', test: /node_modules[\\/](@mui|@emotion)[\\/]/ },
+            { name: 'lucide', test: /node_modules[\\/]lucide-react[\\/]/ }
+          ]
         }
       }
     }

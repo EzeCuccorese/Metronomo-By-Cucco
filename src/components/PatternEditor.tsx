@@ -246,7 +246,9 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
                         <ToggleButton value="piano" aria-label="Piano (p)" title="Piano (p)"><Typography variant="caption">p</Typography></ToggleButton>
                         <ToggleButton value="pen" aria-label="Normal (mf)" title="Normal (mf)"><Pen size={14} /></ToggleButton>
                         <ToggleButton value="forte" aria-label="Forte (f)" title="Forte (f)"><Typography variant="button">f</Typography></ToggleButton>
-                        <ToggleButton value="accent" aria-label="Acento (ff)" title="Acento (ff)"><Typography variant="button" fontWeight="bold">ff</Typography></ToggleButton>
+                        <ToggleButton value="accent" aria-label="Acento (ff)" title="Acento (ff)"><Typography variant="button" sx={{
+                            fontWeight: "bold"
+                        }}>ff</Typography></ToggleButton>
                         <ToggleButton value="eraser" aria-label="Goma de borrar" title="Goma / Borrar"><Eraser size={14} /></ToggleButton>
                     </ToggleButtonGroup>
 
@@ -277,7 +279,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
                         value={Number.isInteger(stepsPerPulse) && pulseOptions.some(o => o.value === stepsPerPulse) ? stepsPerPulse : ''}
                         displayEmpty
                         onChange={(e) => handleSubdivisionChange(Number(e.target.value))}
-                        inputProps={{ 'aria-label': 'Subdivisión' }}
+                        slotProps={{ input: { 'aria-label': 'Subdivisión' } }}
                         sx={{ bgcolor: 'rgba(255,255,255,0.05)', fontSize: '0.8rem', minWidth: 120 }}
                         renderValue={(val) => {
                             const opt = pulseOptions.find(o => o.value === val);
@@ -286,7 +288,9 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
                     >
                         {pulseOptions.map(opt => (
                             <MenuItem key={opt.value} value={opt.value}>
-                                <Stack direction="row" spacing={1} alignItems="center">
+                                <Stack direction="row" spacing={1} sx={{
+                                    alignItems: "center"
+                                }}>
                                     <Typography sx={{ fontSize: '1.2rem', minWidth: 24 }}>{opt.icon}</Typography>
                                     <Typography variant="body2">{opt.label}</Typography>
                                 </Stack>
@@ -300,7 +304,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
                         displayEmpty
                         renderValue={(v) => v || `${num}/${den}`}
                         onChange={(e) => handleTimeSignatureChange(e.target.value)}
-                        inputProps={{ 'aria-label': 'Compás' }}
+                        slotProps={{ input: { 'aria-label': 'Compás' } }}
                         sx={{ width: 84, bgcolor: 'rgba(255,255,255,0.05)' }}
                     >
                         {TIME_SIGNATURES.map(ts => <MenuItem key={ts.label} value={ts.label}>{ts.label}</MenuItem>)}
@@ -336,7 +340,9 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
                 >
                     {/* Beats Header */}
                     <Box sx={{ display: 'contents' }} aria-hidden>
-                        <Box sx={{ p: 1 }}><Typography variant="caption" color="text.secondary">TIEMPO</Typography></Box>
+                        <Box sx={{ p: 1 }}><Typography variant="caption" sx={{
+                            color: "text.secondary"
+                        }}>TIEMPO</Typography></Box>
                         {Array.from({ length: sub }).map((_, idx) => {
                             const isGroupStart = Number.isInteger(cellsPerGroup) ? idx % cellsPerGroup === 0 : idx === 0;
                             return (
@@ -346,8 +352,18 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
                                     borderBottom: '1px solid #444'
                                 }}>
                                     {isGroupStart
-                                        ? <Typography variant="caption" fontWeight="bold" color="text.primary">{Math.floor(idx / cellsPerGroup) + 1}</Typography>
-                                        : <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.6rem' }}>•</Typography>}
+                                        ? <Typography
+                                        variant="caption"
+                                        sx={{
+                                            fontWeight: "bold",
+                                            color: "text.primary"
+                                        }}>{Math.floor(idx / cellsPerGroup) + 1}</Typography>
+                                        : <Typography
+                                        variant="caption"
+                                        sx={{
+                                            color: "text.disabled",
+                                            fontSize: '0.6rem'
+                                        }}>•</Typography>}
                                 </Box>
                             );
                         })}
@@ -358,7 +374,16 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
 
                         return (
                             <Box key={inst.type} sx={{ display: 'contents' }}>
-                                <Stack direction="row" alignItems="center" spacing={1} sx={{ p: 1, bgcolor: 'rgba(255,255,255,0.02)', borderRight: '1px solid #333', minWidth: 0 }}>
+                                <Stack
+                                    direction="row"
+                                    spacing={1}
+                                    sx={{
+                                        alignItems: "center",
+                                        p: 1,
+                                        bgcolor: 'rgba(255,255,255,0.02)',
+                                        borderRight: '1px solid #333',
+                                        minWidth: 0
+                                    }}>
                                     {INSTRUMENT_IMAGES[inst.type] ? (
                                         <Avatar
                                             src={INSTRUMENT_IMAGES[inst.type]}

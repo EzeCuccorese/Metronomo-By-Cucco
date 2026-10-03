@@ -117,12 +117,19 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
     >
       {/* Title & Queue indicator */}
       <Box sx={{ mr: 'auto', display: 'flex', flexDirection: 'column', gap: 0.2, minWidth: 0 }}>
-        <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap>
+        <Stack
+          direction="row"
+          spacing={1.5}
+          useFlexGap
+          sx={{
+            alignItems: "center",
+            flexWrap: "wrap"
+          }}>
           <Typography
             variant="h6"
             component="h1"
-            fontWeight="900"
             sx={{
+              fontWeight: "900",
               background: 'linear-gradient(135deg, #ffd54f 0%, #e5a95f 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
@@ -130,8 +137,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
               textShadow: '0 2px 10px rgba(229, 169, 95, 0.15)',
               fontFamily: '"Outfit", sans-serif',
               fontSize: '1.2rem'
-            }}
-          >
+            }}>
             METRÓNOMO PRO
           </Typography>
 
@@ -164,13 +170,27 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           )}
         </Stack>
 
-        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem', letterSpacing: '0.08em', fontWeight: 600 }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary",
+            fontSize: '0.68rem',
+            letterSpacing: '0.08em',
+            fontWeight: 600
+          }}>
           ESTUDIO RÍTMICO & ENTRENADOR | BY CUCCO
         </Typography>
       </Box>
 
       {/* Preset Selector Dropdown & Visual Library Button */}
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+      <Stack
+        direction="row"
+        spacing={1}
+        useFlexGap
+        sx={{
+          alignItems: "center",
+          flexWrap: "wrap"
+        }}>
         <Button
           variant="outlined"
           color="primary"
@@ -220,7 +240,17 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
       </Stack>
 
       {/* BPM Controls & Tap Tempo */}
-      <Stack direction="row" alignItems="center" spacing={2} sx={{ bgcolor: 'rgba(0,0,0,0.3)', px: 2, py: 0.8, borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
+      <Stack
+        direction="row"
+        spacing={2}
+        sx={{
+          alignItems: "center",
+          bgcolor: 'rgba(0,0,0,0.3)',
+          px: 2,
+          py: 0.8,
+          borderRadius: 3,
+          border: '1px solid rgba(255,255,255,0.05)'
+        }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 70 }}>
           <BpmInput bpm={bpm} disabled={tempoLocked} onCommit={onBpmChange} />
           <Tooltip title={compound ? `En ${timeSignature[0]}/${timeSignature[1]} el pulso con puntillo (♩.) va a ${Math.round(bpm * 2 / 3)}` : 'Pulsos de negra por minuto'}>

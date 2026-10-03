@@ -1,7 +1,7 @@
 # Multi-stage build for Metrónomo by Cucco
 
 # Stage 1: Build the React/Vite application
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 
 # Copy package descriptors first to cache dependency layers

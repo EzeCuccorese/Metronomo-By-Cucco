@@ -47,10 +47,20 @@ export const GenreSelectorModal: React.FC<GenreSelectorModalProps> = ({
     >
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
         <Box>
-          <Typography id="genre-library-title" variant="h6" component="span" fontWeight="bold" color="primary.main" sx={{ display: 'block' }}>
+          <Typography
+            id="genre-library-title"
+            variant="h6"
+            component="span"
+            sx={{
+              fontWeight: "bold",
+              color: "primary.main",
+              display: 'block'
+            }}>
             BIBLIOTECA VISUAL DE RITMOS
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             Selecciona un patrón rítmico folclórico o moderno
           </Typography>
         </Box>
@@ -155,10 +165,23 @@ export const GenreSelectorModal: React.FC<GenreSelectorModalProps> = ({
                   </Box>
 
                   <Box>
-                    <Typography variant="subtitle1" fontWeight="bold" sx={{ textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{
+                        fontWeight: "bold",
+                        textShadow: '0 2px 4px rgba(0,0,0,0.8)'
+                      }}>
                       {p.name}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary",
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden'
+                      }}>
                       {p.description || 'Patrón rítmico profesional'}
                     </Typography>
                   </Box>
