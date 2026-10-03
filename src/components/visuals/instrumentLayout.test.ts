@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
-    BOMBO,
-    CANVAS_H,
-    CANVAS_W,
+    BOMBO_ARO_FROM,
+    MIN_HIT,
+    STACK_BREAKPOINT,
+    computeLayout,
+    contentBox,
+    fitFontSize,
+    fitImageToPad,
+    itemByKey,
+    padKey,
     SCALE_KEYS,
     SPRING_DAMPING,
     SPRING_STIFFNESS,
@@ -22,15 +28,17 @@ import {
 } from './instrumentLayout';
 
 describe('toCanvasCoords', () => {
-    it('maps client pixels into 380x175 logical space', () => {
+    it('maps client pixels into layout space', () => {
         const rect = { left: 10, top: 20, width: 760, height: 350 };
-        expect(toCanvasCoords(10, 20, rect)).toEqual({ x: 0, y: 0 });
-        expect(toCanvasCoords(770, 370, rect)).toEqual({ x: CANVAS_W, y: CANVAS_H });
-        expect(toCanvasCoords(390, 195, rect)).toEqual({ x: 190, y: 87.5 });
+        const logical = { width: 380, height: 175 };
+        expect(toCanvasCoords(10, 20, rect, logical)).toEqual({ x: 0, y: 0 });
+        expect(toCanvasCoords(770, 370, rect, logical)).toEqual({ x: 380, y: 175 });
+        expect(toCanvasCoords(390, 195, rect, logical)).toEqual({ x: 190, y: 87.5 });
     });
 
     it('returns the origin for a collapsed (zero-size) canvas', () => {
-        expect(toCanvasCoords(5, 5, { left: 0, top: 0, width: 0, height: 0 })).toEqual({ x: 0, y: 0 });
+        const z = { left: 0, top: 0, width: 0, height: 0 };
+        expect(toCanvasCoords(5, 5, z, { width: 1, height: 1 })).toEqual({ x: 0, y: 0 });
     });
 });
 
@@ -42,50 +50,168 @@ describe('initial state', () => {
     });
 });
 
+const WIDTHS = [320, 360, 390, 600, 699, 700, 768, 1024, 1440, 1920];
+
+const overlaps = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) =>
+    a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+const inside = (a: { x: number; y: number; w: number; h: number }, o: { x: number; y: number; w: number; h: number }) =>
+    a.x >= o.x - 1e-6 && a.y >= o.y - 1e-6 && a.x + a.w <= o.x + o.w + 1e-6 && a.y + a.h <= o.y + o.h + 1e-6;
+
+describe('computeLayout', () => {
+    it('is row mode from the breakpoint up and stacks below it', () => {
+        expect(computeLayout(STACK_BREAKPOINT - 1).mode).toBe('stack');
+        expect(computeLayout(STACK_BREAKPOINT).mode).toBe('row');
+        const stacked = computeLayout(390);
+        expect(stacked.height).toBeGreaterThan(computeLayout(1440).height * 2);
+    });
+
+    it('places every instrument exactly once', () => {
+        const keys = computeLayout(800).items.map(i => i.key).sort();
+        expect(new Set(keys).size).toBe(12);
+        expect(keys).toEqual([...keys].sort());
+    });
+
+    it.each(WIDTHS)('width %i: sections fit the canvas and never overlap', w => {
+        const l = computeLayout(w, 2);
+        const canvas = { x: 0, y: 0, w: l.width, h: l.height };
+        l.sections.forEach(s => expect(inside(s.rect, canvas)).toBe(true));
+        for (let i = 0; i < l.sections.length; i++) {
+            for (let j = i + 1; j < l.sections.length; j++) {
+                expect(overlaps(l.sections[i].rect, l.sections[j].rect)).toBe(false);
+            }
+        }
+    });
+
+    it.each(WIDTHS)('width %i: labels are inside their section and never overlap', w => {
+        const l = computeLayout(w);
+        l.sections.forEach(s => expect(inside(s.labelRect, s.rect)).toBe(true));
+        for (let i = 0; i < l.sections.length; i++) {
+            for (let j = i + 1; j < l.sections.length; j++) {
+                expect(overlaps(l.sections[i].labelRect, l.sections[j].labelRect)).toBe(false);
+            }
+        }
+    });
+
+    it.each(WIDTHS)('width %i: pads and names sit inside their section without overlapping', w => {
+        const l = computeLayout(w);
+        l.items.forEach(it => {
+            const sec = l.sections.find(s => s.id === it.section)!;
+            const pad = { x: it.cx - it.r, y: it.cy - it.r, w: 2 * it.r, h: 2 * it.r };
+            const name = { x: it.nameX - it.nameMaxW / 2, y: it.nameY, w: it.nameMaxW, h: 12 };
+            expect(inside(pad, sec.rect)).toBe(true);
+            expect(inside(name, sec.rect)).toBe(true);
+            expect(overlaps(pad, sec.labelRect)).toBe(false);
+        });
+        for (let i = 0; i < l.items.length; i++) {
+            for (let j = i + 1; j < l.items.length; j++) {
+                const a = l.items[i], b = l.items[j];
+                expect(Math.hypot(a.cx - b.cx, a.cy - b.cy)).toBeGreaterThanOrEqual(a.r + b.r - 1e-6);
+            }
+        }
+    });
+
+    it('keeps hit areas at least 44px from 360px width up', () => {
+        for (const w of [360, 390, 600, 768, 1440]) {
+            computeLayout(w).items.forEach(it => expect(it.hitR * 2).toBeGreaterThanOrEqual(MIN_HIT));
+        }
+    });
+
+    it('keeps adjacent hit areas from swallowing each other', () => {
+        for (const w of [360, 700, 1440]) {
+            const l = computeLayout(w);
+            l.items.forEach((a, i) => l.items.slice(i + 1).forEach(b => {
+                expect(Math.hypot(a.cx - b.cx, a.cy - b.cy)).toBeGreaterThanOrEqual(a.hitR + b.hitR - 1e-6);
+            }));
+        }
+    });
+
+    it('uses one pad size for all instruments and snaps the height to device pixels', () => {
+        const l = computeLayout(1000, 3);
+        expect(new Set(l.items.map(i => i.r)).size).toBe(1);
+        expect(Math.abs(l.height * 3 - Math.round(l.height * 3))).toBeLessThan(1e-9);
+    });
+
+    it('survives degenerate widths', () => {
+        expect(computeLayout(0).items).toHaveLength(12);
+        // Collapsed containers must never produce a non-positive pad radius (ctx.arc would throw).
+        for (const w of [0, 1, 10, 16, 40, 100]) {
+            computeLayout(w).items.forEach(it => expect(it.r).toBeGreaterThan(0));
+        }
+        expect(computeLayout(-5, 0).width).toBe(1);
+    });
+});
+
 describe('hitTestInstrument', () => {
-    it.each([
-        [45, 40, 'clave', 'clave'],
-        [105, 40, 'caja', 'caja'],
-        [179, 45, 'candombe_chico', 'candombe_chico'],
-        [195, 45, 'candombe_repique', 'candombe_repique'],
-        [211, 45, 'candombe_piano', 'candombe_piano'],
-        [180, 115, 'cajon', 'cajon'],
-        [235, 115, 'palmas', 'palmas'],
-        [290, 40, 'hihat', 'hihat'],
-        [345, 40, 'snare', 'snare'],
-        [300, 115, 'kick', 'kick'],
-        [345, 115, 'shaker', 'shaker'],
-    ])('hits (%i,%i) -> %s', (x, y, key, instrument) => {
-        expect(hitTestInstrument(x, y)).toMatchObject({ key, instrument });
+    it.each([320, 360, 390, 768, 1440])('width %i: every instrument center hits that instrument', w => {
+        const l = computeLayout(w);
+        for (const it of l.items) {
+            const h = hitTestInstrument(l, it.cx, it.cy);
+            expect(h).toMatchObject({ key: it.key, instrument: it.instrument });
+        }
     });
 
-    it('distinguishes bombo parche, aro and body', () => {
-        const top = BOMBO.centerY - BOMBO.height / 2;
-        expect(hitTestInstrument(BOMBO.x, top)).toMatchObject({ key: 'bombo_parche', instrument: 'bombo_leguero', rippleRadius: 42 });
-        // Inside the outer ellipse but outside the inner (parche) ellipse
-        expect(hitTestInstrument(BOMBO.x + BOMBO.rx - 1, top)).toMatchObject({ key: 'bombo_aro', instrument: 'rim', rippleRadius: 36 });
-        // Below the head, within the body
-        expect(hitTestInstrument(BOMBO.x, top + 30)).toMatchObject({ key: 'bombo_parche', instrument: 'bombo_leguero' });
+    it('hits near the edge of the 44px target but not beyond', () => {
+        const l = computeLayout(360);
+        const it = l.items[0];
+        expect(hitTestInstrument(l, it.cx + it.hitR - 0.5, it.cy)?.key).toBe(it.key);
+        expect(hitTestInstrument(l, it.cx + it.hitR + 6, it.cy + it.hitR + 6)).toBeNull();
     });
 
-    it('respects radius edges', () => {
-        expect(hitTestInstrument(45 + 18, 40)).not.toBeNull();
-        expect(hitTestInstrument(45 + 19, 40)).toBeNull();
-        expect(hitTestInstrument(180 + 11, 115)).toBeNull(); // cajón uses strict bounds
-        expect(hitTestInstrument(180 + 10, 115 + 18)).toMatchObject({ key: 'cajon' });
+    it('treats the expanded touch area outside a small bombo pad as aro', () => {
+        for (const width of [160, 200, 240]) {
+            const l = computeLayout(width);
+            const b = itemByKey(l, 'bombo_parche')!;
+            expect(b.hitR).toBeGreaterThan(b.r);
+            expect(hitTestInstrument(l, b.cx + (b.r + b.hitR) / 2, b.cy)).toMatchObject({ key: 'bombo_aro' });
+        }
+    });
+
+    it('distinguishes bombo parche from aro', () => {
+        const l = computeLayout(800);
+        const b = itemByKey(l, 'bombo_parche')!;
+        expect(hitTestInstrument(l, b.cx, b.cy)).toMatchObject({ key: 'bombo_parche', instrument: 'bombo_leguero' });
+        const rim = hitTestInstrument(l, b.cx + b.r * (BOMBO_ARO_FROM + 0.1), b.cy);
+        expect(rim).toMatchObject({ key: 'bombo_aro', instrument: 'rim' });
     });
 
     it('returns null on empty space and outside the canvas', () => {
-        expect(hitTestInstrument(1, 1)).toBeNull();
-        expect(hitTestInstrument(-50, -50)).toBeNull();
-        expect(hitTestInstrument(CANVAS_W + 100, CANVAS_H + 100)).toBeNull();
+        const l = computeLayout(800);
+        expect(hitTestInstrument(l, 1, 1)).toBeNull();
+        expect(hitTestInstrument(l, -50, -50)).toBeNull();
+        expect(hitTestInstrument(l, l.width + 50, l.height + 50)).toBeNull();
+    });
+});
+
+describe('image normalisation', () => {
+    const rgba = (w: number, h: number, fill: (x: number, y: number) => [number, number, number, number]) => {
+        const d = new Uint8ClampedArray(w * h * 4);
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) d.set(fill(x, y), (y * w + x) * 4);
+        return d;
+    };
+
+    it('finds the bright content box on a dark background', () => {
+        const data = rgba(20, 10, (x, y) => (x >= 4 && x < 12 && y >= 2 && y < 8 ? [200, 150, 90, 255] : [5, 5, 5, 255]));
+        expect(contentBox(data, 20, 10)).toEqual({ x: 4, y: 2, w: 8, h: 6 });
+    });
+
+    it('ignores transparent pixels and falls back to the full image when empty', () => {
+        const transparent = rgba(6, 4, () => [255, 255, 255, 0]);
+        expect(contentBox(transparent, 6, 4)).toEqual({ x: 0, y: 0, w: 6, h: 4 });
+    });
+
+    it('fits content so its longest side spans the requested pad fraction, centered', () => {
+        const fit = fitImageToPad(100, 100, { x: 20, y: 40, w: 40, h: 20 }, 30, 0.8);
+        const k = fit.dw / 100;
+        expect(40 * k).toBeCloseTo(48); // 2 * 30 * 0.8
+        expect(fit.dx + (20 + 20) * k).toBeCloseTo(0);
+        expect(fit.dy + (40 + 10) * k).toBeCloseTo(0);
     });
 });
 
 describe('stepTrigger', () => {
     it('distinguishes bombo aro from parche', () => {
-        expect(stepTrigger('bombo_leguero', 'aro')).toMatchObject({ key: 'bombo_aro', y: 85 });
-        expect(stepTrigger('bombo_leguero')).toMatchObject({ key: 'bombo_parche', y: 115 });
+        expect(stepTrigger('bombo_leguero', 'aro')).toMatchObject({ key: 'bombo_aro', rim: true });
+        expect(stepTrigger('bombo_leguero')).toMatchObject({ key: 'bombo_parche' });
         expect(stepTrigger('rim')).toMatchObject({ key: 'bombo_aro' });
     });
 
@@ -100,7 +226,7 @@ describe('stepTrigger', () => {
         inst => {
             const t = stepTrigger(inst)!;
             expect(t.key).toBe(inst);
-            expect(t.maxRadius).toBeGreaterThan(0);
+            expect(t.radiusFactor).toBeGreaterThan(0);
         },
     );
 
@@ -112,6 +238,13 @@ describe('stepTrigger', () => {
         for (const inst of ['bombo_leguero', 'rim', 'kick', 'hihat', 'caja']) {
             expect(SCALE_KEYS).toContain(stepTrigger(inst)!.key);
         }
+    });
+});
+
+describe('padKey', () => {
+    it('maps the bombo aro onto the bombo pad', () => {
+        expect(padKey('bombo_aro')).toBe('bombo_parche');
+        expect(padKey('snare')).toBe('snare');
     });
 });
 
@@ -211,5 +344,19 @@ describe('advanceAndPrune', () => {
     it('keeps survivor order and handles empty lists', () => {
         expect(advanceAndPrune([1, 2, 3, 4], n => n % 2 === 0)).toEqual([2, 4]);
         expect(advanceAndPrune([], () => true)).toEqual([]);
+    });
+});
+
+describe('fitFontSize', () => {
+    const measure = (fs: number) => fs * 10;
+    it('keeps the start size when it fits', () => {
+        expect(fitFontSize(measure, 12, 200)).toBe(12);
+    });
+    it('shrinks in 0.5 steps until the text fits', () => {
+        expect(fitFontSize(measure, 12, 100)).toBe(10);
+        expect(fitFontSize(measure, 12, 107)).toBe(10.5);
+    });
+    it('never goes below the minimum', () => {
+        expect(fitFontSize(measure, 12, 1)).toBe(8);
     });
 });
