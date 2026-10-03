@@ -45,6 +45,12 @@ describe('useStudyTasks', () => {
         expect(result.current.tasks[0].subtasks).toEqual([]);
     });
 
+    it('stores the title without surrounding whitespace', () => {
+        const { result } = renderHook(() => useStudyTasks());
+        act(() => { result.current.addTask('  Escalas  ', 1, ''); });
+        expect(result.current.tasks[0].title).toBe('Escalas');
+    });
+
     it('rejects empty or whitespace-only titles', () => {
         const { result } = renderHook(() => useStudyTasks());
         let ok = true;

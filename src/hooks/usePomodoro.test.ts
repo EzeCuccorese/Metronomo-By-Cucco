@@ -86,6 +86,21 @@ describe('usePomodoro', () => {
         expect(onComplete).toHaveBeenCalledTimes(1);
     });
 
+    it('starting again after a phase ended restarts it instead of completing twice', () => {
+        const onComplete = vi.fn();
+        const { result } = renderHook(() => usePomodoro(onComplete));
+        act(() => result.current.toggle());
+        act(() => { vi.advanceTimersByTime(DURATIONS.pomodoro * 1000 + 500); });
+        expect(onComplete).toHaveBeenCalledTimes(1);
+        expect(result.current.timeLeft).toBe(0);
+
+        act(() => result.current.toggle());
+        act(() => { vi.advanceTimersByTime(1_000); });
+        expect(onComplete).toHaveBeenCalledTimes(1);
+        expect(result.current.isActive).toBe(true);
+        expect(result.current.timeLeft).toBe(DURATIONS.pomodoro - 1);
+    });
+
     it('completes a break phase reporting break', () => {
         const onComplete = vi.fn();
         const { result } = renderHook(() => usePomodoro(onComplete));

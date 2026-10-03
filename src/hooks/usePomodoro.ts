@@ -42,7 +42,11 @@ export function usePomodoro(onComplete?: (mode: TimerMode) => void) {
         return () => clearInterval(id);
     }, [isActive]);
 
-    const toggle = useCallback(() => setIsActive(active => !active), []);
+    const toggle = useCallback(() => {
+        // Starting a finished phase starts it over instead of completing it again at once.
+        if (!isActive && latest.current.timeLeft === 0) setTimeLeft(DURATIONS[latest.current.mode]);
+        setIsActive(active => !active);
+    }, [isActive]);
     const reset = useCallback(() => {
         setIsActive(false);
         setTimeLeft(DURATIONS[latest.current.mode]);

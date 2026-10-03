@@ -47,7 +47,7 @@ export function useStudyTasks() {
         }));
         const task: Task = {
             id: now.toString(),
-            title,
+            title: title.trim(),
             subtasks,
             estimatedPomodoros: Math.max(1, pomodoros),
             completedPomodoros: 0,
