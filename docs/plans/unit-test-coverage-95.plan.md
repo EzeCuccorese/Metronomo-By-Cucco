@@ -1,3 +1,5 @@
+> **Estado:** Parcial (2026-10). Commits `3be95c8` (umbrales de cobertura en `vite.config.ts`, script `test:coverage`) y `b413173`. Existen `AudioContextManager.test.ts`, `PolyphonicSynth.test.ts` y `RhythmPatterns.test.ts`. **Obsoleto:** `usePresetManager` ya no existe, por lo que su test no aplica. Los checkboxes del plan nunca se actualizaron.
+
 # Plan de Elevación de Cobertura de Pruebas Unitarias al 95%+
 
 ## Objetivos
