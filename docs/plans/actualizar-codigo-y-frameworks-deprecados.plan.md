@@ -1,3 +1,5 @@
+> **Estado:** Parcial (2026-10). Commits `e7d7e1f`, `63f51c7`. Hecho: Grid v7 con `size`, sin `webkitAudioContext` en `AudioContextManager.ts`. No aplicado: `Scheduler.ts` sigue usando `import ClockWorker from './clock.worker?worker'` y `DrumSynthesizer.ts` sigue llamando `createStereoPanner()` sin fallback. **Obsoleto:** `src/hooks/useMetronomeAudio.ts` ya no existe (eliminado en `b413173`, reemplazado por `useMetronomeEngine`).
+
 # Plan de Trabajo: Actualización de Código y Frameworks Deprecados
 
 ## Resumen
