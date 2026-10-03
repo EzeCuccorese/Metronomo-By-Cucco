@@ -14,6 +14,7 @@ import {
     createParticle,
     createRipple,
     hitTestInstrument,
+    SCALE_KEYS,
     initialScales,
     initialVelocities,
     reducedScale,
@@ -48,7 +49,7 @@ const PREVIEW_BUTTONS: { instrument: string; modifier?: string; label: string }[
 ];
 
 /** useRef whose initial value is computed once (not on every render). */
-function useLazyRef<T>(init: () => T): React.MutableRefObject<T> {
+function useLazyRef<T extends object>(init: () => T): React.MutableRefObject<T> {
     const ref = useRef<T | null>(null);
     if (ref.current === null) ref.current = init();
     return ref as React.MutableRefObject<T>;
@@ -189,16 +190,16 @@ export default function InteractiveInstrumentVisual({
             // --- A. ELASTIC SPRING PHYSICS ---
 
             const frameNow = performance.now();
-            Object.keys(scalesRef.current).forEach(key => {
+            for (const key of SCALE_KEYS) {
                 if (reduceMotionRef.current) {
                     velocitiesRef.current[key] = 0;
                     scalesRef.current[key] = reducedScale(isHighlighted(highlightUntilRef.current, key, frameNow));
-                    return;
+                    continue;
                 }
                 const next = springStep(scalesRef.current[key], velocitiesRef.current[key]);
                 velocitiesRef.current[key] = next.velocity;
                 scalesRef.current[key] = next.scale;
-            });
+            }
 
             // --- B. RENDERING RIPPLES ---
             advanceAndPrune(ripplesRef.current, advanceRipple).forEach(rp => {
