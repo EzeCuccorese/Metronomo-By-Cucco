@@ -449,7 +449,9 @@ html, body {
   cursor: pointer;
   margin: 0;
   padding: 0;
-  -webkit-appearance: slider-vertical;
+  /* Standard vertical range (Chrome 124+, Safari 17.4+); replaces -webkit-appearance: slider-vertical. */
+  writing-mode: vertical-lr;
+  direction: rtl;
 }
 
 /* 3D Brushed Metal Fader Cap overlay */

@@ -37,8 +37,6 @@ vi.mock('./clock.worker?worker', () => ({
     default: class { constructor() { return worker; } }
 }));
 
-// jsdom has no Worker: the Scheduler only creates its clock when the API exists.
-globalThis.Worker = class {} as unknown as typeof Worker;
 
 let rafCallbacks: FrameRequestCallback[] = [];
 globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {

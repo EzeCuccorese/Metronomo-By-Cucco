@@ -33,7 +33,7 @@ Metrónomo profesional y entrenador rítmico para músicos, con foco en ritmos f
 src/
 ├── audio/            Motor de audio (sin React)
 │   ├── Scheduler.ts         Agendado lookahead, cola visual, trainer, silencios, formas
-│   ├── DrumSynthesizer.ts   Samples (WAV/OGG) + síntesis de respaldo, mixer por canales
+│   ├── DrumSynthesizer.ts   Samples (Opus/OGG) + síntesis de respaldo, mixer por canales
 │   ├── PolyphonicSynth.ts   Acompañamiento armónico
 │   ├── VoiceTracker.ts      Corte inmediato de voces agendadas al detener
 │   └── instrumentChannels.ts  Ruteo instrumento → canal (fuente única de verdad)
@@ -72,6 +72,8 @@ npm run test:coverage  # con umbrales de cobertura
 npm run test:e2e       # Playwright contra el build de producción
 npm run check          # todo lo anterior
 ```
+
+La app requiere un contexto seguro (`crypto.randomUUID`, Web Audio, service worker): funciona en HTTPS, en Capacitor (`capacitor://localhost`) y en `localhost`. Para probar en un teléfono por LAN, `http://192.168.x.x` no es un contexto seguro; usá la app dentro de Capacitor, un túnel HTTPS o el hosting HTTPS de la PWA.
 
 ### Tests
 
