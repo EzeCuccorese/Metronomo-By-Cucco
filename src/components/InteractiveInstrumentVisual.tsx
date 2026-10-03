@@ -347,18 +347,18 @@ export default function InteractiveInstrumentVisual({
     useEffect(() => {
         const wrap = wrapRef.current;
         if (!wrap) return;
-        const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(applySize);
-        resizeObserver?.observe(wrap);
+        const resizeObserver = new ResizeObserver(applySize);
+        resizeObserver.observe(wrap);
         applySize();
         // Web fonts change text metrics: drop cached name sizes once they finish loading.
         const fonts = document.fonts;
         const invalidateNames = () => {
             nameFontsRef.current = { layout: null, sizes: new Map() };
         };
-        fonts?.addEventListener?.('loadingdone', invalidateNames);
+        fonts.addEventListener('loadingdone', invalidateNames);
         return () => {
-            resizeObserver?.disconnect();
-            fonts?.removeEventListener?.('loadingdone', invalidateNames);
+            resizeObserver.disconnect();
+            fonts.removeEventListener('loadingdone', invalidateNames);
         };
     }, [applySize]);
 
