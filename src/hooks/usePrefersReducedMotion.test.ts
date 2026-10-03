@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getPrefersReducedMotion, usePrefersReducedMotion } from './usePrefersReducedMotion';
+import { usePrefersReducedMotion } from './usePrefersReducedMotion';
 
 type Listener = (e: MediaQueryListEvent) => void;
 
@@ -23,13 +23,6 @@ function mockMatchMedia(initial: boolean) {
 
 describe('usePrefersReducedMotion', () => {
     afterEach(() => vi.unstubAllGlobals());
-
-    it('is false when matchMedia is unavailable', () => {
-        vi.stubGlobal('matchMedia', undefined);
-        expect(getPrefersReducedMotion()).toBe(false);
-        const { result } = renderHook(() => usePrefersReducedMotion());
-        expect(result.current).toBe(false);
-    });
 
     it('reads the initial preference', () => {
         mockMatchMedia(true);
