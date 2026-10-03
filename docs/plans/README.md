@@ -12,4 +12,4 @@ Planes de trabajo que guiaron el desarrollo. Cada archivo lleva al inicio un blo
 | [actualizar-codigo-y-frameworks-deprecados](actualizar-codigo-y-frameworks-deprecados.plan.md) | Parcial | Se migró Grid y se quitó `webkitAudioContext`; quedan `?worker` y `createStereoPanner`; `useMetronomeAudio` es obsoleto. |
 | [auditoria-buenas-practicas-reglas](auditoria-buenas-practicas-reglas.plan.md) | Parcial | DDD/DRY/SOLID y cobertura 95%; los hooks `useMetronomeAudio` y `usePresetManager` ya no existen. |
 | [unit-test-coverage-95](unit-test-coverage-95.plan.md) | Parcial | Umbral de cobertura 95% y tests de audio; `usePresetManager` es obsoleto. |
-| [evaluacion-tooling-y-mobile](evaluacion-tooling-y-mobile.plan.md) | Pendiente (propuesta) | Evaluación de tooling (pnpm, Oxlint/TS 7, Vitest Browser Mode, hosting) y plan mobile con Capacitor 8 en fases. |
+| [evaluacion-tooling-y-mobile](evaluacion-tooling-y-mobile.plan.md) | Pendiente (propuesta) | Evaluación de tooling (pnpm, Oxlint/TS 7, Vitest Browser Mode, hosting) y uso personal en el celular: PWA endurecida y Capacitor 8 instalado con Developer Mode, sin tiendas. |

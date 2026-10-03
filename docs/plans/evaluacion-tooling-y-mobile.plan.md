@@ -1,6 +1,6 @@
-> **Estado:** Pendiente (propuesta). Investigación y plan, sin cambios de código. Base: `main` en `a280b3c` (2026-10-03).
+> **Estado:** Pendiente (propuesta). Investigación y plan, sin cambios de código. Base: `main` en `61e675b` (2026-10-03). Revisado el mismo día: la salida mobile es solo para uso personal, sin tiendas.
 
-# Evaluación de tooling, librerías y salida mobile nativa — Metrónomo by Cucco
+# Evaluación de tooling, librerías y uso en el celular — Metrónomo by Cucco
 
 Fecha: 2026-10-03 · Rama: `docs/plan-tooling-and-mobile`
 
@@ -9,7 +9,7 @@ Fecha: 2026-10-03 · Rama: `docs/plan-tooling-and-mobile`
 Responder dos preguntas:
 
 1. ¿Qué herramientas, frameworks y librerías conviene migrar, y las elecciones actuales son las mejores para esta app?
-2. ¿Cómo publicar la app para iPhone y Android?
+2. ¿Cómo instalar la app en el iPhone propio (y quizá en un Android) para uso personal, sin publicarla en tiendas?
 
 Dispositivos objetivo: solo el último iPhone con el último iOS, Safari de macOS y Chrome actual (desktop y Android).
 
@@ -30,7 +30,11 @@ Dispositivos objetivo: solo el último iPhone con el último iOS, Safari de macO
 | Bundle (gzip) | `mui` 104 kB · `vendor` (React) 68 kB · app 39 kB · CSS 3,5 kB. El precache PWA suma 66 entradas y 6,25 MB, casi todo samples e imágenes |
 | Deploy | Imagen Docker con nginx 1.31 en GHCR, con headers OWASP en `deploy/security-headers.conf` |
 
-> Nota: el pedido original mencionaba MUI v7, samples Opus, piano sampleado y un looper de melodía. En `main` hay MUI v9, samples WAV/OGG y armonía sintetizada, y no hay looper. El plan se basa en lo que existe hoy.
+> Nota: este plan se basa en `main`, que tiene MUI **v9.4** (no v7), samples WAV/OGG y armonía sintetizada. Hay dos PR abiertos que cambian el panorama de audio:
+> - **#20** pasa todos los samples a **Opus** (−95% de audio).
+> - **#26** agrega piano (armonía, teclado tocable y modo melodía).
+>
+> Si se mergean, las filas de audio de este plan aplican igual. La de formatos queda resuelta por #20, siempre que se verifique Opus en el iPhone.
 
 ## Resumen ejecutivo
 
@@ -39,7 +43,7 @@ Recomendaciones ordenadas por impacto sobre esfuerzo:
 | # | Recomendación | Impacto | Esfuerzo |
 |---|---|---|---|
 | 1 | **Endurecer el audio en iOS antes de cualquier wrapper.** Usar `navigator.audioSession.type = 'playback'` para que suene con el switch de silencio activado. Pedir Screen Wake Lock mientras suena. Llamar a `resume()` en `visibilitychange`/`statechange` (manejando `interrupted`). Verificar en un iPhone real el bug de WebKit 291892, en el que el `AudioContext` queda mudo al volver del background. | Alto: hoy en iPhone el click puede no sonar | Bajo (1–2 días) |
-| 2 | **Salida mobile con Capacitor 8** sobre el mismo build de Vite, con una spike en iPhone real y criterios de go/no-go. Android con el mismo proyecto Capacitor (TWA queda como plan B). | Alto: App Store y Play Store | Medio (2–4 semanas en total) |
+| 2 | **App nativa personal con Capacitor 8**, instalada directo en el iPhone con Developer Mode y un Apple ID gratis (Personal Team; reinstalación semanal con un comando). En Android, APK por `adb`. Sin tiendas. | Alto: háptica, keep-awake y sesión de audio nativos, y camino a sonar con la pantalla bloqueada | Medio (3–5 días) |
 | 3 | **Reemplazar ESLint + typescript-eslint por Oxlint con type-aware (tsgolint, basado en TS 7).** Se elimina TypeScript 6 y el alias `typescript7`, y el lint pasa a tener reglas con tipos, que hoy no tiene. | Medio: una sola versión de TS, lint 10x+ más rápido | Bajo (1 día) |
 | 4 | **Seguridad de la cadena de dependencias.** Migrar a pnpm 11 (`minimumReleaseAge` de 24 h por defecto y builds de dependencias bloqueados). Si se descarta pnpm, configurar en npm 11 `min-release-age` y `ignore-scripts`. | Medio: defensa contra gusanos tipo Shai-Hulud | Bajo (medio día) |
 | 5 | **Tests de audio y canvas en Vitest Browser Mode** (Chromium real vía Playwright) para `Scheduler`, `DrumSynthesizer` y `PolyphonicSynth` con `OfflineAudioContext`. jsdom queda para hooks y lógica pura. | Medio: menos mocks y más confianza en el timing | Medio (3–5 días) |
@@ -58,7 +62,7 @@ Lo que **no** cambiaría está al final: React, Vite, Web Audio crudo, el store 
 | E2E | Playwright (Chromium) + sonda de audio + axe | **Mantener.** Agregar el proyecto `webkit` para smoke tests de UI y PWA. | Playwright es el estándar. La sonda de audio real es un activo. WebKit de Playwright no es Safari iOS, pero detecta regresiones de CSS/JS en WebKit. El audio en iOS se valida a mano en el dispositivo (checklist de la fase M0). | 0,5 día | Bajo |
 | Bundler | Vite 8 (Rolldown) | **Mantener** | Es lo más moderno del ecosistema. Vite+ (VoidZero) unifica Vite, Vitest, Oxlint y oxfmt bajo un CLI. Conviene mirarlo cuando sea GA [sin verificar el estado], pero no aporta nada que no se pueda lograr con las piezas sueltas. | — | — |
 | Hosting | Docker + nginx en GHCR (sin destino de deploy definido en el repo) | **Cloudflare Workers Static Assets** (o Pages) con `_headers`. Docker queda para self-hosting. | Es un sitio 100% estático. Cloudflare sirve `_headers` (CSP, `Cache-Control`), da CDN global y HTTPS gratis, y deploya desde CI con `wrangler`. Pages está en modo mantenimiento y Workers es lo recomendado para proyectos nuevos [fuente secundaria]. GitHub Pages **no** sirve: no permite headers propios (CSP, `no-cache` del `sw.js`). Netlify es equivalente a Cloudflare. | 1 día | Bajo. Hay que mantener nginx y `_headers` sincronizados (se pueden generar ambos desde `deploy/security-headers.conf`, como ya hace `vite.config.ts`). |
-| CI | 3 jobs (quality, e2e, nginx) + publish Docker + Gemini review | **Mantener la estructura.** Arreglar la deriva de la imagen nginx: CI valida con `1.30.5` y el Dockerfile usa `1.31.0`. Sumar los jobs mobile de la sección C. | La estructura es correcta. La deriva hace que `nginx -t` valide una versión que no es la que se publica. | 0,5 día | Bajo |
+| CI | 3 jobs (quality, e2e, nginx) + publish Docker + Gemini review | **Mantener la estructura.** La deriva de la imagen nginx entre CI y Dockerfile ya se corrigió en el PR #36. Opcional: un job que genere el APK de Android como artifact (sección C, M2). | La estructura es correcta. | 0,5 día | Bajo |
 
 ### Detalle: pnpm sin corepack en Node 26
 
@@ -85,12 +89,14 @@ Si se decide quedarse en npm, la alternativa mínima es un `.npmrc` con `min-rel
 | Motor de audio | Web Audio crudo, reloj en Worker + lookahead | **Mantener Web Audio crudo.** No usar Tone.js. | El patrón lookahead sobre `currentTime` es justamente lo que hace Tone.js por dentro. Este código ya agrega microtiming por groove, corte de voces en ~12 ms, cambios de patrón al paso siguiente y buses por canal. Tone.js sumaría unos 100 kB y otra capa de abstracción sobre el timing, que es lo crítico. | — | — |
 | AudioWorklet | No se usa | **Solo para medición** (vúmetros con RMS/peak en el hilo de audio, enviado por `MessagePort`). **No** para agendar. | El agendado lookahead ya es *sample-accurate*: los eventos se fijan en tiempo de audio y el jitter del Worker solo mueve el momento en que se agenda, no el instante en que suena. Mover el scheduler a un Worklet complica todo sin ganancia audible. Los vúmetros con `AnalyserNode` leídos desde rAF ya funcionan. Es opcional. | 1–2 días | Bajo |
 | Reloj del Worker | `setInterval` de 25 ms en un Worker | **Mantener** | Es el patrón clásico ("A Tale of Two Clocks"). Con un lookahead ≥ 100 ms tolera los throttles del navegador en primer plano. | — | — |
-| Formatos de audio | WAV (~1,6 MB) + OGG | **Unificar en un formato comprimido** después de verificar en el iPhone que `decodeAudioData` acepta Ogg Vorbis/Opus. Si no lo acepta, usar AAC (`.m4a`). | Ahorra ~1,3 MB del precache. En Safari, el soporte de Ogg en `decodeAudioData` llegó tarde [sin verificar la versión exacta]. Hoy, si falla la decodificación, la app cae a síntesis sin aviso: conviene un test E2E o manual que lo detecte. | 0,5 día | Bajo |
+| Formatos de audio | WAV (~1,6 MB) + OGG en `main`; el PR #20 lo pasa todo a Opus | **Mergear #20** después de verificar en el iPhone que `decodeAudioData` acepta Opus. Si no lo acepta, usar AAC (`.m4a`). | Achica fuerte el precache. En Safari, el soporte de Ogg en `decodeAudioData` llegó tarde [sin verificar la versión exacta]. Hoy, si falla la decodificación, la app cae a síntesis sin aviso: conviene un test E2E o manual que lo detecte. | 0,5 día | Bajo |
 | MIDI | No hay | **No priorizar.** Si se hace, que sea una mejora progresiva solo en Chrome. | Web MIDI sigue sin soporte en Safari (macOS e iOS; WebKit bug 107250 abierto). En el target principal (iPhone) no existe. En Capacitor haría falta un plugin nativo CoreMIDI. | — | — |
 | Visuales | Canvas 2D en el hilo principal | **Mantener canvas 2D.** OffscreenCanvas en Worker solo si se mide jank. | Son dibujos simples a 60 fps. WebGL no aporta. OffscreenCanvas 2D en Worker existe en Safari desde 16.4–17 [sin verificar la versión exacta], pero su beneficio es nulo mientras el hilo principal esté libre. | — | — |
 | PWA | `vite-plugin-pwa` 2.0 (Workbox `generateSW`) | **Mantener** | Funciona, precachea samples y está integrado con Vite. Serwist (fork de Workbox) es la alternativa si Workbox se estanca. Hoy no hay motivo para cambiar [no hay anuncio oficial sobre el mantenimiento de Workbox]. | — | — |
 
-## C. Mobile nativo (iPhone y Android)
+## C. Mobile: uso personal en iPhone (y Android)
+
+**Alcance.** La app es solo para uso personal en el iPhone 18 Pro del autor, y quizá en un teléfono Android. No se publica en App Store ni en Play Store. Por eso no aplican las reglas de revisión de Apple (4.2), TestFlight, los tracks de Play, la subida a tiendas con fastlane, ni los aranceles de las tiendas como requisito.
 
 ### Qué exige un metrónomo
 
@@ -103,23 +109,40 @@ Si se decide quedarse en npm, la alternativa mínima es un `.npmrc` con `min-rel
 
 ### Opciones evaluadas
 
-| Opción | Silencio (switch) | Pantalla bloqueada / background | Wake lock | Háptica | Tiendas | Costo y esfuerzo | Veredicto |
+| Opción | Silencio (switch) | Pantalla bloqueada / background | Wake lock | Háptica | Costo | Mantenimiento | Veredicto |
 |---|---|---|---|---|---|---|---|
-| **1. Solo PWA** | Sí, con `navigator.audioSession.type = 'playback'` (iOS 17+) | **No.** El audio se corta al bloquear o pasar a background. Además existe el bug WebKit 291892: en PWA de pantalla de inicio el `AudioContext` puede quedar mudo al volver [sin verificar si está corregido en iOS 26/27] | Sí en PWA instalada desde iOS 18.4 | No (`navigator.vibrate` no existe en iOS) | No | $0, bajo | **Necesaria igual** (fase M0) |
-| **2. Capacitor 8** (mismo build Vite en WKWebView / Android WebView) | Sí, con `AVAudioSession` `.playback` desde nativo, o con `audioSession` desde JS | **Limitado.** WKWebView suspende el Web Audio unos 30 s después de pasar a background, incluso con `UIBackgroundModes: audio` [reportes de foros]. El background real exige audio nativo (plugin propio) | Sí (`@capacitor-community/keep-awake`) | Sí (`@capacitor/haptics`) | Sí | $99/año Apple + $25 Google [montos conocidos, confirmar], medio | **Recomendada** |
-| **3. TWA / Bubblewrap** (solo Android) | No aplica: Android no tiene switch de silencio para medios | Igual que Chrome (se suspende) | Sí (Wake Lock web) | Sí (`navigator.vibrate`) | Play Store | Bajo. Requiere Digital Asset Links y target API 36 desde el 31-08-2026 | **Plan B para Android** si no hace falta nada nativo |
-| **4. Tauri 2 mobile** | Igual que Capacitor (también WKWebView) | Igual que Capacitor | Plugin | Plugin | Sí | Medio-alto: agrega Rust y su ecosistema mobile es menos maduro | No: es Capacitor con más fricción |
-| **5. React Native / Expo + `react-native-audio-api`** | Sí (nativo) | **Sí** (audio nativo, background real) | Sí | Sí | Sí | **Alto**: reescribir toda la UI (MUI, canvas → Skia) y portar el motor a un API "tipo Web Audio" (C++ sobre CoreAudio/Oboe) | Solo si el background bloqueado es imprescindible y el camino 2 + plugin nativo falla |
-
-**Apple 4.2 (minimum functionality).** Un wrapper que solo carga una URL se rechaza. Esta app tiene a favor que funciona 100% offline (los assets van dentro del bundle, no se carga una URL), tiene audio con sesión nativa, háptica en el pulso y keep-awake. Los revisores prueban en modo avión. Con Capacitor el contenido se empaqueta local, así que ese caso queda cubierto.
+| **0. PWA "Agregar a inicio"** (Safari → Compartir → Agregar a inicio) | Sí, con `navigator.audioSession.type = 'playback'` (iOS 17+). Sin eso, el default `ambient` se silencia con el switch. | **No.** El audio se corta al bloquear la pantalla o pasar a background [foros de Apple]. Además existe el bug WebKit 291892: en PWA de pantalla de inicio el `AudioContext` puede quedar mudo al volver [sin verificar si está corregido en iOS 26/27]. | Sí en PWA instalada desde iOS 18.4 | No (`navigator.vibrate` no existe en iOS) | $0. Necesita estar servida por HTTPS (Cloudflare, sección A). | Ninguno: se actualiza sola con el service worker | **Base obligatoria** (M0). Suficiente si no hace falta sonar con la pantalla bloqueada. |
+| **1. Capacitor 8 + Xcode, instalado por cable o Wi-Fi con Developer Mode** | Sí, con `AVAudioSession` `.playback` desde `AppDelegate`, o con `audioSession` desde JS | **Limitado.** WKWebView suspende el Web Audio unos 30 s después de pasar a background, incluso con `UIBackgroundModes: audio` [reportes de foros]. El background real exige audio nativo (M3). | Sí (`@capacitor-community/keep-awake`) | Sí (`@capacitor/haptics`) | $0 con Apple ID gratis ("Personal Team"). $99/año solo como comodidad. | Con cuenta gratis hay que reinstalar cada 7 días desde la Mac (un comando, M2) | **Recomendada** |
+| **2. Android: APK de Capacitor por `adb` o archivo** | No aplica (Android no tiene switch de silencio para medios) | Igual que Chrome (se suspende) salvo plugin nativo con foreground service (M3) | Sí | Sí | $0, sin Play Console | Ninguno: el APK firmado no vence | **Recomendada** si se usa Android (mismo proyecto Capacitor) |
+| **3. Tauri 2 mobile** | Igual que Capacitor (también WKWebView) | Igual que Capacitor | Plugin | Plugin | $0 | Agrega Rust; su ecosistema mobile es menos maduro | No: es Capacitor con más fricción |
+| **4. React Native / Expo + `react-native-audio-api`** | Sí (nativo) | **Sí** (audio nativo) | Sí | Sí | $0 | **Alto**: reescribir toda la UI (MUI, canvas → Skia) y portar el motor | No, salvo que M3 fracase y el background sea imprescindible |
 
 ### Recomendación
 
-**Capacitor 8 para iOS y Android**, sobre el mismo código. Va en fases y con una spike medible antes de pagar cuentas de desarrollador:
+**Primero la PWA endurecida (M0), después Capacitor 8 instalado directo en el iPhone con la cuenta gratis.** Android usa el mismo proyecto, con APK por `adb`.
 
-- Un solo proyecto, un solo pipeline y los mismos plugins (háptica, keep-awake, sesión de audio) en las dos plataformas.
-- El motor de audio web se queda tal cual. En primer plano, WKWebView y Android WebView agendan igual que Safari y Chrome.
-- El "suena con la pantalla bloqueada" se trata como fase opcional M3. Es el único requisito que la web no resuelve. La solución es un **plugin nativo de metrónomo** (`AVAudioEngine` en Swift, Oboe/AAudio o `AudioTrack` en Kotlin) que reproduzca click y acentos en background, no reescribir toda la app en React Native.
+- La PWA ya funciona hoy y no cuesta nada. M0 arregla el switch de silencio, la pantalla que se apaga y el audio mudo al volver. Si eso alcanza, Capacitor es opcional.
+- Capacitor agrega lo que la PWA no puede: sesión de audio nativa garantizada, háptica en el pulso, keep-awake nativo y el camino a M3 (sonar con la pantalla bloqueada).
+- El motor de audio web se queda tal cual. En primer plano, WKWebView agenda igual que Safari.
+- La cuenta paga ($99/año) **no hace falta**. Solo evita reinstalar cada 7 días (los perfiles duran un año) y habilita sin ambigüedad la capability Background Modes. Conviene evaluarla después de usar la cuenta gratis unas semanas.
+
+### Límites de la firma gratuita ("Personal Team")
+
+| Tema | Cuenta gratis (Apple ID) | Cuenta paga ($99/año, opcional) |
+|---|---|---|
+| Vigencia del perfil | **7 días.** Al vencer, la app no abre hasta reinstalarla desde Xcode (`npm run ios:install`). Los datos (`localStorage`) se conservan si se reinstala sobre la misma app [sin verificar en iOS 26/27]. | 1 año |
+| Límites | Hasta 3 apps instaladas por dispositivo, 10 App IDs cada 7 días y 3 dispositivos [Microsoft Learn / foros de Apple] | Sin límites prácticos para uso personal |
+| Capabilities | Sin Push, App Groups, iCloud ni extensiones. **Background Modes figura solo para la membresía paga** en la tabla de capabilities de Apple. Pero `UIBackgroundModes` es una clave de `Info.plist`, no un entitlement firmado, y hay reportes de que funciona con Personal Team [sin verificar: probar en M1]. Solo importa para M3. | Todas |
+| Developer Mode | Obligatorio (iOS 16+) | Obligatorio para builds de desarrollo |
+
+**Refresco automático estilo SideStore/AltStore.** SideStore (compatible con iOS 26 según guías de terceros) re-firma las apps desde el propio iPhone con un túnel VPN local, sin la Mac, y así evita el vencimiento de 7 días. Advertencias:
+
+- Le da credenciales del Apple ID a una herramienta de terceros.
+- Se rompe con cambios de iOS.
+- Ocupa uno de los 3 slots de app.
+- Agrega superficie de ataque.
+
+Para una sola app propia, reinstalar desde la Mac una vez por semana (un comando) es más simple y seguro. **No lo recomiendo** salvo que la reinstalación semanal moleste mucho; en ese caso, la cuenta paga es la alternativa limpia.
 
 ### Fases
 
@@ -131,67 +154,101 @@ Si se decide quedarse en npm, la alternativa mínima es un `.npmrc` con `min-rel
    - Si `resume()` no resuelve en 1 s (bug 291892), recrear el contexto y reconstruir el grafo. Hace falta un `dispose()` en `DrumSynthesizer` y `PolyphonicSynth`.
 2. Wake lock: crear `src/hooks/useWakeLock.ts` con `navigator.wakeLock.request('screen')` mientras `isPlaying`, y volver a pedirlo en `visibilitychange`.
 3. Agregar un aviso de Bluetooth en la UI (texto). Opcional: compensación visual con `AudioContext.outputLatency` [sin verificar que Safari reporte la latencia BT].
-4. **Checklist manual en iPhone 18 Pro (iOS actual), como PWA instalada y en Safari:**
+4. **Checklist manual en el iPhone 18 Pro (iOS actual), como PWA instalada y en Safari:**
    - Suena con el switch de silencio activado.
    - Vuelve a sonar después de bloquear y desbloquear, y después de una llamada.
    - La pantalla no se apaga mientras suena.
-   - Los samples OGG decodifican (no cae a síntesis).
+   - Los samples decodifican (no cae a síntesis).
    - 10 minutos a 120 BPM sin derivas audibles.
 5. Tests: unit con un `audioSession` mockeado. El caso de recrear el contexto va en Vitest Browser Mode.
 
-#### M1. Spike de Capacitor en iOS (go/no-go, sin cuenta paga)
+#### M1. Capacitor instalado en el iPhone (cuenta gratis)
+
+Requisitos: una Mac con Xcode 26+ (Capacitor 8 lo exige), el iPhone y un Apple ID.
 
 ```bash
-pnpm add @capacitor/core @capacitor/haptics @capacitor-community/keep-awake   # o npm i
-pnpm add -D @capacitor/cli @capacitor/ios @capacitor/android
-npx cap init "Metrónomo by Cucco" ar.cucco.metronomo --web-dir dist
+npm i @capacitor/core @capacitor/haptics @capacitor-community/keep-awake   # o pnpm add
+npm i -D @capacitor/cli @capacitor/ios @capacitor/android
+npx cap init "Metrónomo" ar.cucco.metronomo --web-dir dist   # bundle id único; cambiarlo si Xcode dice que está tomado
 npx cap add ios && npx cap add android
-pnpm build && npx cap sync
-npx cap open ios   # correr en el iPhone con un Apple ID gratis (provisioning personal, 7 días)
+npm run build && npx cap sync
+npx cap open ios
 ```
 
-Archivos nuevos:
+**Pasos en Xcode y en el iPhone:**
+
+1. Xcode → Settings → Accounts → `+` → Apple ID. Se crea el equipo "*Tu Nombre* (Personal Team)".
+2. Target `App` → **Signing & Capabilities**: tildar *Automatically manage signing*, elegir **Team = Personal Team** y confirmar el *Bundle Identifier* (`ar.cucco.metronomo`).
+3. Conectar el iPhone por USB-C y aceptar "Confiar en esta computadora".
+4. En el iPhone, ir a **Ajustes → Privacidad y seguridad → Modo de desarrollador**, activarlo y reiniciar. La opción aparece después de conectar el equipo a Xcode por primera vez.
+5. Elegir el iPhone como destino y ejecutar (⌘R). La primera vez iOS bloquea la app.
+6. En el iPhone, ir a **Ajustes → General → VPN y gestión de dispositivos**, tocar el perfil de desarrollador con el Apple ID y elegir **Confiar**.
+7. Wi-Fi (opcional): en Xcode → Window → Devices and Simulators → el iPhone → *Connect via network*. Después se puede instalar sin cable, con la Mac y el iPhone en la misma red.
+
+Archivos y cambios:
 
 - `capacitor.config.ts` con `webDir: 'dist'` y `ios.contentInset: 'never'`.
 - `ios/App/App/AppDelegate.swift`, con `AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)` y `setActive(true)`.
-- `ios/App/App/Info.plist`, con `UIBackgroundModes: [audio]` solo si M3 avanza.
-- Carpetas `android/` e `ios/` versionadas.
-
-Cambios en la app:
-
 - `src/platform/native.ts`, con detección `Capacitor.isNativePlatform()`, háptica en el downbeat (opcional, configurable) y keep-awake en lugar de Wake Lock web.
-- `vite.config.ts`: desactivar el registro del service worker cuando se compila para nativo (`VITE_NATIVE=1`), porque los assets ya van empaquetados.
-- La CSP sigue aplicando vía `<meta>`. Revisar el esquema `capacitor://localhost`.
+- `vite.config.ts`: no registrar el service worker cuando se compila para nativo (`VITE_NATIVE=1`), porque los assets ya van empaquetados.
+- Las carpetas `ios/` y `android/` van versionadas. Excluir `ios/App/Pods`, `android/.gradle` y `android/app/build`.
 
-**Criterios de go:**
+**Android (si se usa):**
+
+1. En el teléfono, ir a **Ajustes → Acerca del teléfono** y tocar 7 veces "Número de compilación". Después, en **Opciones de desarrollador**, activar **Depuración USB**.
+2. Conectar el teléfono y compilar con `npx cap open android` (Android Studio → Run), o por consola:
+
+   ```bash
+   npx cap sync android
+   cd android && ./gradlew assembleDebug
+   adb install -r app/build/outputs/apk/debug/app-debug.apk
+   ```
+
+3. Sin cable: copiar el APK al teléfono y abrirlo, habilitando "Instalar apps desconocidas" para el gestor de archivos.
+4. Para que no venza ni dependa de la Mac, generar un keystore propio (`keytool -genkey ...`) y un `assembleRelease` firmado. El APK debug también sirve indefinidamente.
+5. La verificación de desarrolladores que Google despliega en 2026 apunta a la instalación fuera de Play. Según Google, la instalación por `adb` para desarrollo sigue permitida [sin verificar el alcance exacto en el teléfono concreto].
+
+**Criterios para quedarse con Capacitor** (si no se cumplen, alcanza la PWA de M0):
 
 - El checklist de M0 pasa también en WKWebView.
 - El jitter medido con la sonda de audio (adaptada para ejecutarse en WebView) no es peor que en Safari.
-- Arranque en frío menor a 1,5 s.
+- La háptica y el keep-awake aportan algo real en la práctica.
 
-#### M2. Publicación (cuentas pagas)
+#### M2. Comodidad: un comando para instalar
 
-- Costos: Apple Developer Program, $99/año, y Google Play Console, $25 una vez [confirmar montos vigentes]. Android exige además la verificación de identidad de desarrollador que Google viene desplegando en 2026, y el target SDK 36 (Capacitor 8 ya compila contra SDK 36).
-- Firma:
-  - iOS: App Store Connect API key (`.p8`) en secrets y `fastlane` con `match` en un repo privado de certificados, o firma automática de Xcode con la API key.
-  - Android: un upload keystore en secrets con Play App Signing.
-- CI: crear `.github/workflows/mobile.yml`, que dispara en tags `v*` y `workflow_dispatch`.
-  - Job `ios` en `macos-26` (Xcode 26.x): `pnpm build && npx cap sync ios`, después `fastlane ios beta` (build y subida a TestFlight).
-  - Job `android` en `ubuntu-latest`: `npx cap sync android` y `./gradlew bundleRelease`, después `fastlane android internal` (track interno de Play).
-  - Costo de CI: el repo es **público**, así que los runners estándar de GitHub (incluido macOS) no tienen costo [confirmar en la documentación de GitHub]. Si el repo pasa a privado, los minutos de macOS cuentan 10x.
-- Archivos: `fastlane/Fastfile`, `fastlane/Appfile`, `fastlane/Matchfile`, `.github/workflows/mobile.yml`, y metadata de la tienda (capturas, textos en español, política de privacidad: sin datos recolectados).
-- Actualizaciones OTA: no al principio. Con los assets empaquetados, cada cambio de web pasa por la tienda. Si molesta, usar Capgo o Capawesome Live Updates (Ionic Appflow cierra en 2027 [fuente secundaria]). El cambio debe respetar la regla de Apple de no alterar el propósito de la app.
+Scripts en `package.json`:
 
-#### M3 (opcional). Metrónomo en background con pantalla bloqueada
+```json
+"ios:install": "VITE_NATIVE=1 npm run build && npx cap sync ios && ./scripts/ios-install.sh",
+"android:install": "VITE_NATIVE=1 npm run build && npx cap sync android && cd android && ./gradlew installDebug"
+```
 
-Solo si los usuarios lo piden: es lo que más trabajo cuesta.
+`scripts/ios-install.sh` compila con la firma automática del Personal Team y lo instala con `devicectl` (Xcode 15+):
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+DEVICE_ID="${DEVICE_ID:-$(xcrun devicectl list devices | awk '/available/ {print $3; exit}')}"   # ajustar al formato de salida real
+xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Debug \
+  -destination "id=$DEVICE_ID" -derivedDataPath build/ios -allowProvisioningUpdates build
+xcrun devicectl device install app --device "$DEVICE_ID" build/ios/Build/Products/Debug-iphoneos/App.app
+xcrun devicectl device process launch --device "$DEVICE_ID" ar.cucco.metronomo
+```
+
+- Con la cuenta gratis, este comando es el "refresco semanal": cuando el perfil vence a los 7 días, se corre de nuevo. Opcional: un recordatorio en el calendario.
+- Si el proyecto iOS usa Swift Package Manager (default en Capacitor 8), cambiar `-workspace` por `-project ios/App/App.xcodeproj` [sin verificar la estructura generada].
+- **CI opcional:** un job en `.github/workflows/ci.yml` (o un `android-apk.yml` con `workflow_dispatch`) en `ubuntu-latest` que corra `npx cap sync android && ./gradlew assembleDebug` y suba el APK con `actions/upload-artifact`. Así se puede bajar e instalar el APK desde el teléfono sin Android Studio. Para iOS **no** se arma CI: la firma con Personal Team necesita el Apple ID en una Mac con Xcode, y un runner macOS no aporta nada para uso personal.
+
+#### M3 (opcional). Metrónomo con la pantalla bloqueada
+
+Solo si hace falta de verdad: es lo que más trabajo cuesta.
 
 - Crear un plugin Capacitor local `plugins/native-metronome`:
-  - iOS: `AVAudioEngine` con `AVAudioPlayerNode.scheduleBuffer(at:)`.
+  - iOS: `AVAudioEngine` con `AVAudioPlayerNode.scheduleBuffer(at:)` y `UIBackgroundModes: [audio]`. Primero verificar que la capability funcione con Personal Team; si no, esta fase requiere la cuenta paga.
   - Android: Oboe o `AudioTrack` con un foreground service de tipo `mediaPlayback`.
 - El plugin replica solo el click con acentos y subdivisiones, no los grooves completos.
 - Al pasar a background, el JS hace handoff al plugin con BPM, compás y fase. Al volver, el JS retoma.
-- Riesgo alto: dos motores que tienen que quedar en fase. Por eso es opcional.
+- Riesgo alto: dos motores que tienen que quedar en fase.
 
 ## Qué NO cambiaría y por qué
 
@@ -210,10 +267,10 @@ Solo si los usuarios lo piden: es lo que más trabajo cuesta.
 1. M0: audio en iOS. Arregla un problema real hoy.
 2. Oxlint y solo TS 7.
 3. Decisión de pnpm (en espera del usuario) o `.npmrc` endurecido.
-4. M1: spike de Capacitor.
-5. Vitest Browser Mode para el motor de audio.
-6. Hosting en Cloudflare.
-7. M2: publicación.
+4. Hosting en Cloudflare. Es lo que permite instalar la PWA por HTTPS en el iPhone.
+5. M1: Capacitor en el iPhone con la cuenta gratis.
+6. M2: `npm run ios:install` / `android:install` y el APK en CI.
+7. Vitest Browser Mode para el motor de audio.
 8. M3 y migración de MUI: solo con demanda.
 
 ## Fuentes
@@ -223,15 +280,15 @@ Solo si los usuarios lo piden: es lo que más trabajo cuesta.
 - `navigator.audioSession` y el switch de silencio: https://bugs.webkit.org/show_bug.cgi?id=261554
 - Wake Lock en PWA de iOS (corregido en 18.4): https://bugs.webkit.org/show_bug.cgi?id=254545 · https://progressier.com/pwa-capabilities/screen-wake-lock
 - Web MIDI en Safari: https://caniuse.com/midi · https://bugs.webkit.org/show_bug.cgi?id=107250
-- Capacitor 8: https://ionic.io/blog/announcing-capacitor-8 · requisitos: https://capawesome.io/blog/how-to-upgrade-your-capacitor-app-to-capacitor-8
+- Capacitor 8: https://ionic.io/blog/announcing-capacitor-8 · requisitos (Xcode 26, SPM): https://capawesome.io/blog/how-to-upgrade-your-capacitor-app-to-capacitor-8
 - Audio en background con Capacitor (requiere reproducción nativa): https://capawesome.io/blog/how-to-play-audio-in-the-background-in-capacitor/ · https://developer.apple.com/forums/thread/781787
-- Cierre de Appflow (fuente secundaria): https://capgo.app/blog/appflow-shutdown-alternative
-- Apple 4.2 y wrappers: https://www.mobiloud.com/blog/app-store-review-guidelines-webview-wrapper
-- Play, target API 36: https://developer.android.com/google/play/requirements/target-sdk · verificación de desarrolladores: https://android-developers.googleblog.com/2026/06/android-developer-verification.html
-- TWA: https://web.dev/articles/using-a-pwa-in-your-android-app
+- Capabilities por membresía (Background Modes solo ADP): https://developer.apple.com/help/account/reference/supported-capabilities-ios · comparativa de membresías: https://developer.apple.com/support/compare-memberships/
+- Límites de la firma gratuita (7 días, 3 apps, 10 App IDs): https://learn.microsoft.com/previous-versions/xamarin/ios/get-started/installation/device-provisioning/free-provisioning · https://developer.apple.com/forums/thread/724896
+- `devicectl`: https://developer.apple.com/documentation/xcode/xcode-command-line-tool-reference
+- SideStore en iOS 26 (guías de terceros): https://iphonesoft.fr/2026/03/11/guide-ios-26-installer-sidestore-livecontainer-sideloader-apps-jailbreak
+- Verificación de desarrolladores Android 2026: https://android-developers.googleblog.com/2026/06/android-developer-verification.html
 - Tauri 2: https://v2.tauri.app/blog/roadmap-to-tauri-2-0/
 - react-native-audio-api: https://docs.swmansion.com/react-native-audio-api/
-- Runner `macos-26`: https://github.blog/changelog/2026-02-26-macos-26-is-now-generally-available-for-github-hosted-runners/
 - pnpm 11: https://pnpm.io/blog/releases/11.0 · Shai-Hulud: https://www.picussecurity.com/resource/blog/shai-hulud-worm-inside-the-npm-supply-chain-attack
 - npm `min-release-age` y npm 12: https://apostrophecms.com/docs/guide/npm-v12-install-scripts.html
 - Bun `minimumReleaseAge`: https://bun.com/docs/pm/cli/install
