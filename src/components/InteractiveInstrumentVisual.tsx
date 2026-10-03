@@ -1,5 +1,5 @@
 import { Box, Typography } from '@mui/material';
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
 import { usePlaybackStore } from '../state/PlaybackContext';
@@ -46,6 +46,12 @@ const PREVIEW_BUTTONS: { instrument: string; modifier?: string; label: string }[
     { instrument: 'shaker', label: 'Shaker' },
 ];
 
+/** useRef whose initial value is computed once (not on every render). */
+function useLazyRef<T>(init: () => T): { current: T } {
+    const [ref] = useState(() => ({ current: init() }));
+    return ref;
+}
+
 export default function InteractiveInstrumentVisual({
     pattern,
     isPlaying,
@@ -68,8 +74,8 @@ export default function InteractiveInstrumentVisual({
     }, []);
 
     // Spring scaling values for organic bounce physics
-    const scalesRef = useRef<Record<string, number>>(initialScales());
-    const velocitiesRef = useRef<Record<string, number>>(initialVelocities());
+    const scalesRef = useLazyRef(initialScales);
+    const velocitiesRef = useLazyRef(initialVelocities);
 
     const ripplesRef = useRef<Ripple[]>([]);
 
@@ -87,7 +93,7 @@ export default function InteractiveInstrumentVisual({
         } else {
             velocitiesRef.current[key] += amount;
         }
-    }, []);
+    }, [velocitiesRef]);
 
     const spawnParticles = useCallback((x: number, y: number, color: string, count: number = 8) => {
         for (let i = 0; i < count; i++) {
@@ -715,7 +721,7 @@ export default function InteractiveInstrumentVisual({
 
         animationFrameId = requestAnimationFrame(render);
         return () => cancelAnimationFrame(animationFrameId);
-    }, []);
+    }, [scalesRef, velocitiesRef]);
 
     // Manual canvas click previews
     const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
