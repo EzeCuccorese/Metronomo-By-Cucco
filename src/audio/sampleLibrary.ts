@@ -65,7 +65,9 @@ function sampleFormats(): SampleFormat[] {
 }
 
 async function fetchAndDecode(context: BaseAudioContext, url: string): Promise<AudioBuffer> {
-    const baseUrl = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'http://localhost';
+    const baseUrl = typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null'
+        ? window.location.origin
+        : 'http://localhost';
     const response = await fetch(new URL(url, baseUrl).href);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await context.decodeAudioData(await response.arrayBuffer());
