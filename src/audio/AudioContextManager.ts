@@ -13,12 +13,8 @@ class AudioContextManager {
 
     private constructor() {
         // (ES) Inicializa el AudioContext estándar con optimizaciones
-        const AudioContextClass = window.AudioContext;
-        if (!AudioContextClass) {
-            throw new Error("Web Audio API not supported in this browser");
-        }
         // No forced sampleRate: using the device's native rate avoids resampling latency (most phones run at 48 kHz).
-        this.audioContext = new AudioContextClass({
+        this.audioContext = new window.AudioContext({
             latencyHint: 'interactive',
         });
     }
