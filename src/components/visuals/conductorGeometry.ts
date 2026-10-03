@@ -61,6 +61,7 @@ export const MAX_SWING_ANGLE = 0.45; // radians (~25 degrees)
 
 /** Pendulum target angle: swings left on even beats, right on odd beats, along a cosine ease. */
 export function swingTargetAngle(stepIndex: number, stepsPerBeat: number): number {
+    if (!(stepsPerBeat > 0) || !Number.isFinite(stepsPerBeat)) return 0;
     const isOddBeat = Math.floor(stepIndex / stepsPerBeat) % 2 === 1;
     const interpolationFactor = (stepIndex % stepsPerBeat) / stepsPerBeat;
     const direction = isOddBeat ? 1 : -1;
@@ -161,7 +162,7 @@ export function stepDurationMs(bpm: number, timeSignature: [number, number], sub
     return (timePerBar / subdivision) * 1000;
 }
 
-/** Fractional step position: current step plus progress through it (capped at 0.99, 0 when reduced). */
+/** Fractional step position: current step plus progress through it (clamped to 0..0.99, 0 when reduced). */
 export function smoothStepPosition(
     currentStepIndex: number,
     elapsedMs: number,
@@ -169,7 +170,7 @@ export function smoothStepPosition(
     reduceMotion: boolean,
 ): number {
     const valid = durationMs > 0 && Number.isFinite(durationMs);
-    const progress = reduceMotion || !valid ? 0 : Math.min(0.99, elapsedMs / durationMs);
+    const progress = reduceMotion || !valid ? 0 : Math.max(0, Math.min(0.99, elapsedMs / durationMs));
     return currentStepIndex + progress;
 }
 

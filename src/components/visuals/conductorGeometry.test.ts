@@ -66,6 +66,8 @@ describe('pendulum swing', () => {
     it('swings left on even beats and right on odd beats', () => {
         expect(swingTargetAngle(0, 4)).toBeCloseTo(-MAX_SWING_ANGLE);
         expect(swingTargetAngle(4, 4)).toBeCloseTo(MAX_SWING_ANGLE);
+        expect(swingTargetAngle(3, 0)).toBe(0);
+        expect(swingTargetAngle(3, NaN)).toBe(0);
         expect(swingTargetAngle(8, 4)).toBeCloseTo(-MAX_SWING_ANGLE);
     });
 
@@ -151,6 +153,7 @@ describe('timing', () => {
         expect(smoothStepPosition(3, 50, 100, false)).toBeCloseTo(3.5);
         expect(smoothStepPosition(3, 500, 100, false)).toBeCloseTo(3.99);
         expect(smoothStepPosition(3, 50, 100, true)).toBe(3);
+        expect(smoothStepPosition(3, -20, 100, false)).toBe(3);
     });
 
     it('eases with a cosine curve', () => {

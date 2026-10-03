@@ -48,10 +48,10 @@ const PREVIEW_BUTTONS: { instrument: string; modifier?: string; label: string }[
 ];
 
 /** useRef whose initial value is computed once (not on every render). */
-function useLazyRef<T>(init: () => T): { current: T } {
+function useLazyRef<T>(init: () => T): React.MutableRefObject<T> {
     const ref = useRef<T | null>(null);
     if (ref.current === null) ref.current = init();
-    return ref as { current: T };
+    return ref as React.MutableRefObject<T>;
 }
 
 export default function InteractiveInstrumentVisual({
