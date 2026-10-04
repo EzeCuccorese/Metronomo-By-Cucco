@@ -75,20 +75,22 @@ src/
 
 Solo se soportan los navegadores más recientes: Safari (iOS y macOS) y Chrome en su última versión. No hay transpilación ni polyfills para navegadores antiguos (`build.target: esnext`).
 
-Requiere Node 26 (CI y Docker usan Node 26; ver `.nvmrc`). El typecheck corre con TypeScript 7 y ESLint usa TypeScript 6 (ver notas en el PR: typescript-eslint aún no soporta la API de TS 7).
+Requiere Node 26 (CI y Docker usan Node 26; ver `.nvmrc`) y pnpm 11. Node 25+ ya no trae corepack, así que pnpm se instala con `npm i -g pnpm@11` (o mise/fnm). El typecheck corre con TypeScript 7 y ESLint usa TypeScript 6 (ver notas en el PR: typescript-eslint aún no soporta la API de TS 7).
 
 ## Desarrollo
 
+El gestor es **pnpm 11** (`packageManager` y `devEngines` en `package.json`). Por defecto pnpm 11 espera 24 h antes de instalar una versión recién publicada (`minimumReleaseAge`) y no corre los scripts de instalación de las dependencias: `pnpm-workspace.yaml` tiene `allowBuilds` vacío porque hoy ninguna los necesita. Si alguna dependencia futura lo requiere, se agrega ahí de forma explícita y con su motivo.
+
 ```bash
-npm install
-npm run dev            # servidor de desarrollo
-npm run build          # build de producción (typecheck + vite)
-npm run lint
-npm run typecheck
-npm test               # tests unitarios e integración (Vitest + Testing Library)
-npm run test:coverage  # con umbrales de cobertura
-npm run test:e2e       # Playwright contra el build de producción
-npm run check          # todo lo anterior
+pnpm install
+pnpm dev               # servidor de desarrollo
+pnpm build             # build de producción (typecheck + vite)
+pnpm lint
+pnpm typecheck
+pnpm test              # tests unitarios e integración (Vitest + Testing Library)
+pnpm test:coverage     # con umbrales de cobertura
+pnpm test:e2e          # Playwright contra el build de producción
+pnpm check             # todo lo anterior
 ```
 
 La app requiere un contexto seguro (`crypto.randomUUID`, Web Audio, service worker): funciona en HTTPS, en Capacitor (`capacitor://localhost`) y en `localhost`. Para probar en un teléfono por LAN, `http://192.168.x.x` no es un contexto seguro; usá la app dentro de Capacitor, un túnel HTTPS o el hosting HTTPS de la PWA.
