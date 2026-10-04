@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useCallback } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 import { CHANNEL_IDS, getChannelForInstrument } from '../audio/instrumentChannels';
 import type { ChannelId } from '../audio/instrumentChannels';
+import { ANALYSED_CHANNELS } from '../audio/channelLevel';
 import { CUSTOM_PATTERN_ID, isMetronomePattern } from '../rhythms/patternLibrary';
 import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
 import { usePersistentState } from '../hooks/usePersistentState';
@@ -14,6 +15,8 @@ interface MixerConsoleProps {
   onVolumeChange: (channel: string, volume: number) => void;
   onPanChange: (channel: string, pan: number) => void;
   onMuteChange: (channel: string, muted: boolean) => void;
+  /** Real output level (0..1) of a channel; feeds the PIANO and TECLADO meters. */
+  getChannelLevel?: (channel: string) => number;
 }
 
 interface ChannelState {
@@ -81,6 +84,7 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
   onVolumeChange,
   onPanChange,
   onMuteChange,
+  getChannelLevel,
 }) => {
   const [mixer, setMixer] = usePersistentState<MixerState>('mixer', INITIAL_MIXER, { sanitize: sanitizeMixerState });
   const channels = mixer.channels;
@@ -116,9 +120,11 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
   const stripRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const rafRef = useRef<number | null>(null);
   const patternRef = useRef(pattern);
+  const getLevelRef = useRef(getChannelLevel);
   const isPlayingRef = useRef(isPlaying);
   useEffect(() => {
     patternRef.current = pattern;
+    getLevelRef.current = getChannelLevel;
     isPlayingRef.current = isPlaying;
   });
 
@@ -129,7 +135,11 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
       let energy = false;
       CHANNEL_IDS.forEach(id => {
         const prev = peaksRef.current[id] || 0;
-        const next = Math.max(0, prev * 0.87 - 0.005);
+        let next = Math.max(0, prev * 0.87 - 0.005);
+        // Pad and piano are not pattern steps: they follow their strip's real output.
+        if ((ANALYSED_CHANNELS as readonly string[]).includes(id)) {
+          next = Math.max(next, Math.min(1, getLevelRef.current?.(id) ?? 0));
+        }
         peaksRef.current[id] = next;
         if (next > 0) energy = true;
 
@@ -140,12 +150,13 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
           seg.classList.toggle('active', next >= Number(seg.dataset.threshold));
         });
       });
-      rafRef.current = energy ? requestAnimationFrame(paintMeters) : null;
+      // Keep polling while a strip can be fed by live audio (chords, piano keys) or still decays.
+      rafRef.current = energy || isPlayingRef.current || getLevelRef.current ? requestAnimationFrame(paintMeters) : null;
     };
 
     const unsubscribe = store.subscribe(() => {
       if (!isPlayingRef.current) return;
-      const { step, chordIndex } = store.getSnapshot();
+      const { step } = store.getSnapshot();
       if (step === lastStep) return;
       lastStep = step;
       const current = patternRef.current;
@@ -154,11 +165,9 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
         const channel = getChannelForInstrument(s.instrument);
         peaksRef.current[channel] = Math.min(1, Math.max(peaksRef.current[channel] || 0, s.velocity));
       });
-      if (chordIndex >= 0 && (step === 0 || step === Math.floor(current.subdivision / 2))) {
-        peaksRef.current.synth = Math.max(peaksRef.current.synth || 0, 0.7);
-      }
       if (rafRef.current === null) rafRef.current = requestAnimationFrame(paintMeters);
     });
+    if (getLevelRef.current) rafRef.current = requestAnimationFrame(paintMeters);
     return () => {
       unsubscribe();
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);

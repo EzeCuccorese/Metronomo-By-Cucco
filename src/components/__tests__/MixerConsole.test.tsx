@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import { MixerConsole } from '../MixerConsole';
 import { PRESET_PATTERNS } from '../../rhythms/RhythmPatterns';
 import { DEFAULT_CUSTOM_PATTERN, METRONOME_PATTERN_ID } from '../../rhythms/patternLibrary';
@@ -102,5 +102,39 @@ describe('MixerConsole', () => {
         localStorage.setItem('metronomo:v1:mixer', JSON.stringify(value));
         const { onVolumeChange } = renderMixer();
         expect(onVolumeChange).toHaveBeenCalledWith('bombo', 1);
+    });
+
+    describe('meters follow each channel output', () => {
+        const litSegments = (id: string) =>
+            screen.getByTestId(`mixer-channel-${id}`).querySelectorAll('.vu-segment.active').length;
+
+        const setup = (levels: Record<string, number>) => {
+            const frames: FrameRequestCallback[] = [];
+            vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb));
+            vi.stubGlobal('cancelAnimationFrame', () => {});
+            const getChannelLevel = vi.fn((id: string) => levels[id] ?? 0);
+            render(<MixerConsole pattern={rock} isPlaying onVolumeChange={vi.fn()} onPanChange={vi.fn()} onMuteChange={vi.fn()} getChannelLevel={getChannelLevel} />);
+            act(() => { frames.shift()?.(0); });
+        };
+
+        afterEach(() => vi.unstubAllGlobals());
+
+        it('lights only PIANO when only the piano strip has output', () => {
+            setup({ piano: 0.9 });
+            expect(litSegments('piano')).toBeGreaterThan(0);
+            expect(litSegments('synth')).toBe(0);
+        });
+
+        it('lights only TECLADO when only the pad strip has output', () => {
+            setup({ synth: 0.9 });
+            expect(litSegments('synth')).toBeGreaterThan(0);
+            expect(litSegments('piano')).toBe(0);
+        });
+
+        it('does not light TECLADO from chord changes alone', () => {
+            setup({});
+            expect(litSegments('synth')).toBe(0);
+            expect(litSegments('piano')).toBe(0);
+        });
     });
 });
