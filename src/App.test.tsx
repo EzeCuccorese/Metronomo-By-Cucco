@@ -138,6 +138,18 @@ describe('App (integration with a scripted engine)', () => {
         expect(bpmInput().value).toBe('126');
     });
 
+    it('opens the shortcut cheat sheet with ? and steps rhythms with . and ,', async () => {
+        render(<App />);
+        fireEvent.keyDown(document.body, { code: 'Period' });
+        await act(async () => {});
+        const next = scheduler().pattern?.id;
+        fireEvent.keyDown(document.body, { code: 'Comma' });
+        await act(async () => {});
+        expect(scheduler().pattern?.id).not.toBe(next);
+        fireEvent.keyDown(document.body, { code: 'Slash', key: '?', shiftKey: true });
+        expect(await screen.findByRole('dialog', { name: 'Atajos de teclado' })).toBeInTheDocument();
+    });
+
     it('sends pattern edits to the engine and persists them', () => {
         const { unmount } = render(<App />);
         const before = scheduler().calls.setPattern.length;
