@@ -133,14 +133,22 @@ export const test = base.extend<{ probe: AudioProbe; consoleErrors: string[] }>(
 export { expect };
 
 /** Opens the app with a clean slate (no persisted settings) unless told otherwise. */
-export async function openApp(page: Page, { keepStorage = false } = {}) {
+/** Panels as they were before the "Vista" presets existed (every panel shown): what existing users get. */
+const LAYOUT_TODO = JSON.stringify({ preset: 'todo', panels: { pulse: 'open', instruments: 'open', sequencer: 'open', mixer: 'open', practice: 'collapsed', harmony: 'open', study: 'open', piano: 'open' } });
+
+/**
+ * Opens the app with clean storage. The specs written before the view presets exist expect every panel,
+ * so by default the layout is seeded with "Todo"; pass `newUser: true` for the real first-run layout.
+ */
+export async function openApp(page: Page, { keepStorage = false, newUser = false } = {}) {
     if (!keepStorage) {
-        await page.addInitScript(() => {
+        await page.addInitScript(([todo, fresh]) => {
             if (!sessionStorage.getItem('__e2e_cleared')) {
                 localStorage.clear();
+                if (!fresh) localStorage.setItem('metronomo:v1:ui.layout.v1', todo);
                 sessionStorage.setItem('__e2e_cleared', '1');
             }
-        });
+        }, [LAYOUT_TODO, newUser] as const);
     }
     await page.goto('/');
     await expect(page.getByTestId('play-toggle')).toBeVisible();

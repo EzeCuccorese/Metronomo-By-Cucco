@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Box, Button, Grid, Stack, Typography } from '@mui/material';
+import { Box, Grid } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import './App.css';
@@ -42,8 +42,8 @@ import { useLayout } from './hooks/useLayout';
 import { useMixer } from './hooks/useMixer';
 import { useHarmonySync, useMelodySync } from './hooks/useEngineSync';
 import { LayoutContext } from './state/LayoutContext';
-import { PANEL_IDS, PANEL_LABELS } from './state/layout';
 import type { PanelId } from './state/layout';
+import { ViewMenu } from './components/ViewMenu';
 import { BluetoothNotice } from './components/BluetoothNotice';
 import { PlaybackContext } from './state/PlaybackContext';
 import { isBoolean, isNumber, isPlainObject, isString } from './state/storage';
@@ -151,7 +151,6 @@ function App() {
   useMelodySync(engine);
 
   const shown = (id: PanelId) => layout.panels[id] !== 'hidden';
-  const hiddenPanels = PANEL_IDS.filter(id => !shown(id));
   const mutedChannels = mixer.channels.filter(ch => ch.isMuted);
   const mixerSummary = `${mixer.channels.length} canales · ${mutedChannels.length === 0 ? 'sin mutes' : mutedChannels.length === 1 ? `${mutedChannels[0].name} en mute` : `${mutedChannels.length} en mute`}`;
 
@@ -178,20 +177,10 @@ function App() {
               availablePresets={PRESET_PATTERNS}
               onSelectPreset={loadPreset}
               tempoLocked={tempoLocked}
+              viewControl={<ViewMenu />}
             />
 
             <BluetoothNotice isPlaying={isPlaying} />
-
-            {hiddenPanels.length > 0 && (
-              <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center', gap: 1 }} data-testid="hidden-panels">
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>Paneles ocultos:</Typography>
-                {hiddenPanels.map(id => (
-                  <Button key={id} size="small" variant="outlined" onClick={() => layout.setPanelState(id, 'open')} sx={{ textTransform: 'none' }}>
-                    Mostrar {PANEL_LABELS[id].toLowerCase()}
-                  </Button>
-                ))}
-              </Stack>
-            )}
 
             {/* Rows of an aligned 12-column grid; cells stretch to the row height. Hidden panels leave no gap. */}
             <Grid container spacing={{ xs: 1.5, md: 2 }} sx={{ width: '100%' }}>

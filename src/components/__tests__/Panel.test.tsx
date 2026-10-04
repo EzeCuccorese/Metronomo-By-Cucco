@@ -1,9 +1,10 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { Panel } from '../Panel';
 import { LayoutContext } from '../../state/LayoutContext';
 import { useLayout } from '../../hooks/useLayout';
 import { STORAGE_PREFIX } from '../../state/storage';
+import { LAYOUT_TODO } from '../../state/layout';
 
 function Harness({ withBody = true }: { withBody?: boolean }) {
     const layout = useLayout();
@@ -19,6 +20,7 @@ function Harness({ withBody = true }: { withBody?: boolean }) {
 const saved = () => JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}ui.layout.v1`) ?? 'null');
 
 describe('Panel', () => {
+    beforeEach(() => localStorage.setItem(`${STORAGE_PREFIX}ui.layout.v1`, JSON.stringify(LAYOUT_TODO)));
     afterEach(() => { cleanup(); localStorage.clear(); });
 
     it('is a plain open card without an id', () => {
