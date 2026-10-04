@@ -18,6 +18,8 @@ import type { Melody } from '../audio/piano/melody';
 import type { PianoStatus } from '../audio/piano/PianoSampler';
 import PianoKeyboard from './piano/PianoKeyboard';
 import MelodyControls from './piano/MelodyControls';
+import MidiControls from './piano/MidiControls';
+import { useMidiInput } from '../hooks/useMidiInput';
 
 type PianoEngine = Pick<MetronomeEngine,
     'harmonyProgression' | 'pianoStatus' | 'pianoNoteOn' | 'pianoNoteOff' | 'setPianoSustain' | 'releaseAllPianoKeys' | 'preloadPiano' |
@@ -126,7 +128,8 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
     // --- Sustain pedal: Shift (held) and the on-screen button (toggle) share one pedal ---
     const [shiftPedal, setShiftPedal] = useState(false);
     const [buttonPedal, setButtonPedal] = useState(false);
-    const pedalDown = shiftPedal || buttonPedal;
+    const [midiPedal, setMidiPedal] = useState(false);
+    const pedalDown = shiftPedal || buttonPedal || midiPedal;
     useEffect(() => { setPianoSustain(pedalDown); }, [pedalDown, setPianoSustain]);
     useEffect(() => () => setPianoSustain(false), [setPianoSustain]);
 
@@ -136,6 +139,10 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
     }, [setSettings]);
 
     const [focusInside, setFocusInside] = useState(false);
+
+    // --- MIDI keyboard (Chrome/Android): same noteOn / noteOff / pedal as the other sources ---
+    const [midiNoticeDismissed, setMidiNoticeDismissed] = usePersistentState('piano.midiNoticeDismissed', false, isBoolean);
+    const midi = useMidiInput({ onNoteOn: noteOn, onNoteOff: noteOff, onSustain: setMidiPedal });
 
     usePianoComputerKeyboard({
         globalEnabled: settings.computerKeys,
@@ -321,6 +328,17 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
                         ? 'Tocando con el teclado de la PC (el foco está en el piano)'
                         : 'Enfocá el piano o activá "Teclado PC" para tocar con las letras'}
             </Box>
+
+            <MidiControls
+                support={midi.support}
+                status={midi.status}
+                devices={midi.devices}
+                selected={midi.selected}
+                onSelect={midi.select}
+                onConnect={() => { void midi.connect(); }}
+                noticeDismissed={midiNoticeDismissed}
+                onDismissNotice={() => setMidiNoticeDismissed(true)}
+            />
 
             <Divider sx={{ my: 1.5, borderColor: '#333' }} />
 
