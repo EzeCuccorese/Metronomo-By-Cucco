@@ -1,7 +1,5 @@
-import { useEffect, useCallback } from 'react';
-import type { SxProps, Theme } from '@mui/material/styles';
+import { useCallback } from 'react';
 import { Box, Typography, Select, MenuItem, Stack, Slider, FormControl, InputLabel, Button, Divider, Chip } from '@mui/material';
-import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ReplayIcon from '@mui/icons-material/Replay';
 import type { AccompanimentStyle } from '../audio/PolyphonicSynth';
@@ -10,12 +8,7 @@ import { usePlayback } from '../state/PlaybackContext';
 import { isNumber, isPlainObject, isString } from '../state/storage';
 
 interface HarmonyBuilderProps {
-    onUpdateProgression: (progression: string[][]) => void;
-    onVolumeChange: (vol: number) => void;
-    onStyleChange: (style: AccompanimentStyle) => void;
     isPlaying?: boolean;
-    /** Extra styles for the outer card (e.g. to match the surrounding panels). */
-    sx?: SxProps<Theme>;
 }
 
 const STYLES: { id: AccompanimentStyle; label: string }[] = [
@@ -81,7 +74,7 @@ const isOctave = (v: unknown): v is number => isNumber(v) && OCTAVES.includes(v)
 const isVolume = (v: unknown): v is number => isNumber(v) && v >= 0 && v <= 1;
 const isStyle = (v: unknown): v is AccompanimentStyle => STYLES.some(s => s.id === v);
 
-export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, onStyleChange, isPlaying = false, sx }: HarmonyBuilderProps) {
+export default function HarmonyBuilder({ isPlaying = false }: HarmonyBuilderProps) {
     const [rootKey, setRootKey] = usePersistentState('harmony.key', 'C', isKey);
     const [mode, setMode] = usePersistentState<ModeType>('harmony.mode', 'major', isMode);
     const [octave, setOctave] = usePersistentState('harmony.octave', 4, isOctave);
@@ -93,9 +86,8 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
     // Sequence
     const [sequence, setSequence] = usePersistentState<ChordStep[]>('harmony.sequence', [], isSequence);
 
-    // Restored settings must reach the audio engine too.
-    useEffect(() => { onStyleChange(style); }, [style, onStyleChange]);
-    useEffect(() => { onVolumeChange(volume); }, [volume, onVolumeChange]);
+    // The progression, style and volume reach the audio engine through `useHarmonySync` (in App),
+    // so the sound does not depend on this card being on screen.
 
     const availableDegrees = [0, 1, 2, 3, 4, 5, 6].map(i => ({
         index: i,
@@ -144,21 +136,6 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
         setSequence(prev => prev.filter(c => c.id !== id));
     }, [setSequence]);
 
-    // Sync with Parent
-    useEffect(() => {
-        const progression: string[][] = [];
-
-        sequence.forEach(step => {
-            // Push N copies of the chord, where N is durationUnits
-            // Each copy represents 1/2 bar of music
-            for (let i = 0; i < step.durationUnits; i++) {
-                progression.push(step.notes);
-            }
-        });
-
-        onUpdateProgression(progression);
-    }, [sequence, onUpdateProgression]);
-
     const handleVolume = (_: Event, val: number | number[]) => {
         setVolume(val as number);
     };
@@ -181,30 +158,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
     }
 
     return (
-        <Box sx={[{
-            p: 2,
-            borderRadius: 3,
-            bgcolor: '#1a1a1a',
-            border: '1px solid #333',
-            height: '100%',
-            overflow: 'auto'
-        }, ...(Array.isArray(sx) ? sx : [sx])]}>
-            <Stack
-                direction="row"
-                spacing={1}
-                sx={{
-                    alignItems: "center",
-                    mb: 2
-                }}>
-                <MusicNoteIcon sx={{ fontSize: 20, color: '#c0c0c0' }} />
-                <Typography variant="subtitle1" sx={{
-                    color: 'white',
-                    fontWeight: "bold"
-                }}>
-                    Constructor Armónico
-                </Typography>
-            </Stack>
-
+        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
             {/* Global Settings */}
             <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 0.7fr) minmax(0, 1.3fr)', gap: 1, mb: 1 }}>
                 <FormControl size="small">

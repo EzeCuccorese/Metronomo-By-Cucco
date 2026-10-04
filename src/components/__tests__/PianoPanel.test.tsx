@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import PianoPanel from '../PianoPanel';
+import { useMelodySync } from '../../hooks/useEngineSync';
 import { PlaybackContext } from '../../state/PlaybackContext';
 import { createPlaybackStore } from '../../state/playbackStore';
 import type { PlaybackStore } from '../../state/playbackStore';
@@ -30,10 +31,16 @@ const makeEngine = (overrides: Partial<Record<string, unknown>> = {}) => {
 
 const TAKE: Melody = { bars: 1, subdivision: 4, notes: [{ step: 0, midi: 60, velocity: 0.9, length: 1 }] };
 
+/** App wires the melody loop to the engine (so it survives a hidden card); the card only edits it. */
+const WithMelodySync = ({ engine, isPlaying }: { engine: ReturnType<typeof makeEngine>; isPlaying: boolean }) => {
+    useMelodySync(engine);
+    return <PianoPanel engine={engine as never} isPlaying={isPlaying} />;
+};
+
 function renderPanel(engine = makeEngine(), isPlaying = false, store: PlaybackStore = createPlaybackStore()) {
     const utils = render(
         <PlaybackContext.Provider value={store}>
-            <PianoPanel engine={engine as never} isPlaying={isPlaying} />
+            <WithMelodySync engine={engine} isPlaying={isPlaying} />
         </PlaybackContext.Provider>
     );
     return { ...utils, engine, store };

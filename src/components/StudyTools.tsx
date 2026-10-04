@@ -9,6 +9,7 @@ import {
 import { usePomodoro, formatTime } from '../hooks/usePomodoro';
 import { useStudyTasks } from '../hooks/useStudyTasks';
 import { usePlayback } from '../state/PlaybackContext';
+import { Panel } from './Panel';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -82,9 +83,13 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
     };
 
     return (
-        <Paper className="brass-trim" sx={{
-            p: { xs: 1.5, md: 2.5 }, bgcolor: '#141210', borderRadius: 4, height: '100%',
-            display: 'grid', gap: { xs: 1.5, md: 2 }, alignContent: 'start',
+        <Panel
+            id="study"
+            title="Estudio"
+            summary={`${formatTime(timeLeft)} · ${isActive ? 'corriendo' : 'en pausa'} · ${tasks.length === 1 ? '1 tarea' : `${tasks.length} tareas`}`}
+        >
+        <Box sx={{
+            display: 'grid', gap: { xs: 1.5, md: 2 }, alignContent: 'start', flex: 1, minHeight: 0,
             // Stacked on phones; timer | stats on tablets with the plan below; three columns on desktop.
             gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))', lg: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr)' },
             gridTemplateAreas: {
@@ -272,6 +277,7 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
                 </List>
             </Box>
 
+        </Box>
             {/* ADD TASK DIALOG */}
             <Dialog open={isDialogOpen} onClose={() => setIsDialogOpen(false)} fullWidth maxWidth="xs">
                 <DialogTitle>Nueva Tarea</DialogTitle>
@@ -314,6 +320,6 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
                 onClose={() => setNotice(null)}
                 message={notice}
             />
-        </Paper>
+        </Panel>
     );
 }

@@ -3,7 +3,6 @@ import { Box, Button, Chip, Divider, FormControl, IconButton, InputLabel, MenuIt
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import KeyboardIcon from '@mui/icons-material/Keyboard';
-import PianoIcon from '@mui/icons-material/Piano';
 import type { MetronomeEngine } from '../hooks/useMetronomeEngine';
 import { usePersistentState } from '../hooks/usePersistentState';
 import { usePianoComputerKeyboard } from '../hooks/usePianoComputerKeyboard';
@@ -19,7 +18,7 @@ import MelodyControls from './piano/MelodyControls';
 
 type PianoEngine = Pick<MetronomeEngine,
     'harmonyProgression' | 'pianoStatus' | 'pianoNoteOn' | 'pianoNoteOff' | 'releaseAllPianoKeys' | 'preloadPiano' |
-    'setMelody' | 'subscribeMelodyRecorded' | 'recordMelody' | 'cancelMelodyRecording'>;
+    'subscribeMelodyRecorded' | 'recordMelody' | 'cancelMelodyRecording'>;
 
 interface PianoPanelProps {
     engine: PianoEngine;
@@ -71,7 +70,7 @@ const STATUS_LABEL: Record<PianoStatus, string> = {
  * (ES) Piano tocable con resaltado del acorde, guía de escala y grabación de melodías en loop.
  */
 export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
-    const { pianoNoteOn, pianoNoteOff, releaseAllPianoKeys, preloadPiano, setMelody: pushMelody, subscribeMelodyRecorded, recordMelody, cancelMelodyRecording } = engine;
+    const { pianoNoteOn, pianoNoteOff, releaseAllPianoKeys, preloadPiano, subscribeMelodyRecorded, recordMelody, cancelMelodyRecording } = engine;
     const [settings, setSettings] = usePersistentState('piano.settings', DEFAULT_SETTINGS, isSettings);
     const [melody, setMelody] = usePersistentState<Melody | null>('piano.melody.v1', null, isStoredMelody);
     const [history, setHistory] = useState<(Melody | null)[]>([]);
@@ -147,11 +146,7 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
         return scalePitchClasses(Number(pc), mode as ScaleMode);
     }, [settings.scale]);
 
-    // --- Melody ---
-    useEffect(() => {
-        pushMelody(settings.loop ? melody : null);
-    }, [melody, settings.loop, pushMelody]);
-
+    // --- Melody (the loop reaches the engine through `useMelodySync` in App, so it plays with this card hidden) ---
     useEffect(() => subscribeMelodyRecorded((take, isLateUpdate) => {
         if (!isLateUpdate) setHistory(prev => [...prev, melodyRef.current].slice(-HISTORY_LIMIT));
         setMelody(take);
@@ -171,20 +166,14 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
 
     return (
         <Box
-            component="section"
             ref={panelRef}
-            aria-labelledby="piano-panel-title"
             data-testid="piano-panel"
             onPointerEnter={preload}
             onFocusCapture={preload}
             onTouchStart={preload}
-            sx={{ p: 2, borderRadius: 3, bgcolor: '#1a1a1a', border: '1px solid #333', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }}
+            sx={{ minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }}
         >
             <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
-                <PianoIcon sx={{ fontSize: 20, color: '#c0c0c0' }} aria-hidden="true" />
-                <Typography id="piano-panel-title" variant="subtitle1" component="h2" sx={{ color: 'white', fontWeight: 'bold' }}>
-                    Piano
-                </Typography>
                 <Chip
                     size="small"
                     label={STATUS_LABEL[engine.pianoStatus]}

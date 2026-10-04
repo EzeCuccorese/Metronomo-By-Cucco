@@ -243,4 +243,71 @@ describe('App (integration with a scripted engine)', () => {
         unmount();
         expect(s.calls.dispose).toHaveLength(1);
     });
+
+    describe('hiding or folding panels never changes the sound', () => {
+        const put = (key: string, value: unknown) => localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(value));
+        const chord = { id: 'a', degree: 'I', durationUnits: 2, notes: ['C4', 'E4', 'G4'] };
+        const take = { bars: 1, subdivision: 4, notes: [{ step: 0, midi: 60, velocity: 0.9, length: 1 }] };
+
+        it('applies the stored mix, progression and melody with those panels hidden from the start', () => {
+            put('ui.layout.v1', { panels: { mixer: 'hidden', harmony: 'hidden', piano: 'hidden' } });
+            put('harmony.sequence', [chord]);
+            put('harmony.style', 'zamba_base');
+            put('piano.melody.v1', take);
+            put('mixer', {
+                clickRulePatternId: 'metronome',
+                channels: [{ id: 'bombo', name: 'BOMBO', volume: 0.4, pan: 0, isMuted: true }],
+            });
+            render(<App />);
+            expect(screen.queryByRole('region', { name: 'Mezclador' })).toBeNull();
+            expect(screen.queryByRole('region', { name: 'Armonía' })).toBeNull();
+            const calls = scheduler().calls;
+            expect(calls.setChannelMute).toContainEqual(['bombo', true]);
+            expect(calls.setChannelVolume).toContainEqual(['bombo', 0.4]);
+            expect(calls.setHarmonyProgression.at(-1)![0]).toHaveLength(2);
+            expect(calls.setAccompanimentStyle.at(-1)).toEqual(['zamba_base']);
+            expect(calls.setMelody.at(-1)).toEqual([take]);
+        });
+
+        it('keeps the progression and the mutes when the panels are hidden and folded at run time', () => {
+            render(<App />);
+            fireEvent.click(screen.getByText('IV'));
+            fireEvent.click(screen.getByTestId('mute-kick'));
+            const progression = scheduler().calls.setHarmonyProgression.at(-1)![0];
+            expect(progression).toHaveLength(2);
+
+            // Fold the mixer, hide the harmony card.
+            fireEvent.click(screen.getByTestId('panel-toggle-mixer'));
+            fireEvent.click(screen.getByRole('button', { name: 'Opciones de Armonía' }));
+            fireEvent.click(screen.getByRole('menuitem', { name: 'Ocultar panel' }));
+            expect(screen.queryByTestId('harmony-step')).toBeNull();
+            expect(scheduler().calls.setHarmonyProgression.at(-1)![0]).toEqual(progression);
+            expect(scheduler().calls.setChannelMute.at(-1)).toEqual(['kick', true]);
+
+            // Hide the mixer too, then change rhythm: the click rule still applies to the engine.
+            fireEvent.click(screen.getByRole('button', { name: 'Opciones de Mezclador' }));
+            fireEvent.click(screen.getByRole('menuitem', { name: 'Ocultar panel' }));
+            expect(screen.queryByTestId('mute-click')).toBeNull();
+            return choose('Ritmo Predefinido', 'Chacarera Trunca').then(() => {
+                expect(scheduler().calls.setChannelMute).toContainEqual(['click', true]);
+                expect(scheduler().calls.setChannelMute.filter(c => c[0] === 'kick').at(-1)).toEqual(['kick', true]);
+            });
+        });
+
+        it('restores a hidden panel from the "Paneles ocultos" bar, with its state intact', () => {
+            put('harmony.sequence', [chord]);
+            put('ui.layout.v1', { panels: { harmony: 'hidden' } });
+            render(<App />);
+            fireEvent.click(screen.getByRole('button', { name: 'Mostrar armonía' }));
+            expect(screen.getAllByTestId('harmony-step')).toHaveLength(1);
+            expect(screen.queryByTestId('hidden-panels')).toBeNull();
+        });
+
+        it('lets the hidden panels free their grid cell', () => {
+            put('ui.layout.v1', { panels: { pulse: 'hidden', instruments: 'hidden', sequencer: 'hidden', mixer: 'hidden', practice: 'hidden', harmony: 'hidden', study: 'hidden', piano: 'hidden' } });
+            render(<App />);
+            expect(screen.queryAllByRole('region')).toHaveLength(0);
+            expect(screen.getAllByRole('button', { name: /^Mostrar / })).toHaveLength(8);
+        });
+    });
 });

@@ -1,7 +1,6 @@
 import React from 'react';
 import {
     Box,
-    Paper,
     Stack,
     Switch,
     FormControlLabel,
@@ -13,13 +12,9 @@ import {
     InputLabel,
     Slider,
     ToggleButton,
-    ToggleButtonGroup,
-    Accordion,
-    AccordionSummary,
-    AccordionDetails,
-    Chip
+    ToggleButtonGroup
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { Panel } from './Panel';
 import { FORM_GENRES } from '../audio/Scheduler';
 import type { FormGenre, TrainerConfig, TrainerMode } from '../audio/Scheduler';
 import { MAX_BPM, MIN_BPM, clampBpm } from '../rhythms/meter';
@@ -119,19 +114,11 @@ export const PracticeModes: React.FC<PracticeModesProps> = ({
     const updateTrainer = (patch: Partial<TrainerConfig>) => onTrainerChange({ ...trainer, ...patch });
 
     return (
-        <Paper className="brass-trim" sx={{ bgcolor: '#141210', borderRadius: 4, overflow: 'hidden' }}>
-            <Accordion disableGutters defaultExpanded={activeCount > 0} sx={{ bgcolor: 'transparent', backgroundImage: 'none' }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls="practice-modes-content" id="practice-modes-header">
-                    <Stack direction="row" spacing={1} sx={{
-                        alignItems: "center"
-                    }}>
-                        <Typography variant="subtitle1" sx={{
-                            fontWeight: "bold"
-                        }}>Modos de práctica</Typography>
-                        {activeCount > 0 && <Chip size="small" color="primary" label={`${activeCount} activo${activeCount > 1 ? 's' : ''}`} />}
-                    </Stack>
-                </AccordionSummary>
-                <AccordionDetails id="practice-modes-content">
+        <Panel
+            id="practice"
+            title="Modos de práctica"
+            summary={activeCount > 0 ? `${activeCount} activo${activeCount > 1 ? 's' : ''}` : 'ninguno activo'}
+        >
                     <Stack spacing={2.5}>
                         {/* SPEED TRAINER */}
                         <Box>
@@ -240,8 +227,6 @@ export const PracticeModes: React.FC<PracticeModesProps> = ({
                             {formas.enabled && <FormStatus />}
                         </Box>
                     </Stack>
-                </AccordionDetails>
-            </Accordion>
-        </Paper>
+        </Panel>
     );
 };
