@@ -19,6 +19,13 @@ function ruleHeaders(file: string, pattern: string): Record<string, string> {
     );
 }
 
+describe('parseNginxHeaders', () => {
+    it('reads quoted and bare values, with or without indentation, and ignores comments', () => {
+        const conf = '# add_header Ignored "x";\n  add_header A "a b" always;\nadd_header B nosniff always;\n';
+        expect(parseNginxHeaders(conf)).toEqual([['A', 'a b'], ['B', 'nosniff']]);
+    });
+});
+
 describe('Cloudflare _headers parity with nginx', () => {
     const file = buildHeadersFile(securityConf, publicFiles);
 

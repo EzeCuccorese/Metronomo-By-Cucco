@@ -16,14 +16,9 @@ const MEDIA_EXTENSIONS = /\.(?:png|webp|svg|ico|woff2)$/i;
 /** Entry points that must always be revalidated or deploys and service-worker updates never arrive. */
 const REVALIDATED_PATHS = ['/index.html', '/manifest.webmanifest', '/sw.js', '/registerSW.js', '/workbox-*'];
 
-/** `add_header Name "value" always;` lines of the nginx snippet. */
+/** `add_header Name "value" always;` lines of the nginx snippet (indented or not, quoted or bare value). */
 export function parseNginxHeaders(conf: string): Array<[string, string]> {
-    return Array.from(conf.matchAll(/^add_header\s+(\S+)\s+"([^"]*)"/gm), m => [m[1], m[2]] as [string, string]);
-}
-
-export interface PublicEntry {
-    /** Path relative to the public dir, with forward slashes. */
-    path: string;
+    return Array.from(conf.matchAll(/^\s*add_header\s+(\S+)\s+(?:"([^"]*)"|([^\s;]+))/gm), m => [m[1], m[2] ?? m[3]] as [string, string]);
 }
 
 /**
