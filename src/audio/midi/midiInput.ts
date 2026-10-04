@@ -99,7 +99,7 @@ export class MidiInputController {
     };
 
     private handleMessage = (e: MIDIMessageEvent) => {
-        const id = (e.currentTarget as MIDIInput | null)?.id;
+        const id = ((e.currentTarget ?? e.target) as MIDIInput | null)?.id;
         if (this.disposed || id === undefined || !this.accepts(id)) return;
         const event = parseMidiMessage(e.data);
         if (!event) return;

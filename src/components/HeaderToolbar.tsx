@@ -306,32 +306,32 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
         />
 
         <Tooltip title={tapLabel}>
-        <span style={{ display: 'inline-flex' }}>
-        <Button
-          variant="contained"
-          size="small"
-          onClick={onTapTempo}
-          disabled={tempoLocked}
-          startIcon={<SpeedIcon />}
-          aria-label={tapLabel}
-          sx={{
-            bgcolor: 'rgba(229, 169, 95, 0.15)',
-            color: '#e5a95f',
-            border: '1px solid rgba(229, 169, 95, 0.3)',
-            fontWeight: 800,
-            fontSize: '0.75rem',
-            px: 1.5,
-            minWidth: { xs: 64, sm: 75 },
-            boxShadow: 'none',
-            '&:hover': {
-              bgcolor: 'rgba(229, 169, 95, 0.3)',
-              boxShadow: '0 0 10px rgba(229, 169, 95, 0.3)'
-            }
-          }}
-        >
-          TAP
-        </Button>
-        </span>
+          <span style={{ display: 'inline-flex' }}>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={onTapTempo}
+              disabled={tempoLocked}
+              startIcon={<SpeedIcon />}
+              aria-label={tapLabel}
+              sx={{
+                bgcolor: 'rgba(229, 169, 95, 0.15)',
+                color: '#e5a95f',
+                border: '1px solid rgba(229, 169, 95, 0.3)',
+                fontWeight: 800,
+                fontSize: '0.75rem',
+                px: 1.5,
+                minWidth: { xs: 64, sm: 75 },
+                boxShadow: 'none',
+                '&:hover': {
+                  bgcolor: 'rgba(229, 169, 95, 0.3)',
+                  boxShadow: '0 0 10px rgba(229, 169, 95, 0.3)'
+                }
+              }}
+            >
+              TAP
+            </Button>
+          </span>
         </Tooltip>
       </Stack>
 

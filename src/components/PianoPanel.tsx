@@ -149,10 +149,10 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
     const layout: PianoLayout = settings.layout ?? 'ableton';
     const layoutDef = COMPUTER_LAYOUTS[layout];
     const labelOf = useKeyLabels();
-    useEffect(() => {
-        setPianoLayout(layout);
-        return () => setPianoLayout('ableton');
-    }, [layout]);
+    const tapNote = shadowNote(shortcutById('transport.tap'), layout);
+    const tapConflict = tapNote ? `${labelOf('KeyT')} = ${tapNote}` : 'T sigue siendo tap';
+    useEffect(() => { setPianoLayout(layout); }, [layout]);
+    useEffect(() => () => setPianoLayout('ableton'), []);
 
     // --- MIDI keyboard (Chrome/Android): same noteOn / noteOff / pedal as the other sources ---
     const [midiNoticeDismissed, setMidiNoticeDismissed] = usePersistentState('piano.midiNoticeDismissed', false, isBoolean);
@@ -347,7 +347,7 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
             <Box role="status" aria-live="polite" data-testid="piano-pc-status"
                 sx={{ mt: 0.5, minHeight: 20, color: settings.computerKeys || focusInside ? '#9fdcf7' : 'text.secondary', fontSize: 12, '@media (pointer: coarse)': { display: 'none' } }}>
                 {settings.computerKeys
-                    ? `⌨ Teclado PC activo · las letras tocan notas · ${labelOf('KeyT')} = ${shadowNote(shortcutById('transport.tap'), layout)} (tap: botón TAP) · ${shortcutById('piano.exit').display} para salir`
+                    ? `⌨ Teclado PC activo · las letras tocan notas · ${tapConflict} (tap: botón TAP) · ${shortcutById('piano.exit').display} para salir`
                     : focusInside
                         ? 'Tocando con el teclado de la PC (el foco está en el piano)'
                         : 'Enfocá el piano o activá "Teclado PC" para tocar con las letras'}

@@ -169,7 +169,7 @@ function App() {
     'transport.prev-rhythm': () => stepPreset(-1),
     'transport.next-rhythm': () => stepPreset(1),
     'help.shortcuts': () => setShortcutsOpen(true),
-    'palette.open': () => setPaletteOpen(true),
+    'palette.open': () => setPaletteOpen(prev => !prev),
   });
 
   const canRestore = currentPattern.id !== CUSTOM_PATTERN_ID && !!overrides[currentPattern.id];

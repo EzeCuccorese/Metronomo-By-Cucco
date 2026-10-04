@@ -35,7 +35,7 @@ export default function MidiControls({ support, status, devices, selected, onSel
         <Box data-testid="midi-controls" sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mt: 1.5 }}>
             {status === 'connected' ? (
                 <>
-                    <FormControl size="small" sx={{ minWidth: 200 }}>
+                    <FormControl size="small" sx={{ minWidth: 200 }} disabled={devices.length === 0}>
                         <InputLabel id="piano-midi-label">Teclado MIDI</InputLabel>
                         <Select labelId="piano-midi-label" label="Teclado MIDI" value={selected} onChange={e => onSelect(e.target.value)} data-testid="midi-device-select">
                             <MenuItem value={ALL_DEVICES}>Todos los dispositivos</MenuItem>

@@ -118,8 +118,10 @@
 }
 
 /* Band over the keys the computer keyboard reaches. */
-.piano-keys:has(.piano-band) {
-  margin-top: 22px;
+@media not all and (pointer: coarse) {
+  .piano-keys:has(.piano-band) {
+    margin-top: 22px;
+  }
 }
 .piano-band {
   position: absolute;

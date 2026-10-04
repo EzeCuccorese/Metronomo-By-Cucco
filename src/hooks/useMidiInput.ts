@@ -28,6 +28,7 @@ export function useMidiInput(options: Options) {
     const [selected, setSelected] = useState(ALL_DEVICES);
     const controller = useRef<MidiInputController | null>(null);
     const mounted = useRef(true);
+    const connecting = useRef(false); // guards against two overlapping connect() calls
 
     useEffect(() => {
         mounted.current = true;
@@ -39,7 +40,8 @@ export function useMidiInput(options: Options) {
     }, []);
 
     const connect = useCallback(async () => {
-        if (controller.current || typeof navigator.requestMIDIAccess !== 'function') return;
+        if (controller.current || connecting.current || typeof navigator.requestMIDIAccess !== 'function') return;
+        connecting.current = true;
         setStatus('connecting');
         try {
             const access = await navigator.requestMIDIAccess({ sysex: false });
@@ -56,6 +58,8 @@ export function useMidiInput(options: Options) {
             setStatus('connected');
         } catch {
             if (mounted.current) setStatus('denied');
+        } finally {
+            connecting.current = false;
         }
     }, []);
 

@@ -248,6 +248,17 @@ describe('PianoPanel', () => {
         expect(engine.setPianoSustain).toHaveBeenLastCalledWith(false);
     });
 
+    it('Esc releases held keys and the Shift pedal on its way out', () => {
+        const { engine } = renderPanel();
+        fireEvent.click(screen.getByRole('button', { name: 'Teclado PC' }));
+        fireEvent.keyDown(document.body, { code: 'KeyA' });
+        fireEvent.keyDown(document.body, { code: 'ShiftLeft' });
+        fireEvent.keyDown(document.body, { code: 'Escape' });
+        expect(engine.pianoNoteOff).toHaveBeenCalledWith(48);
+        expect(engine.setPianoSustain).toHaveBeenLastCalledWith(false);
+        expect(screen.getByRole('button', { name: 'Teclado PC' })).toHaveAttribute('aria-pressed', 'false');
+    });
+
     it('lifts the Shift pedal when the window loses focus', () => {
         const { engine } = renderPanel();
         keyEl(48).focus();
@@ -491,6 +502,18 @@ describe('piano UI helpers', () => {
             expect(screen.getByRole('button', { name: 'Pedal de sustain' })).toHaveAttribute('aria-pressed', 'true');
             act(() => keyboard.send(0xb0, 64, 0));
             expect(engine.setPianoSustain).toHaveBeenLastCalledWith(false);
+        });
+
+        it('requests access only once when connect is triggered twice', async () => {
+            const access = new FakeMidiAccess();
+            const request = stubRequestMidiAccess(access);
+            renderPanel();
+            const button = screen.getByTestId('midi-connect');
+            fireEvent.click(button);
+            fireEvent.click(button);
+            await screen.findByTestId('midi-status');
+            expect(request).toHaveBeenCalledTimes(1);
+            expect(screen.getByRole('combobox', { name: /Teclado MIDI/ })).toHaveAttribute('aria-disabled', 'true');
         });
 
         it('releases the held notes when the keyboard is unplugged', async () => {

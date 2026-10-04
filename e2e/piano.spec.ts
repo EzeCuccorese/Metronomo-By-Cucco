@@ -29,6 +29,7 @@ test.describe('piano', () => {
         await page.keyboard.up('KeyZ');
         await page.keyboard.up('KeyQ');
         await expect(page.getByTestId('piano-key-48')).toHaveAttribute('aria-pressed', 'false');
+        await expect(page.getByTestId('piano-key-60')).toHaveAttribute('aria-pressed', 'false');
     });
 
     test('a MIDI keyboard plays the on-screen keys, and hot-unplug lets go of them', async ({ page }) => {

@@ -155,11 +155,14 @@ export function fallbackKeyLabel(code: string): string {
     return named[code] ?? code;
 }
 
+const SEMITONE_TO_CODE: Readonly<Record<PianoLayout, ReadonlyMap<number, string>>> = {
+    ableton: new Map(Object.entries(COMPUTER_LAYOUTS.ableton.notes).map(([code, semitone]) => [semitone, code])),
+    tracker: new Map(Object.entries(COMPUTER_LAYOUTS.tracker.notes).map(([code, semitone]) => [semitone, code])),
+};
+
 /** Key of a layout that plays a semitone offset, if any. */
-export function computerKeyCode(semitone: number, layout: PianoLayout = 'ableton'): string | null {
-    const entry = Object.entries(COMPUTER_LAYOUTS[layout].notes).find(([, s]) => s === semitone);
-    return entry ? entry[0] : null;
-}
+export const computerKeyCode = (semitone: number, layout: PianoLayout = 'ableton'): string | null =>
+    SEMITONE_TO_CODE[layout].get(semitone) ?? null;
 
 /** Letter shown on the on-screen key for a semitone offset (for the hint labels). */
 export function computerKeyLabel(semitone: number, layout: PianoLayout = 'ableton'): string | null {
@@ -168,4 +171,8 @@ export function computerKeyLabel(semitone: number, layout: PianoLayout = 'ableto
 }
 
 /** Highest semitone offset a layout reaches. */
-export const layoutSpan = (layout: PianoLayout): number => Math.max(...Object.values(COMPUTER_LAYOUTS[layout].notes));
+const LAYOUT_SPAN: Readonly<Record<PianoLayout, number>> = {
+    ableton: Math.max(...Object.values(COMPUTER_LAYOUTS.ableton.notes)),
+    tracker: Math.max(...Object.values(COMPUTER_LAYOUTS.tracker.notes)),
+};
+export const layoutSpan = (layout: PianoLayout): number => LAYOUT_SPAN[layout];
