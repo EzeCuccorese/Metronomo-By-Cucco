@@ -1,8 +1,9 @@
-import { readFileSync } from 'node:fs'
-import { defineConfig } from 'vitest/config'
+import { readdirSync, readFileSync } from 'node:fs'
+import { defineConfig, type Plugin } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { playwright } from '@vitest/browser-playwright'
 import { VitePWA } from 'vite-plugin-pwa'
+import { buildHeadersFile } from './deploy/cloudflareHeaders'
 
 /**
  * Reuses the production nginx security headers for `vite preview`, so the E2E suite
@@ -17,10 +18,24 @@ function productionSecurityHeaders(): Record<string, string> {
   return headers
 }
 
+/** Emits dist/_headers for Cloudflare Workers Static Assets (same headers and cache policy as nginx). */
+function cloudflareHeaders(): Plugin {
+  return {
+    name: 'cloudflare-headers',
+    apply: 'build',
+    generateBundle() {
+      const conf = readFileSync(new URL('./deploy/security-headers.conf', import.meta.url), 'utf8')
+      const publicFiles = readdirSync(new URL('./public', import.meta.url), { recursive: true, encoding: 'utf8' }).map(file => file.replaceAll('\\', '/'))
+      this.emitFile({ type: 'asset', fileName: '_headers', source: buildHeadersFile(conf, publicFiles) })
+    }
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
+    cloudflareHeaders(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
@@ -80,7 +95,7 @@ export default defineConfig({
           name: 'unit',
           environment: 'jsdom',
           setupFiles: ['./src/test/setup.ts'],
-          include: ['src/**/*.test.{ts,tsx}'],
+          include: ['src/**/*.test.{ts,tsx}', 'deploy/**/*.test.ts'],
           exclude: ['src/**/*.browser.test.{ts,tsx}']
         }
       },

@@ -5,4 +5,12 @@
 # `playwright install`, no con un postinstall. Si una dependencia futura lo pide,
 # agregarla de forma explícita (`pnpm approve-builds`) y documentar por qué.
 # `minimumReleaseAge` queda en el valor por defecto de pnpm 11 (1440 min = 24 h).
-allowBuilds: {}
+#
+# wrangler (despliegue en Cloudflare) trae `esbuild` y `workerd`, que declaran un postinstall.
+# Se dejan explícitamente en `false`: ambos solo copian el binario de su paquete por plataforma a
+# una ruta más corta (optimización de arranque) y wrangler funciona sin eso (`wrangler dev` y
+# `wrangler deploy` verificados con los scripts bloqueados). Declararlos en false evita que
+# `pnpm install` falle con ERR_PNPM_IGNORED_BUILDS.
+allowBuilds:
+  esbuild: false
+  workerd: false
