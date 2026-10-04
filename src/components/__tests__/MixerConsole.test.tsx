@@ -209,6 +209,12 @@ describe('MixerConsole', () => {
             expect(screen.queryByTestId('mixer-channel-synth')).toBeNull();
         });
 
+        it('does not count an empty melody as a use of the piano', () => {
+            localStorage.setItem('metronomo:v1:piano.melody.v1', JSON.stringify({ bars: 1, subdivision: 4, notes: [] }));
+            render(<MixerHarness pattern={rock} all={false} onVolumeChange={vi.fn()} onPanChange={vi.fn()} onMuteChange={vi.fn()} />);
+            expect(screen.queryByTestId('mixer-channel-piano')).toBeNull();
+        });
+
         it('solo mutes every other channel in the engine and restores the user mutes afterwards', () => {
             const { onMuteChange } = renderMixer(rock);
             fireEvent.click(screen.getByTestId('mute-snare'));
