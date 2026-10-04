@@ -313,6 +313,11 @@ class Scheduler {
         this.take?.noteOff(midi, now - this.inputLatency());
     }
 
+    /** Sustain pedal of the live keyboard (computer pedal button / Shift, MIDI CC64). */
+    public setPianoSustain(down: boolean) {
+        this.piano.setSustain(down);
+    }
+
     /** Lifts every key held on the live keyboard (focus lost, panel unmounted...). */
     public releaseAllPianoKeys() {
         Array.from(this.liveVoices.keys()).forEach(midi => this.pianoNoteOff(midi));
