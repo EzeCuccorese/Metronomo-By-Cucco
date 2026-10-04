@@ -25,7 +25,7 @@ test.describe('first-use tips', () => {
 
     test('Vista tip after three long scrolls, above the phone bottom bar', async ({ page }) => {
         await openApp(page, { tips: true });
-        const height = page.viewportSize()!.height;
+        const height = page.viewportSize()?.height ?? (await page.evaluate(() => window.innerHeight));
         const tip = page.getByTestId('first-use-tip');
         // Long scrolls back and forth until the tip shows (engines differ a little in when they deliver scroll events).
         for (let i = 0; i < 10 && (await tip.count()) === 0; i++) {

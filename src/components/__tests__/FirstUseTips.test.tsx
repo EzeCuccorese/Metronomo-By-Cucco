@@ -96,6 +96,17 @@ describe('FirstUseTips', () => {
         expect(screen.queryByText(/Tip:/)).toBeNull();
     });
 
+    it('registers no listeners once every tip has been seen', () => {
+        localStorage.setItem(`${STORAGE_PREFIX}tips.seen`, JSON.stringify(['play', 'piano', 'layout']));
+        const add = vi.spyOn(document, 'addEventListener');
+        const addWin = vi.spyOn(window, 'addEventListener');
+        render(<Page />);
+        expect(add.mock.calls.filter(([type]) => type === 'click' || type === 'pointerover')).toHaveLength(0);
+        expect(addWin.mock.calls.filter(([type]) => type === 'scroll')).toHaveLength(0);
+        add.mockRestore();
+        addWin.mockRestore();
+    });
+
     it('hides itself after a while', () => {
         render(<Page />);
         fireEvent.click(screen.getByTestId('play-toggle'), { detail: 1 });

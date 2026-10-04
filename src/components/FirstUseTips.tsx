@@ -16,6 +16,7 @@ const isSeenList = (v: unknown): v is string[] => Array.isArray(v) && v.every(is
 /** Mouse and keyboard devices only: on touch screens there is no Space bar and no hover. */
 const hasKeyboardPointer = () => window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
+const ALL_TIPS: TipId[] = ['play', 'piano', 'layout'];
 const LONG_SCROLLS_FOR_LAYOUT_TIP = 3;
 const SCROLL_IDLE_MS = 350;
 
@@ -44,7 +45,11 @@ export const FirstUseTips: React.FC = () => {
     setSeen(prev => (prev.includes(tip) ? prev : [...prev, tip]));
   }, [setSeen]);
 
+  // People who have seen every tip (almost everyone, soon) pay for no listeners at all.
+  const allSeen = ALL_TIPS.every(tip => seen.includes(tip));
+
   useEffect(() => {
+    if (allSeen) return;
     const onClick = (e: MouseEvent) => {
       // detail 0 is a keyboard activation: whoever used Space already knows it.
       if (e.detail > 0 && hasKeyboardPointer() && (e.target as Element | null)?.closest?.('[data-testid="play-toggle"]')) show('play');
@@ -75,7 +80,7 @@ export const FirstUseTips: React.FC = () => {
       window.removeEventListener('scroll', onScroll);
       clearTimeout(timer);
     };
-  }, [show]);
+  }, [show, allSeen]);
 
   const close = (_?: unknown, reason?: string) => {
     if (reason === 'clickaway') return;

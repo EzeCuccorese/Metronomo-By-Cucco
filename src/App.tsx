@@ -49,6 +49,7 @@ import { PANEL_IDS, PANEL_LABELS, PANEL_PRESET_ORDER, PRESET_LABELS } from './st
 import type { PanelId } from './state/layout';
 import { ViewMenu } from './components/ViewMenu';
 import { FirstUseTips } from './components/FirstUseTips';
+import { enterFullscreen } from './hooks/useFullscreen';
 import { StageMode } from './components/StageMode';
 import { CompactTransport } from './components/CompactTransport';
 import { useElementOutOfView } from './hooks/useElementOutOfView';
@@ -81,6 +82,8 @@ function App() {
   const [formas, setFormas] = usePersistentState('formas', DEFAULT_FORMAS, isFormas);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [stageOpen, setStageOpen] = useState(false);
+  // Fullscreen must be asked for inside the click / key press that opens the stage (see enterFullscreen).
+  const openStage = useCallback(() => { void enterFullscreen(); setStageOpen(true); }, []);
 
   const setBpm = useCallback((value: number) => setBpmRaw(clampBpm(value)), [setBpmRaw]);
 
@@ -190,7 +193,7 @@ function App() {
     'transport.bpm-down': e => { if (!tempoLocked) setBpmRaw(prev => clampBpm(prev - (e.shiftKey ? 5 : 1))); },
     'transport.prev-rhythm': () => stepPreset(-1),
     'transport.next-rhythm': () => stepPreset(1),
-    'view.stage': e => { if (!e.repeat) setStageOpen(prev => !prev); },
+    'view.stage': e => { if (!e.repeat) { if (stageOpen) setStageOpen(false); else openStage(); } },
     'help.shortcuts': () => setShortcutsOpen(true),
     'palette.open': () => setPaletteOpen(prev => !prev),
   });
@@ -240,7 +243,7 @@ function App() {
               availablePresets={PRESET_PATTERNS}
               onSelectPreset={loadPreset}
               tempoLocked={tempoLocked}
-              viewControl={<ViewMenu onStageMode={() => setStageOpen(true)} />}
+              viewControl={<ViewMenu onStageMode={openStage} />}
               pattern={currentPattern}
               onNudgeBpm={nudgeBpm}
               headerRef={setHeaderEl}
@@ -255,7 +258,7 @@ function App() {
                 onTogglePlay={toggle}
                 onNudgeBpm={nudgeBpm}
                 onTapTempo={guardedTap}
-                viewControl={<ViewMenu compact onStageMode={() => setStageOpen(true)} />}
+                viewControl={<ViewMenu compact onStageMode={openStage} />}
               />
             )}
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Box, Button, Dialog, IconButton, Typography } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
@@ -8,7 +8,7 @@ import StopIcon from '@mui/icons-material/Stop';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 import { usePlayback } from '../state/PlaybackContext';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
-import { useFullscreen } from '../hooks/useFullscreen';
+import { exitFullscreen, useFullscreen } from '../hooks/useFullscreen';
 import { usePersistentState } from '../hooks/usePersistentState';
 import { isNumber, isPlainObject, isString } from '../state/storage';
 import { noteToMidi, spanishNoteName } from '../audio/piano/notes';
@@ -50,9 +50,9 @@ interface StageModeProps {
  *
  * (ES) Modo escenario / atril: pulso y BPM gigantes. Pantalla completa solo donde existe.
  */
-export const StageMode: React.FC<StageModeProps> = ({ open, onClose, pattern, bpm, isPlaying, tempoLocked, onTogglePlay, onNudgeBpm }) => {
-  const [paper, setPaper] = useState<HTMLElement | null>(null);
-  const fullscreen = useFullscreen(paper);
+/** The stage itself: only mounted while it is open, so the pulse subscriptions cost nothing the rest of the time. */
+const StageContent: React.FC<Omit<StageModeProps, 'open'>> = ({ onClose, pattern, bpm, isPlaying, tempoLocked, onTogglePlay, onNudgeBpm }) => {
+  const fullscreen = useFullscreen();
   const step = usePlayback(s => s.step);
   const reduceMotion = usePrefersReducedMotion();
   const [sequence] = usePersistentState<ChordStep[]>('harmony.sequence', [], isChordSequence);
@@ -61,25 +61,17 @@ export const StageMode: React.FC<StageModeProps> = ({ open, onClose, pattern, bp
 
   const beats = pattern.timeSignature[0];
   const stepsPerBeat = pattern.subdivision / beats;
-  const current = isPlaying ? Math.floor(step / stepsPerBeat) : -1;
+  // Wraps, so a transient out-of-range step can never read "Pulso 5 de 4".
+  const current = isPlaying && beats > 0 ? Math.floor(step / stepsPerBeat) % beats : -1;
   const downbeat = current === 0;
 
   const close = () => {
-    void fullscreen.exit();
+    void exitFullscreen();
     onClose();
   };
 
   return (
-    <Dialog
-      fullScreen
-      open={open}
-      onClose={close}
-      slotProps={{
-        transition: { onEntered: () => { void fullscreen.enter(); } },
-        paper: { ref: setPaper, 'data-testid': 'stage-mode', 'aria-label': 'Modo escenario' } as never,
-      }}
-      sx={{ '& .MuiDialog-paper': { bgcolor: '#070605', backgroundImage: 'none' } }}
-    >
+    <>
       <Box
         data-downbeat={downbeat}
         sx={{
@@ -157,6 +149,18 @@ export const StageMode: React.FC<StageModeProps> = ({ open, onClose, pattern, bp
           <BpmStepButton direction={1} onStep={onNudgeBpm} disabled={tempoLocked} size={64} testId="stage-bpm-up" />
         </Box>
       </Box>
-    </Dialog>
+    </>
   );
 };
+
+export const StageMode: React.FC<StageModeProps> = ({ open, onClose, ...rest }) => (
+  <Dialog
+    fullScreen
+    open={open}
+    onClose={() => { void exitFullscreen(); onClose(); }}
+    slotProps={{ paper: { 'data-testid': 'stage-mode', 'aria-label': 'Modo escenario' } as never }}
+    sx={{ '& .MuiDialog-paper': { bgcolor: '#070605', backgroundImage: 'none' } }}
+  >
+    {open && <StageContent onClose={onClose} {...rest} />}
+  </Dialog>
+);
