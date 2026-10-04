@@ -36,6 +36,8 @@ import { useMetronomeEngine } from './hooks/useMetronomeEngine';
 import { usePersistentState } from './hooks/usePersistentState';
 import { useTapTempo } from './hooks/useTapTempo';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useWakeLock } from './hooks/useWakeLock';
+import { BluetoothNotice } from './components/BluetoothNotice';
 import { PlaybackContext } from './state/PlaybackContext';
 import { isBoolean, isNumber, isPlainObject, isString } from './state/storage';
 
@@ -91,6 +93,9 @@ function App() {
     onPatternChange: useCallback((p: RhythmPattern) => setSelectedPatternId(p.id), [setSelectedPatternId]),
   });
   const { isPlaying, toggle, queuePattern, configureTrainer, setSilenceMode, configureFormas } = engine;
+
+  // Keep the screen on while the metronome sounds (the system would otherwise lock the phone mid-practice).
+  useWakeLock(isPlaying);
 
   useEffect(() => { configureTrainer(trainer); }, [trainer, configureTrainer]);
   useEffect(() => { setSilenceMode(silence.active, silence.chance); }, [silence, setSilenceMode]);
@@ -163,6 +168,8 @@ function App() {
               onSelectPreset={loadPreset}
               tempoLocked={tempoLocked}
             />
+
+            <BluetoothNotice isPlaying={isPlaying} />
 
             {/* Rows of an aligned 12-column grid; every cell stretches to the row height. */}
             <Grid container spacing={{ xs: 1.5, md: 2 }} sx={{ width: '100%' }}>
