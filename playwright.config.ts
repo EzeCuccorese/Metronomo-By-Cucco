@@ -15,7 +15,12 @@ export default defineConfig({
     trace: 'retain-on-failure',
     serviceWorkers: 'block',
     launchOptions: {
-      args: ['--autoplay-policy=no-user-gesture-required'],
+      args: [
+        '--autoplay-policy=no-user-gesture-required',
+        // The audio probe reads the Web Audio graph (AnalyserNode), not the speakers:
+        // mute the device output so local runs don't play the metronome out loud.
+        '--mute-audio',
+      ],
       // Optional: reuse a locally installed Chromium instead of the one bundled with this Playwright version.
       executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
     },
