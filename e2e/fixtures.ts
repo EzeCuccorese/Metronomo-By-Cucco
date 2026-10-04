@@ -138,17 +138,19 @@ const LAYOUT_TODO = JSON.stringify({ preset: 'todo', panels: { pulse: 'open', in
 
 /**
  * Opens the app with clean storage. The specs written before the view presets exist expect every panel,
- * so by default the layout is seeded with "Todo"; pass `newUser: true` for the real first-run layout.
+ * so by default the layout is seeded with "Todo"; pass `newUser: true` for the real first-run layout and `tips: true` to see the first-use tips.
  */
-export async function openApp(page: Page, { keepStorage = false, newUser = false } = {}) {
+export async function openApp(page: Page, { keepStorage = false, newUser = false, tips = false } = {}) {
     if (!keepStorage) {
-        await page.addInitScript(([todo, fresh]) => {
+        await page.addInitScript(([todo, fresh, showTips]) => {
             if (!sessionStorage.getItem('__e2e_cleared')) {
                 localStorage.clear();
                 if (!fresh) localStorage.setItem('metronomo:v1:ui.layout.v1', todo);
+                // The first-use tips float over the page: off unless a test is about them.
+                if (!showTips) localStorage.setItem('metronomo:v1:tips.seen', '["play","piano","layout"]');
                 sessionStorage.setItem('__e2e_cleared', '1');
             }
-        }, [LAYOUT_TODO, newUser] as const);
+        }, [LAYOUT_TODO, newUser, tips] as const);
     }
     await page.goto('/');
     await expect(page.getByTestId('play-toggle')).toBeVisible();

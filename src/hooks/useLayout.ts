@@ -6,13 +6,15 @@ import type { LayoutApi } from '../state/LayoutContext';
 import { STORAGE_PREFIX, writeStored } from '../state/storage';
 
 const LAYOUT_KEY = 'ui.layout.v1';
+/** Saved by merely using the page (dismissing a notice, seeing a tip): they do not make someone an existing user. */
+const NOT_SETTINGS = [LAYOUT_KEY, 'tips.seen', 'bluetoothNoticeDismissed'];
 
 /** Someone who already used the app has other saved settings (tempo, rhythm, mix...). */
 function hasSavedSettings(): boolean {
     try {
         for (let i = 0; i < window.localStorage.length; i++) {
             const key = window.localStorage.key(i);
-            if (key?.startsWith(STORAGE_PREFIX) && key !== STORAGE_PREFIX + LAYOUT_KEY) return true;
+            if (key?.startsWith(STORAGE_PREFIX) && !NOT_SETTINGS.includes(key.slice(STORAGE_PREFIX.length))) return true;
         }
     } catch {
         // Storage unavailable: treat as a new user.

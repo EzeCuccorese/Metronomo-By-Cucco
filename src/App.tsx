@@ -44,6 +44,7 @@ import { useHarmonySync, useMelodySync } from './hooks/useEngineSync';
 import { LayoutContext } from './state/LayoutContext';
 import type { PanelId } from './state/layout';
 import { ViewMenu } from './components/ViewMenu';
+import { FirstUseTips } from './components/FirstUseTips';
 import { StageMode } from './components/StageMode';
 import { CompactTransport } from './components/CompactTransport';
 import { useElementOutOfView } from './hooks/useElementOutOfView';
@@ -331,6 +332,7 @@ function App() {
           onTogglePlay={toggle}
           onNudgeBpm={nudgeBpm}
         />
+        <FirstUseTips />
         <PwaUpdater isPlaying={isPlaying} />
         <GenreSelectorModal
           open={libraryOpen}
