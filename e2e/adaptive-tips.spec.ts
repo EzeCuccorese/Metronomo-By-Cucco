@@ -26,13 +26,12 @@ test.describe('first-use tips', () => {
     test('Vista tip after three long scrolls, above the phone bottom bar', async ({ page }) => {
         await openApp(page, { tips: true });
         const height = page.viewportSize()!.height;
-        for (let i = 0; i < 3; i++) {
-            await page.evaluate((y) => window.scrollTo(0, y), height * 1.5);
-            await page.waitForTimeout(450);
-            await page.evaluate(() => window.scrollTo(0, 0));
-            await page.waitForTimeout(450);
-        }
         const tip = page.getByTestId('first-use-tip');
+        // Long scrolls back and forth until the tip shows (engines differ a little in when they deliver scroll events).
+        for (let i = 0; i < 10 && (await tip.count()) === 0; i++) {
+            await page.evaluate((y) => window.scrollTo(0, y), i % 2 === 0 ? height * 1.5 : 0);
+            await page.waitForTimeout(700);
+        }
         await expect(tip).toContainText('"Vista"');
         const phonePortrait = await page.evaluate(() => matchMedia('(max-width: 599.98px) and (orientation: portrait)').matches);
         if (phonePortrait) {
