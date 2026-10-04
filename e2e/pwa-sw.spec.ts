@@ -35,7 +35,7 @@ test.beforeAll(async () => {
     await new Promise<void>(resolve => server.listen(PROXY_PORT, '127.0.0.1', resolve));
 });
 
-test.afterAll(async () => { await new Promise(resolve => server.close(resolve)); });
+test.afterAll(async () => { if (server) await new Promise(resolve => server.close(resolve)); });
 
 test.beforeEach(() => { newVersion = false; });
 

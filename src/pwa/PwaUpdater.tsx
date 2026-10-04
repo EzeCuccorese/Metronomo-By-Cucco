@@ -9,7 +9,7 @@ export function PwaUpdater({ isPlaying }: { isPlaying: boolean }) {
   } = useRegisterSW({
     onRegisteredSW(_url, registration) {
       // Long-lived tabs (an installed PWA stays open for days) check for a new version every hour.
-      if (registration) setInterval(() => { void registration.update(); }, 60 * 60 * 1000);
+      if (registration) setInterval(() => { registration.update().catch(() => { /* offline: try again next hour */ }); }, 60 * 60 * 1000);
     },
   });
 

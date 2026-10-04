@@ -70,7 +70,7 @@ export const darkTheme = createTheme({
     },
     // The visible track is thin; the hit area (root padding) is what must reach 44 px.
     MuiSlider: {
-      styleOverrides: { root: { [coarse]: { paddingBlock: 20 } } },
+      styleOverrides: { root: { [coarse]: { paddingBlock: 20, '&.MuiSlider-vertical': { paddingBlock: 0, paddingInline: 20 } } } },
     },
   },
 });

@@ -16,7 +16,7 @@ export function UpdatePrompt({ needRefresh, isPlaying, onUpdate, onDismiss }: Up
       open={needRefresh && !isPlaying}
       onClose={(_, reason) => { if (reason !== 'clickaway') onDismiss(); }}
       anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      sx={{ top: 'calc(8px + env(safe-area-inset-top)) !important' }}
+      sx={{ top: 'calc(8px + var(--safe-top, env(safe-area-inset-top, 0px))) !important' }}
     >
       <Alert
         severity="info"
