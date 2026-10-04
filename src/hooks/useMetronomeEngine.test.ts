@@ -23,6 +23,7 @@ class MockScheduler {
     setChannelVolume = vi.fn();
     setChannelPan = vi.fn();
     setChannelMute = vi.fn();
+    getChannelLevel = vi.fn(() => 0);
     setHarmonyProgression = vi.fn();
     setHarmonyVolume = vi.fn();
     setAccompanimentStyle = vi.fn();
