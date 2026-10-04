@@ -42,7 +42,10 @@ export function usePersistentState<T>(
         let set = listeners.get(key);
         if (!set) listeners.set(key, set = new Set());
         set.add(listener);
-        return () => { set.delete(listener); };
+        return () => {
+            set.delete(listener);
+            if (set.size === 0) listeners.delete(key);
+        };
     }, [key]);
 
     useEffect(() => {

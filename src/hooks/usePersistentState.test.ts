@@ -35,3 +35,19 @@ describe('usePersistentState', () => {
         expect(result.current[0]).toEqual([1, 2]);
     });
 });
+
+describe('usePersistentState instances', () => {
+    afterEach(() => localStorage.clear());
+
+    it('keeps every mounted instance of a key in step and stops tracking after unmount', () => {
+        const a = renderHook(() => usePersistentState('shared', 0, isNumber));
+        const b = renderHook(() => usePersistentState('shared', 0, isNumber));
+        act(() => a.result.current[1](4));
+        expect(b.result.current[0]).toBe(4);
+        a.unmount();
+        b.unmount();
+        // A fresh instance starts from storage, with nothing left over from the unmounted ones.
+        const c = renderHook(() => usePersistentState('shared', 0, isNumber));
+        expect(c.result.current[0]).toBe(4);
+    });
+});

@@ -42,7 +42,8 @@ export const Panel: React.FC<PanelProps> = ({ id, title, summary, actions, colla
   const state = id ? layout.panels[id] : 'open';
   if (state === 'hidden') return null;
 
-  const canFold = Boolean(title) && (collapsible ?? Boolean(id));
+  // Folding needs somewhere to remember the state, so it only exists for cards with an id.
+  const canFold = Boolean(title) && Boolean(id) && (collapsible ?? true);
   const collapsed = canFold && state === 'collapsed';
   const toggle = () => { if (id) layout.setPanelState(id, collapsed ? 'open' : 'collapsed'); };
   const hide = () => {
