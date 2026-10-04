@@ -402,4 +402,17 @@ describe('App (integration with a scripted engine)', () => {
             expect(screen.getByTestId('bpm-up')).toBeDisabled();
         });
     });
+
+    it('opens the stage mode from the Vista menu and closes it again', async () => {
+        render(<App />);
+        fireEvent.click(screen.getByTestId('view-menu-button'));
+        fireEvent.click(screen.getByTestId('stage-menu-item'));
+        const stage = await screen.findByRole('dialog', { name: 'Modo escenario' });
+        expect(within(stage).getByTestId('stage-bpm')).toHaveTextContent('120');
+        await act(async () => { fireEvent.click(within(stage).getByTestId('stage-play-toggle')); });
+        expect(scheduler().playing).toBe(true);
+        fireEvent.click(within(stage).getByTestId('stage-close'));
+        await waitForElementToBeRemoved(() => screen.queryByRole('dialog', { name: 'Modo escenario' }));
+        expect(scheduler().playing).toBe(true); // closing the stage does not stop the metronome
+    });
 });

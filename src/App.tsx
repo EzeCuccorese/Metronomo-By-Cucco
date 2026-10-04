@@ -44,6 +44,7 @@ import { useHarmonySync, useMelodySync } from './hooks/useEngineSync';
 import { LayoutContext } from './state/LayoutContext';
 import type { PanelId } from './state/layout';
 import { ViewMenu } from './components/ViewMenu';
+import { StageMode } from './components/StageMode';
 import { CompactTransport } from './components/CompactTransport';
 import { useElementOutOfView } from './hooks/useElementOutOfView';
 import { BluetoothNotice } from './components/BluetoothNotice';
@@ -74,6 +75,7 @@ function App() {
   const [silence, setSilence] = usePersistentState('silence', DEFAULT_SILENCE, isSilence);
   const [formas, setFormas] = usePersistentState('formas', DEFAULT_FORMAS, isFormas);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [stageOpen, setStageOpen] = useState(false);
 
   const setBpm = useCallback((value: number) => setBpmRaw(clampBpm(value)), [setBpmRaw]);
 
@@ -190,7 +192,7 @@ function App() {
               availablePresets={PRESET_PATTERNS}
               onSelectPreset={loadPreset}
               tempoLocked={tempoLocked}
-              viewControl={<ViewMenu />}
+              viewControl={<ViewMenu onStageMode={() => setStageOpen(true)} />}
               pattern={currentPattern}
               onNudgeBpm={nudgeBpm}
               headerRef={setHeaderEl}
@@ -205,7 +207,7 @@ function App() {
                 onTogglePlay={toggle}
                 onNudgeBpm={nudgeBpm}
                 onTapTempo={guardedTap}
-                viewControl={<ViewMenu compact />}
+                viewControl={<ViewMenu compact onStageMode={() => setStageOpen(true)} />}
               />
             )}
 
@@ -319,6 +321,16 @@ function App() {
           </Box>
         </Box>
 
+        <StageMode
+          open={stageOpen}
+          onClose={() => setStageOpen(false)}
+          pattern={currentPattern}
+          bpm={bpm}
+          isPlaying={isPlaying}
+          tempoLocked={tempoLocked}
+          onTogglePlay={toggle}
+          onNudgeBpm={nudgeBpm}
+        />
         <PwaUpdater isPlaying={isPlaying} />
         <GenreSelectorModal
           open={libraryOpen}
