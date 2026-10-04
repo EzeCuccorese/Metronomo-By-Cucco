@@ -57,6 +57,16 @@ describe('StageMode', () => {
         expect(lit).toEqual(['false', 'true', 'false', 'false']);
     });
 
+    it('never reads a beat beyond the bar, even for a transient out-of-range step', () => {
+        const { store, rerenderWith } = setup();
+        act(() => store.update({ step: pattern.subdivision + 3 }));
+        rerenderWith({ isPlaying: true });
+        const label = screen.getByTestId('stage-beats').getAttribute('aria-label')!;
+        const n = Number(/Pulso (\d+) de 4/.exec(label)![1]);
+        expect(n).toBeGreaterThanOrEqual(1);
+        expect(n).toBeLessThanOrEqual(4);
+    });
+
     it('starts and stops, nudges the tempo and closes', () => {
         const { onTogglePlay, onNudgeBpm, onClose } = setup();
         fireEvent.click(screen.getByTestId('stage-play-toggle'));

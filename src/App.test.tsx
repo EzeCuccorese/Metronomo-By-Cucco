@@ -477,4 +477,16 @@ describe('App (integration with a scripted engine)', () => {
         fireEvent.click(await screen.findByText('Modo escenario (atril)'));
         expect(await screen.findByRole('dialog', { name: 'Modo escenario' })).toBeInTheDocument();
     });
+
+    it('asks for fullscreen inside the click that opens the stage (before any animation) where it is supported', async () => {
+        Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
+        const request = vi.fn(async () => {});
+        HTMLElement.prototype.requestFullscreen = request;
+        render(<App />);
+        fireEvent.click(screen.getByTestId('view-menu-button'));
+        fireEvent.click(screen.getByTestId('stage-menu-item'));
+        expect(request).toHaveBeenCalledTimes(1);
+        await screen.findByRole('dialog', { name: 'Modo escenario' });
+        Reflect.deleteProperty(document, 'fullscreenEnabled');
+    });
 });
