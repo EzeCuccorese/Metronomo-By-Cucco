@@ -131,6 +131,19 @@ describe('MixerConsole', () => {
             expect(litSegments('piano')).toBe(0);
         });
 
+        it('does not run a per-frame loop while idle (slow poll only)', () => {
+            vi.useFakeTimers();
+            const frames: FrameRequestCallback[] = [];
+            vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb));
+            vi.stubGlobal('cancelAnimationFrame', () => {});
+            render(<MixerConsole pattern={rock} isPlaying={false} onVolumeChange={vi.fn()} onPanChange={vi.fn()} onMuteChange={vi.fn()} getChannelLevel={() => 0} />);
+            act(() => { frames.shift()?.(0); });
+            expect(frames).toHaveLength(0); // nothing queued right away
+            act(() => { vi.advanceTimersByTime(200); });
+            expect(frames).toHaveLength(1); // next check comes from the idle timer
+            vi.useRealTimers();
+        });
+
         it('does not light TECLADO from chord changes alone', () => {
             setup({});
             expect(litSegments('synth')).toBe(0);

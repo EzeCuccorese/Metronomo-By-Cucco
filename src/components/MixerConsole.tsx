@@ -75,6 +75,9 @@ const PAN_STEP = 0.05;
 
 const CHANNEL_IMAGES = INSTRUMENT_IMAGES;
 
+/** Analyser polling interval while nothing is playing. */
+const IDLE_POLL_MS = 150;
+
 const panLabel = (pan: number) =>
   Math.abs(pan) < 0.005 ? 'C' : pan > 0 ? `R${Math.round(pan * 50)}` : `L${Math.round(Math.abs(pan) * 50)}`;
 
@@ -130,6 +133,7 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
 
   useEffect(() => {
     let lastStep = -1;
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
     const paintMeters = () => {
       let energy = false;
@@ -150,8 +154,18 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
           seg.classList.toggle('active', next >= Number(seg.dataset.threshold));
         });
       });
-      // Keep polling while a strip can be fed by live audio (chords, piano keys) or still decays.
-      rafRef.current = energy || isPlayingRef.current || getLevelRef.current ? requestAnimationFrame(paintMeters) : null;
+      if (energy || isPlayingRef.current) {
+        rafRef.current = requestAnimationFrame(paintMeters);
+      } else {
+        rafRef.current = null;
+        // Idle: a live piano key can still sound, so check the analysers at a slow rate (no per-frame loop).
+        if (getLevelRef.current && idleTimer === null) {
+          idleTimer = setTimeout(() => {
+            idleTimer = null;
+            if (rafRef.current === null) rafRef.current = requestAnimationFrame(paintMeters);
+          }, IDLE_POLL_MS);
+        }
+      }
     };
 
     const unsubscribe = store.subscribe(() => {
@@ -170,6 +184,7 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
     if (getLevelRef.current) rafRef.current = requestAnimationFrame(paintMeters);
     return () => {
       unsubscribe();
+      if (idleTimer !== null) clearTimeout(idleTimer);
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
