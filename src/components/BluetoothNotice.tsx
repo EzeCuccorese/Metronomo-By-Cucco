@@ -47,6 +47,8 @@ export function BluetoothNotice({ isPlaying }: BluetoothNoticeProps) {
         border: '1px solid rgba(229, 169, 95, 0.14)',
         bgcolor: 'rgba(20, 18, 16, 0.6)',
         color: '#c9bba8',
+        // Phone landscape: vertical space is scarce, keep transport + pulse visible without scrolling.
+        '@media (max-height: 500px)': { display: 'none' },
       }}
     >
       <BluetoothAudioIcon sx={{ fontSize: 18, color: '#e5a95f', flexShrink: 0 }} aria-hidden />
