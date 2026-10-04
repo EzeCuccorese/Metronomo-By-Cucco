@@ -95,12 +95,13 @@ export function useShortcutDispatcher() {
         const onKeyDown = (e: KeyboardEvent) => {
             if (e.defaultPrevented) return;
             const target = e.target instanceof Element ? e.target : null;
-            if (target && isTextEditing(target)) return;
+            const typing = !!target && isTextEditing(target);
             const pianoOn = isPianoActive();
             for (const def of SHORTCUTS) {
                 if (def.scope === 'piano' && !pianoOn) continue;
                 if (!matchesEvent(def, e) || !handlers.has(def.id)) continue;
-                if (target && (def.scope === 'piano' ? ownsLetters(target) : ownsKeys(target))) continue;
+                if (typing && !def.mod) continue;
+                if (target && !def.mod && (def.scope === 'piano' ? ownsLetters(target) : ownsKeys(target))) continue;
                 if (def.preventDefault) e.preventDefault();
                 if (def.swallowKeyup) swallow.add(e.code);
                 if (e.repeat && !def.allowRepeat) return;

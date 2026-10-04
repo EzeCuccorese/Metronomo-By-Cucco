@@ -102,6 +102,18 @@ describe('shortcut dispatcher', () => {
         expect(h.up).toHaveBeenCalledTimes(1);
     });
 
+    it('Cmd/Ctrl+K works even from a text field, where plain keys never do', () => {
+        const palette = vi.fn();
+        renderHook(() => { useShortcutDispatcher(); useShortcutHandlers({ 'palette.open': palette }); });
+        const input = document.createElement('input');
+        document.body.append(input);
+        press('KeyK', input);
+        expect(palette).not.toHaveBeenCalled();
+        expect(press('KeyK', input, { metaKey: true }).defaultPrevented).toBe(true);
+        press('KeyK', document.body, { ctrlKey: true });
+        expect(palette).toHaveBeenCalledTimes(2);
+    });
+
     it('stops dispatching a handler once unmounted, and invokeShortcut runs it directly', () => {
         const { h, unmount } = setup();
         invokeShortcut('transport.play');

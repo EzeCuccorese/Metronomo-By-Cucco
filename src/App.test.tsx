@@ -150,6 +150,23 @@ describe('App (integration with a scripted engine)', () => {
         expect(await screen.findByRole('dialog', { name: 'Atajos de teclado' })).toBeInTheDocument();
     });
 
+    it('opens the command palette with Ctrl+K and sets a typed tempo', async () => {
+        render(<App />);
+        fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
+        const input = await screen.findByPlaceholderText(/Buscá un comando/);
+        fireEvent.change(input, { target: { value: '88' } });
+        fireEvent.click(screen.getByText('Poner tempo 88 BPM'));
+        expect(bpmInput().value).toBe('88');
+    });
+
+    it('Ctrl+K toggles the command palette closed again', async () => {
+        render(<App />);
+        fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
+        const input = await screen.findByPlaceholderText(/Buscá un comando/);
+        fireEvent.keyDown(input, { code: 'KeyK', ctrlKey: true });
+        await waitForElementToBeRemoved(() => screen.queryByPlaceholderText(/Buscá un comando/));
+    });
+
     it('sends pattern edits to the engine and persists them', () => {
         const { unmount } = render(<App />);
         const before = scheduler().calls.setPattern.length;

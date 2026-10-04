@@ -26,6 +26,8 @@
     "@tonaljs/chord": "^6.2.0",
     "@tonaljs/note": "^4.12.2",
     "@tonaljs/scale": "^4.13.5",
+    "cmdk": "^1.1.1",
+
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
