@@ -5,65 +5,55 @@
  * (ES) Utilidades de notas para el piano: MIDI, frecuencias, nombres en español,
  * escalas y el mapeo del teclado de la computadora.
  */
+import * as Note from '@tonaljs/note';
+import { scaleChromas } from '../../theory/harmony';
+import type { ModeId } from '../../theory/harmony';
 
-const PITCH_CLASS: Record<string, number> = {
-    C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, Fb: 4, 'E#': 5, F: 5, 'F#': 6, Gb: 6,
-    G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11, Cb: 11, 'B#': 0,
-};
 
-const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const SPANISH_NAMES = ['Do', 'Do', 'Re', 'Re', 'Mi', 'Fa', 'Fa', 'Sol', 'Sol', 'La', 'La', 'Si'];
-const BLACK_PCS = new Set([1, 3, 6, 8, 10]);
+const SPANISH_LETTERS: Record<string, string> = { C: 'Do', D: 'Re', E: 'Mi', F: 'Fa', G: 'Sol', A: 'La', B: 'Si' };
 
 export const MIDI_A4 = 69;
 
 /** "C#4" / "Eb3" -> MIDI number (C4 = 60), or null when the name is not a note. */
 export function noteToMidi(note: string): number | null {
-    const match = /^([A-G])([#b]?)(-?\d)$/.exec(note.trim());
-    if (!match) return null;
-    const pc = PITCH_CLASS[match[1] + match[2]];
-    const octave = Number(match[3]);
-    // B#/Cb cross the octave boundary.
-    const octaveFix = match[1] + match[2] === 'B#' ? 1 : match[1] + match[2] === 'Cb' ? -1 : 0;
-    return (octave + 1 + octaveFix) * 12 + pc;
+    const trimmed = note.trim();
+    // Tonal accepts lower-case letters and octave-less names; the app only writes "C#4".
+    if (!/^[A-G]/.test(trimmed)) return null;
+    return Note.midi(trimmed);
 }
 
 /** MIDI number -> "C#4" (sharps). */
 export function midiToNoteName(midi: number): string {
-    return `${SHARP_NAMES[pitchClass(midi)]}${Math.floor(midi / 12) - 1}`;
+    return Note.fromMidiSharps(midi);
 }
 
 export const midiToFrequency = (midi: number): number => 440 * Math.pow(2, (midi - MIDI_A4) / 12);
 
 export const pitchClass = (midi: number): number => ((midi % 12) + 12) % 12;
 
-export const isBlackKey = (midi: number): boolean => BLACK_PCS.has(pitchClass(midi));
+const parsed = (midi: number) => Note.get(Note.fromMidiSharps(midi));
+
+export const isBlackKey = (midi: number): boolean => parsed(midi).acc !== '';
 
 /** Visible Spanish name: "Do", "Do♯", "Sol". */
 export function spanishNoteName(midi: number): string {
-    const pc = pitchClass(midi);
-    return BLACK_PCS.has(pc) ? `${SPANISH_NAMES[pc]}♯` : SPANISH_NAMES[pc];
+    const note = parsed(midi);
+    return `${SPANISH_LETTERS[note.letter]}${note.acc ? '♯' : ''}`;
 }
 
 /** Screen-reader name with octave: "Do sostenido 4". */
 export function spanishNoteLabel(midi: number): string {
-    const pc = pitchClass(midi);
-    const octave = Math.floor(midi / 12) - 1;
-    return `${SPANISH_NAMES[pc]}${BLACK_PCS.has(pc) ? ' sostenido' : ''} ${octave}`;
+    const note = parsed(midi);
+    return `${SPANISH_LETTERS[note.letter]}${note.acc ? ' sostenido' : ''} ${note.oct}`;
 }
 
 // --- Scales ---
 
-export type ScaleMode = 'major' | 'minor';
-
-const SCALE_STEPS: Record<ScaleMode, number[]> = {
-    major: [0, 2, 4, 5, 7, 9, 11],
-    minor: [0, 2, 3, 5, 7, 8, 10],
-};
+export type ScaleMode = ModeId;
 
 /** Pitch classes (0-11) of a scale. */
 export function scalePitchClasses(rootPc: number, mode: ScaleMode): Set<number> {
-    return new Set(SCALE_STEPS[mode].map(s => pitchClass(rootPc + s)));
+    return new Set(scaleChromas(rootPc, mode));
 }
 
 /** Pitch classes of a chord given as note names (invalid names are ignored). */
