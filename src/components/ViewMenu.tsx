@@ -58,7 +58,7 @@ const ViewList: React.FC<{ extra?: React.ReactNode; onPick?: () => void }> = ({ 
  * "Vista" button: presets by activity and a switch per panel. A menu on wide screens,
  * a bottom sheet on phones (within thumb's reach).
  */
-export const ViewMenu: React.FC<{ extra?: React.ReactNode }> = ({ extra }) => {
+export const ViewMenu: React.FC<{ extra?: React.ReactNode; compact?: boolean }> = ({ extra, compact }) => {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const phone = useMediaQuery(PHONE_QUERY);
   const close = () => setAnchor(null);
@@ -70,8 +70,8 @@ export const ViewMenu: React.FC<{ extra?: React.ReactNode }> = ({ extra }) => {
         aria-haspopup="menu"
         aria-expanded={anchor !== null}
         onClick={(e) => setAnchor(e.currentTarget)}
-        data-testid="view-menu-button"
-        sx={{ borderRadius: 2, borderColor: 'rgba(229,169,95,0.4)', color: '#e5a95f', textTransform: 'none', fontWeight: 'bold', flexShrink: 0, whiteSpace: 'nowrap', width: { xs: '100%', sm: 'auto' } }}
+        data-testid={compact ? 'compact-view-menu-button' : 'view-menu-button'}
+        sx={{ borderRadius: 2, borderColor: 'rgba(229,169,95,0.4)', color: '#e5a95f', textTransform: 'none', fontWeight: 'bold', flexShrink: 0, whiteSpace: 'nowrap', width: compact ? 'auto' : { xs: '100%', sm: 'auto' }, height: compact ? 44 : undefined }}
       >
         Vista
       </Button>

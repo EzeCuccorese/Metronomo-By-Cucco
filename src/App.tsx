@@ -44,6 +44,8 @@ import { useHarmonySync, useMelodySync } from './hooks/useEngineSync';
 import { LayoutContext } from './state/LayoutContext';
 import type { PanelId } from './state/layout';
 import { ViewMenu } from './components/ViewMenu';
+import { CompactTransport } from './components/CompactTransport';
+import { useElementOutOfView } from './hooks/useElementOutOfView';
 import { BluetoothNotice } from './components/BluetoothNotice';
 import { PlaybackContext } from './state/PlaybackContext';
 import { isBoolean, isNumber, isPlainObject, isString } from './state/storage';
@@ -132,13 +134,18 @@ function App() {
   const tempoLocked = trainer.active && isPlaying;
   const guardedTap = useCallback(() => { if (!tempoLocked) handleTap(); }, [tempoLocked, handleTap]);
 
+  const nudgeBpm = useCallback((delta: number) => {
+    if (!tempoLocked) setBpmRaw(prev => clampBpm(prev + delta));
+  }, [tempoLocked, setBpmRaw]);
+
   useKeyboardShortcuts({
     onTogglePlay: toggle,
     onTap: guardedTap,
-    onNudgeBpm: useCallback((delta: number) => {
-      if (!tempoLocked) setBpmRaw(prev => clampBpm(prev + delta));
-    }, [tempoLocked, setBpmRaw]),
+    onNudgeBpm: nudgeBpm,
   });
+
+  // The slim bar appears once the full header has scrolled away (not on portrait phones: their bar is always there).
+  const headerOutOfView = useElementOutOfView('header.app-header');
 
   // Settings edited inside a card reach the engine from here, so a hidden or folded card keeps its sound.
   const layout = useLayout();
@@ -178,7 +185,22 @@ function App() {
               onSelectPreset={loadPreset}
               tempoLocked={tempoLocked}
               viewControl={<ViewMenu />}
+              pattern={currentPattern}
+              onNudgeBpm={nudgeBpm}
             />
+
+            {headerOutOfView && (
+              <CompactTransport
+                pattern={currentPattern}
+                bpm={bpm}
+                isPlaying={isPlaying}
+                tempoLocked={tempoLocked}
+                onTogglePlay={toggle}
+                onNudgeBpm={nudgeBpm}
+                onTapTempo={guardedTap}
+                viewControl={<ViewMenu compact />}
+              />
+            )}
 
             <BluetoothNotice isPlaying={isPlaying} />
 

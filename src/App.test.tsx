@@ -364,4 +364,42 @@ describe('App (integration with a scripted engine)', () => {
             expect(scheduler().calls.setHarmonyProgression.at(-1)![0]).toEqual(progression);
         });
     });
+
+    describe('sticky transport and pocket mode', () => {
+        const stubObserver = () => {
+            let callback!: (entries: { isIntersecting: boolean }[]) => void;
+            vi.stubGlobal('IntersectionObserver', class { constructor(cb: typeof callback) { callback = cb; } observe() {} disconnect() {} });
+            return (visible: boolean) => act(() => callback([{ isIntersecting: visible }]));
+        };
+        afterEach(() => vi.unstubAllGlobals());
+
+        it('shows the compact bar only while the header is scrolled away, and it drives the same transport', async () => {
+            const setHeaderVisible = stubObserver();
+            render(<App />);
+            expect(screen.queryByTestId('compact-transport')).toBeNull();
+            setHeaderVisible(false);
+            const bar = screen.getByTestId('compact-transport');
+            await act(async () => { fireEvent.click(within(bar).getByTestId('compact-play-toggle')); });
+            expect(scheduler().playing).toBe(true);
+            expect(screen.getByTestId('play-toggle')).toHaveTextContent('DETENER');
+            fireEvent.pointerDown(within(bar).getByRole('button', { name: 'Subir tempo' }), { button: 0 });
+            expect(bpmInput().value).toBe('121');
+            expect(within(bar).getByTestId('compact-bpm')).toHaveTextContent('121');
+            setHeaderVisible(true);
+            expect(screen.queryByTestId('compact-transport')).toBeNull();
+        });
+
+        it('the pocket-mode − and + buttons step the tempo and are blocked by the speed trainer', async () => {
+            render(<App />);
+            fireEvent.pointerDown(screen.getByTestId('bpm-up'), { button: 0 });
+            fireEvent.pointerDown(screen.getByTestId('bpm-down'), { button: 0 });
+            fireEvent.pointerDown(screen.getByTestId('bpm-down'), { button: 0 });
+            expect(bpmInput().value).toBe('119');
+
+            fireEvent.click(screen.getByText('Modos de práctica'));
+            fireEvent.click(screen.getByLabelText('Entrenador de velocidad'));
+            await act(async () => { fireEvent.click(screen.getByTestId('play-toggle')); });
+            expect(screen.getByTestId('bpm-up')).toBeDisabled();
+        });
+    });
 });

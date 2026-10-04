@@ -54,9 +54,16 @@ button, [role='button'], [role='slider'], [role='switch'], [role='tab'], .MuiSli
 /* Transparent on wide screens: tempo and play keep their own header grid cells. */
 .transport-bar { display: contents; }
 
+/* Pocket-mode extras live in the phone bar only. */
+.transport-leds, .tempo-step { display: none !important; }
+
+/* Slim top bar (CompactTransport): below 700 px the rhythm name makes room, and it never shows over the phone bottom bar. */
+@media (max-width: 699.98px) { .compact-transport__name { display: none; } }
+@media (max-width: 599.98px) and (orientation: portrait) { .compact-transport { display: none !important; } }
+
 /* L2: portrait phone. Tempo and play live in a bar fixed to the bottom, within the thumb's reach. */
 @media (max-width: 599.98px) and (orientation: portrait) {
-  :root { --transport-reserve: 148px; }
+  :root { --transport-reserve: 204px; }
 
   .app-header { grid-template-columns: minmax(0, 1fr) !important; grid-template-areas: 'brand' 'lib' !important; }
 
@@ -75,8 +82,12 @@ button, [role='button'], [role='slider'], [role='switch'], [role='tab'], .MuiSli
     border-top: 1px solid rgba(229, 169, 95, 0.28);
     box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.6);
   }
-  .transport-bar .tempo-panel { width: 100%; box-sizing: border-box; }
-  .transport-bar .play-button { width: 100%; height: 52px; }
+  .transport-bar .tempo-panel { width: 100%; box-sizing: border-box; justify-content: space-between; gap: 8px; padding-inline: 8px; }
+  /* Pocket mode: 56 px buttons for the thumb; the slider gives way to − / + (hold to repeat). */
+  .transport-bar .tempo-step, .transport-bar .transport-leds { display: flex !important; }
+  .transport-bar .transport-leds { justify-content: center; }
+  .transport-bar .tempo-panel .MuiSlider-root { display: none; }
+  .transport-bar .play-button { width: 100%; height: 56px; }
 }
 
 /* L3: phone on its side (844x390, 932x430). Transport on the left, pulse on the right, no scrolling for either. */
