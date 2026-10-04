@@ -1,4 +1,6 @@
-import { COMPUTER_KEY_SEMITONES, OCTAVE_KEYS, computerKeyLabel, spanishNoteName } from '../audio/piano/notes';
+import { COMPUTER_LAYOUTS, fallbackKeyLabel, spanishNoteName } from '../audio/piano/notes';
+import type { PianoLayout } from '../audio/piano/notes';
+import { getPianoLayout } from './pianoLayout';
 
 /**
  * Single declaration of every keyboard shortcut. The dispatcher, the cheat sheet (`?`),
@@ -41,15 +43,16 @@ export interface ShortcutDef {
     swallowKeyup?: boolean;
 }
 
-const PIANO_NOTE_CODES = Object.keys(COMPUTER_KEY_SEMITONES);
+/** The piano's keys follow the active layout (Ableton / Tracker); the getters are read on every keypress. */
+const layout = () => COMPUTER_LAYOUTS[getPianoLayout()];
+const notesDisplay = () => Object.keys(layout().notes).map(c => fallbackKeyLabel(c)).join(' ');
 
-/** Order matters: the dispatcher tries them in this order (piano before global). */
 export const SHORTCUTS: readonly ShortcutDef[] = [
-    { id: 'piano.notes', label: 'Tocar notas', group: 'Piano', scope: 'piano', codes: PIANO_NOTE_CODES, display: PIANO_NOTE_CODES.map(c => computerKeyLabel(COMPUTER_KEY_SEMITONES[c]) ?? c).join(' '), separateKeys: true, preventDefault: true },
-    { id: 'piano.octave-down', label: 'Bajar octava', group: 'Piano', scope: 'piano', codes: [Object.keys(OCTAVE_KEYS)[0]], display: 'Z', preventDefault: true },
-    { id: 'piano.octave-up', label: 'Subir octava', group: 'Piano', scope: 'piano', codes: [Object.keys(OCTAVE_KEYS)[1]], display: 'X', preventDefault: true },
-    { id: 'piano.velocity-down', label: 'Menos velocidad (más suave)', group: 'Piano', scope: 'piano', codes: ['KeyC'], display: 'C', preventDefault: true },
-    { id: 'piano.velocity-up', label: 'Más velocidad (más fuerte)', group: 'Piano', scope: 'piano', codes: ['KeyV'], display: 'V', preventDefault: true },
+    { id: 'piano.notes', label: 'Tocar notas', group: 'Piano', scope: 'piano', get codes() { return Object.keys(layout().notes); }, get display() { return notesDisplay(); }, separateKeys: true, preventDefault: true },
+    { id: 'piano.octave-down', label: 'Bajar octava', group: 'Piano', scope: 'piano', get codes() { return [layout().octave.down]; }, get display() { return fallbackKeyLabel(layout().octave.down); }, preventDefault: true },
+    { id: 'piano.octave-up', label: 'Subir octava', group: 'Piano', scope: 'piano', get codes() { return [layout().octave.up]; }, get display() { return fallbackKeyLabel(layout().octave.up); }, preventDefault: true },
+    { id: 'piano.velocity-down', label: 'Menos velocidad (más suave)', group: 'Piano', scope: 'piano', get codes() { return [layout().velocity.down]; }, get display() { return fallbackKeyLabel(layout().velocity.down); }, preventDefault: true },
+    { id: 'piano.velocity-up', label: 'Más velocidad (más fuerte)', group: 'Piano', scope: 'piano', get codes() { return [layout().velocity.up]; }, get display() { return fallbackKeyLabel(layout().velocity.up); }, preventDefault: true },
     { id: 'piano.sustain', label: 'Pedal de sustain (mantener)', group: 'Piano', scope: 'piano', codes: ['ShiftLeft', 'ShiftRight'], display: 'Shift', preventDefault: false },
     { id: 'piano.exit', label: 'Salir del Teclado PC', group: 'Piano', scope: 'piano', codes: ['Escape'], display: 'Esc', preventDefault: false },
     { id: 'transport.play', label: 'Iniciar / detener', group: 'Transporte', scope: 'global', codes: ['Space'], display: 'Espacio', preventDefault: true, swallowKeyup: true },
@@ -78,13 +81,20 @@ export function shadowedBy(def: ShortcutDef): ShortcutDef[] {
     return SHORTCUTS.filter(s => s.scope === 'piano' && s.codes?.some(c => def.codes!.includes(c)));
 }
 
+/** Printable keys of a shortcut using real key labels (see `useKeyLabels`): "A W S E…", "Z", "Espacio". */
+export function displayFor(def: ShortcutDef, labelOf: (code: string) => string): string {
+    if (def.scope !== 'piano' || !def.codes || def.id === 'piano.sustain' || def.id === 'piano.exit') return def.display;
+    return def.codes.map(labelOf).join(' ');
+}
+
 /** "Iniciar" -> "Iniciar (Espacio)". */
 export const withShortcut = (text: string, id: ShortcutId): string => `${text} (${shortcutById(id).display})`;
 
-/** Spanish name of the note a global shortcut's key plays in piano mode ("Fa♯" for T), if any. */
-export function shadowNote(def: ShortcutDef): string | null {
-    const code = def.codes?.find(c => COMPUTER_KEY_SEMITONES[c] !== undefined);
-    return code ? spanishNoteName(60 + COMPUTER_KEY_SEMITONES[code]) : null;
+/** Spanish name of the note a global shortcut's key plays in piano mode ("Fa♯" for T in the Ableton layout), if any. */
+export function shadowNote(def: ShortcutDef, pianoLayout: PianoLayout = getPianoLayout()): string | null {
+    const notes = COMPUTER_LAYOUTS[pianoLayout].notes;
+    const code = def.codes?.find(c => notes[c] !== undefined);
+    return code ? spanishNoteName(60 + notes[code]) : null;
 }
 
 const GROUP_ORDER: ShortcutGroup[] = ['Transporte', 'Piano', 'Ayuda'];

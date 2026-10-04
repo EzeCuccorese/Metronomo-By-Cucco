@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
-import { COMPUTER_KEY_SEMITONES } from '../audio/piano/notes';
+import { COMPUTER_LAYOUTS } from '../audio/piano/notes';
+import { getPianoLayout } from '../shortcuts/pianoLayout';
 import { usePianoScope, useShortcutHandlers } from '../shortcuts/dispatcher';
 
 interface Options {
@@ -29,7 +30,7 @@ export const COMPUTER_KEY_VELOCITY = VELOCITY_LEVELS[DEFAULT_VELOCITY_LEVEL];
 
 /**
  * Plays the piano from the computer keyboard: A W S E D F T G Y H U J K O L P Ñ (one octave
- * and a third), Z / X shift the octave. The keys themselves are declared in the shortcut
+ * and a third), Z / X shift the octave (or the two-row tracker layout, see `COMPUTER_LAYOUTS`). The keys themselves are declared in the shortcut
  * registry and routed by its single dispatcher; this hook only keeps the piano's own
  * held-key bookkeeping (which note each physical key started, release on blur / hide).
  *
@@ -50,7 +51,7 @@ export function usePianoComputerKeyboard(options: Options) {
     useShortcutHandlers({
         'piano.notes': {
             down: e => {
-                const semitone = COMPUTER_KEY_SEMITONES[e.code];
+                const semitone = COMPUTER_LAYOUTS[getPianoLayout()].notes[e.code];
                 if (semitone === undefined || held.current.has(e.code)) return;
                 const midi = ref.current.baseMidi + semitone;
                 held.current.set(e.code, midi);
