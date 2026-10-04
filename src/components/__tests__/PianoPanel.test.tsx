@@ -7,6 +7,7 @@ import { createPlaybackStore } from '../../state/playbackStore';
 import type { PlaybackStore } from '../../state/playbackStore';
 import { STORAGE_PREFIX } from '../../state/storage';
 import type { Melody } from '../../audio/piano/melody';
+import { FakeMidiAccess, stubRequestMidiAccess, unstubRequestMidiAccess } from '../../test/fakeMidi';
 import { useShortcutDispatcher } from '../../shortcuts/dispatcher';
 import { melodyStatusText, velocityFromPointer } from '../piano/pianoUi';
 
@@ -398,5 +399,90 @@ describe('piano UI helpers', () => {
         expect(melodyStatusText(base)).toBe('Sin melodía grabada');
         expect(melodyStatusText({ ...base, recordState: 'recording', recordingBar: 7 })).toBe('Grabando compás 4 de 4');
         expect(melodyStatusText({ ...base, melody: { bars: 3, subdivision: 4, notes: [TAKE.notes[0], TAKE.notes[0]] } })).toBe('2 notas · 3 compases · suena en loop al reproducir');
+    });
+
+    describe('MIDI input', () => {
+        beforeEach(() => localStorage.clear());
+        afterEach(() => { unstubRequestMidiAccess(); vi.unstubAllGlobals(); });
+
+        it('connects from the button and routes notes, velocity and the pedal into the normal piano path', async () => {
+            const access = new FakeMidiAccess();
+            const keyboard = access.plug('k1', 'Arturia KeyLab');
+            const request = stubRequestMidiAccess(access);
+            const { engine } = renderPanel();
+            expect(screen.queryByTestId('midi-notice')).not.toBeInTheDocument();
+            fireEvent.click(screen.getByTestId('midi-connect'));
+            expect(await screen.findByTestId('midi-status')).toHaveTextContent('MIDI activo · Arturia KeyLab');
+            expect(request).toHaveBeenCalledWith({ sysex: false });
+
+            act(() => keyboard.send(0x90, 60, 127));
+            expect(engine.pianoNoteOn).toHaveBeenCalledWith(60, 1);
+            expect(keyEl(60)).toHaveAttribute('aria-pressed', 'true');
+            act(() => keyboard.send(0x80, 60, 0));
+            expect(engine.pianoNoteOff).toHaveBeenCalledWith(60);
+
+            act(() => keyboard.send(0xb0, 64, 127));
+            expect(engine.setPianoSustain).toHaveBeenLastCalledWith(true);
+            expect(screen.getByRole('button', { name: 'Pedal de sustain' })).toHaveAttribute('aria-pressed', 'true');
+            act(() => keyboard.send(0xb0, 64, 0));
+            expect(engine.setPianoSustain).toHaveBeenLastCalledWith(false);
+        });
+
+        it('releases the held notes when the keyboard is unplugged', async () => {
+            const access = new FakeMidiAccess();
+            const keyboard = access.plug('k1', 'Keys');
+            stubRequestMidiAccess(access);
+            const { engine } = renderPanel();
+            fireEvent.click(screen.getByTestId('midi-connect'));
+            await screen.findByTestId('midi-status');
+            act(() => keyboard.send(0x90, 64, 90));
+            act(() => access.unplug('k1'));
+            expect(engine.pianoNoteOff).toHaveBeenCalledWith(64);
+            expect(screen.getByTestId('midi-status')).toHaveTextContent('No hay teclados MIDI conectados');
+        });
+
+        it('lets the player choose which device to listen to', async () => {
+            const access = new FakeMidiAccess();
+            const a = access.plug('a', 'Keys A');
+            const b = access.plug('b', 'Keys B');
+            stubRequestMidiAccess(access);
+            const { engine } = renderPanel();
+            fireEvent.click(screen.getByTestId('midi-connect'));
+            await screen.findByTestId('midi-status');
+            fireEvent.mouseDown(screen.getByRole('combobox', { name: /Teclado MIDI/ }));
+            fireEvent.click(await screen.findByRole('option', { name: 'Keys B' }));
+            act(() => a.send(0x90, 60, 100));
+            expect(engine.pianoNoteOn).not.toHaveBeenCalled();
+            act(() => b.send(0x90, 62, 100));
+            expect(engine.pianoNoteOn).toHaveBeenCalledWith(62, 100 / 127);
+        });
+
+        it('says so when the permission is denied', async () => {
+            stubRequestMidiAccess(new Error('denied'));
+            renderPanel();
+            fireEvent.click(screen.getByTestId('midi-connect'));
+            expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo acceder a MIDI');
+        });
+
+        it('shows the dismissible iPhone/iPad notice when Web MIDI does not exist', () => {
+            vi.stubGlobal('navigator', Object.create(navigator, {
+                userAgent: { value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 Version/26.0 Mobile/15E148 Safari/604.1' },
+            }));
+            renderPanel();
+            expect(screen.getByTestId('midi-notice')).toHaveTextContent('MIDI no está disponible en iPhone/iPad');
+            expect(screen.queryByTestId('midi-connect')).not.toBeInTheDocument();
+            fireEvent.click(screen.getByRole('button', { name: /close|cerrar/i }));
+            expect(screen.queryByTestId('midi-notice')).not.toBeInTheDocument();
+            expect(stored('piano.midiNoticeDismissed')).toBe(true);
+        });
+
+        it('shows the Chrome suggestion on desktop Safari', () => {
+            vi.stubGlobal('navigator', Object.create(navigator, {
+                userAgent: { value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15' },
+                maxTouchPoints: { value: 0 },
+            }));
+            renderPanel();
+            expect(screen.getByTestId('midi-notice')).toHaveTextContent('Para conectar un teclado MIDI, abrí la app en Chrome.');
+        });
     });
 });
