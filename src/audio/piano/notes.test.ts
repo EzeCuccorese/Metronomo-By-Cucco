@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    chordPitchClasses, COMPUTER_KEY_SEMITONES, computerKeyLabel, isBlackKey, midiToFrequency, midiToNoteName,
+    chordPitchClasses, COMPUTER_KEY_SEMITONES, COMPUTER_LAYOUTS, computerKeyCode, fallbackKeyLabel, layoutSpan, computerKeyLabel, isBlackKey, midiToFrequency, midiToNoteName,
     noteToMidi, OCTAVE_KEYS, pitchClass, scalePitchClasses, spanishNoteLabel, spanishNoteName, voiceLead,
 } from './notes';
 
@@ -94,5 +94,28 @@ describe('computer keyboard layout', () => {
         expect(computerKeyLabel(6)).toBe('T');
         expect(computerKeyLabel(16)).toBe('Ñ');
         expect(computerKeyLabel(17)).toBeNull();
+    });
+});
+
+describe('computer keyboard layouts', () => {
+    it('the tracker layout covers the 25 visible keys with two rows and never collides with itself', () => {
+        const { notes, octave, velocity } = COMPUTER_LAYOUTS.tracker;
+        expect(layoutSpan('tracker')).toBe(24);
+        expect(new Set(Object.values(notes)).size).toBe(Object.keys(notes).length);
+        expect(Array.from({ length: 25 }, (_, i) => computerKeyCode(i, 'tracker'))).not.toContain(null);
+        expect([notes.KeyZ, notes.KeyS, notes.KeyQ, notes.Digit2, notes.KeyI]).toEqual([0, 1, 12, 13, 24]);
+        // Octave and velocity moved off the note keys.
+        for (const code of [octave.down, octave.up, velocity.down, velocity.up]) expect(notes[code]).toBeUndefined();
+        expect(Object.keys(notes)).not.toContain('Space');
+    });
+
+    it('keeps the Ableton layout as the default and labels keys with Spanish-friendly fallbacks', () => {
+        expect(COMPUTER_LAYOUTS.ableton.notes).toBe(COMPUTER_KEY_SEMITONES);
+        expect(layoutSpan('ableton')).toBe(16);
+        expect(fallbackKeyLabel('KeyA')).toBe('A');
+        expect(fallbackKeyLabel('Digit2')).toBe('2');
+        expect(fallbackKeyLabel('Semicolon')).toBe('Ñ');
+        expect(fallbackKeyLabel('Comma')).toBe(',');
+        expect(fallbackKeyLabel('IntlRo')).toBe('IntlRo');
     });
 });

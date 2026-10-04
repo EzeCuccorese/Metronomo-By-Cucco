@@ -55,6 +55,7 @@ const ViewList: React.FC<{ extra?: React.ReactNode; onPick?: () => void; onStage
         <MenuItem onClick={() => { onPick?.(); onStageMode(); }} sx={{ minHeight: { xs: 44, sm: 36 } }} data-testid="stage-menu-item">
           <ListItemIcon><SlideshowIcon fontSize="small" /></ListItemIcon>
           <ListItemText>Modo escenario</ListItemText>
+          <Typography variant="caption" sx={{ color: 'text.secondary', ml: 2 }} aria-hidden>F</Typography>
         </MenuItem>
       )}
       {extra}
