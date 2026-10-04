@@ -145,7 +145,8 @@ function App() {
   });
 
   // The slim bar appears once the full header has scrolled away (not on portrait phones: their bar is always there).
-  const headerOutOfView = useElementOutOfView('header.app-header');
+  const [headerEl, setHeaderEl] = useState<HTMLElement | null>(null);
+  const headerOutOfView = useElementOutOfView(headerEl);
 
   // Settings edited inside a card reach the engine from here, so a hidden or folded card keeps its sound.
   const layout = useLayout();
@@ -192,6 +193,7 @@ function App() {
               viewControl={<ViewMenu />}
               pattern={currentPattern}
               onNudgeBpm={nudgeBpm}
+              headerRef={setHeaderEl}
             />
 
             {headerOutOfView && (

@@ -63,6 +63,33 @@ describe('BpmStepButton (hold to repeat)', () => {
         expect(onStep).toHaveBeenCalledTimes(1);
     });
 
+    it('steps once for a bare click (screen readers send no pointer or key events)', () => {
+        const onStep = vi.fn();
+        render(<BpmStepButton direction={1} onStep={onStep} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Subir tempo' }));
+        expect(onStep).toHaveBeenCalledTimes(1);
+        // Much later, another bare click is another step.
+        act(() => { vi.advanceTimersByTime(2000); });
+        fireEvent.click(screen.getByRole('button', { name: 'Subir tempo' }));
+        expect(onStep).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not let Space scroll the page', () => {
+        render(<BpmStepButton direction={1} onStep={vi.fn()} />);
+        const notPrevented = fireEvent.keyDown(screen.getByRole('button', { name: 'Subir tempo' }), { key: ' ' });
+        expect(notPrevented).toBe(false);
+    });
+
+    it('stops repeating when it becomes disabled while held', () => {
+        const onStep = vi.fn();
+        const { rerender } = render(<BpmStepButton direction={1} onStep={onStep} />);
+        press();
+        rerender(<BpmStepButton direction={1} onStep={onStep} disabled />);
+        const calls = onStep.mock.calls.length;
+        act(() => { vi.advanceTimersByTime(2000); });
+        expect(onStep.mock.calls.length).toBe(calls);
+    });
+
     it('does nothing while disabled', () => {
         const onStep = vi.fn();
         render(<BpmStepButton direction={1} onStep={onStep} disabled />);

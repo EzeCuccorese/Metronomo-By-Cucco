@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
 
-/** True while the element matching `selector` is completely scrolled out of the viewport. */
-export function useElementOutOfView(selector: string): boolean {
+/** True while `element` is completely scrolled out of the viewport (false until it is known). */
+export function useElementOutOfView(element: Element | null): boolean {
     const [out, setOut] = useState(false);
     useEffect(() => {
-        const el = document.querySelector(selector);
-        if (!el || typeof IntersectionObserver === 'undefined') return;
+        if (!element || typeof IntersectionObserver === 'undefined') return;
         const observer = new IntersectionObserver(([entry]) => setOut(!entry.isIntersecting));
-        observer.observe(el);
+        observer.observe(element);
         return () => observer.disconnect();
-    }, [selector]);
+    }, [element]);
     return out;
 }
