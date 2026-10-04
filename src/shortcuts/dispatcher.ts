@@ -52,7 +52,11 @@ export function usePianoScope(global: boolean, focused: () => boolean) {
 
 const normalise = (h: ShortcutHandler | ((e: KeyboardEvent) => void)): ShortcutHandler => (typeof h === 'function' ? { down: h } : h);
 
-/** Registers handlers for registry ids for as long as the component is mounted. */
+/**
+ * Registers handlers for registry ids for as long as the component is mounted.
+ * One handler per id: the last one registered wins, so two mounted components must not claim
+ * the same id (a warning is logged in development).
+ */
 export function useShortcutHandlers(map: ShortcutHandlers) {
     const ref = useRef(map);
     useEffect(() => { ref.current = map; });
@@ -65,6 +69,7 @@ export function useShortcutHandlers(map: ShortcutHandlers) {
                 down: e => { const h = ref.current[id]; if (h) normalise(h).down?.(e); },
                 up: e => { const h = ref.current[id]; if (h) normalise(h).up?.(e); },
             };
+            if (import.meta.env.DEV && handlers.has(id)) console.warn(`Shortcut "${id}" already has a handler: only one component may own each id.`);
             wrapped.set(id, w);
             handlers.set(id, w);
         }

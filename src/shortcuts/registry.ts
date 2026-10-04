@@ -42,8 +42,8 @@ const PIANO_NOTE_CODES = Object.keys(COMPUTER_KEY_SEMITONES);
 /** Order matters: the dispatcher tries them in this order (piano before global). */
 export const SHORTCUTS: readonly ShortcutDef[] = [
     { id: 'piano.notes', label: 'Tocar notas', group: 'Piano', scope: 'piano', codes: PIANO_NOTE_CODES, display: PIANO_NOTE_CODES.map(c => computerKeyLabel(COMPUTER_KEY_SEMITONES[c]) ?? c).join(' '), preventDefault: true },
-    { id: 'piano.octave-down', label: 'Bajar octava', group: 'Piano', scope: 'piano', codes: [Object.keys(OCTAVE_KEYS)[0]], display: 'Z', preventDefault: true },
-    { id: 'piano.octave-up', label: 'Subir octava', group: 'Piano', scope: 'piano', codes: [Object.keys(OCTAVE_KEYS)[1]], display: 'X', preventDefault: true },
+    { id: 'piano.octave-down', label: 'Bajar octava', group: 'Piano', scope: 'piano', codes: Object.keys(OCTAVE_KEYS).filter(k => OCTAVE_KEYS[k] === -1), display: 'Z', preventDefault: true },
+    { id: 'piano.octave-up', label: 'Subir octava', group: 'Piano', scope: 'piano', codes: Object.keys(OCTAVE_KEYS).filter(k => OCTAVE_KEYS[k] === 1), display: 'X', preventDefault: true },
     { id: 'transport.play', label: 'Iniciar / detener', group: 'Transporte', scope: 'global', codes: ['Space'], display: 'Espacio', preventDefault: true, swallowKeyup: true },
     { id: 'transport.tap', label: 'Tap tempo', group: 'Transporte', scope: 'global', codes: ['KeyT'], display: 'T', preventDefault: false },
     { id: 'transport.bpm-up', label: 'Subir tempo (Shift: ±5)', group: 'Transporte', scope: 'global', codes: ['ArrowUp'], display: '↑', preventDefault: true, allowRepeat: true },
