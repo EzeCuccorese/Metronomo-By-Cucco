@@ -53,7 +53,8 @@ class DrumSynthesizer {
     constructor() {
         this.context = AudioContextManager.getInstance().getContext();
         this.createNoiseBuffer();
-        this.initPreRenderedSounds();
+        // Rendering failures leave the buffers unset and the voices fall back to live synthesis.
+        void this.initPreRenderedSounds().catch(() => {});
         this.loadPromise = this.loadAssets();
 
         // Initialize Master Bus
@@ -288,7 +289,7 @@ class DrumSynthesizer {
 
     /** Adapter handed to the synthesized voices (see ./voices). */
     private createVoiceHost(): VoiceHost {
-        // eslint-disable-next-line @typescript-eslint/no-this-alias -- the getters below need the engine instance
+        // oxlint-disable-next-line typescript/no-this-alias -- the getters below need the engine instance
         const self = this;
         return {
             get context() { return self.context; },

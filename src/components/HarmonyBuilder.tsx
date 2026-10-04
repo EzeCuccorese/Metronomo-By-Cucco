@@ -216,7 +216,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
 
                 <FormControl size="small">
                     <InputLabel id="harmony-mode-label">Modo</InputLabel>
-                    <Select value={mode} labelId="harmony-mode-label" label="Modo" onChange={(e) => setMode(e.target.value as ModeType)}>
+                    <Select value={mode} labelId="harmony-mode-label" label="Modo" onChange={(e) => setMode(e.target.value)}>
                         {MODES.map(m => <MenuItem key={m.id} value={m.id}>{m.label}</MenuItem>)}
                     </Select>
                 </FormControl>
@@ -225,7 +225,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
             <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 76px', gap: 1, mb: 2 }}>
                 <FormControl size="small">
                     <InputLabel id="harmony-style-label">Estilo</InputLabel>
-                    <Select value={style} labelId="harmony-style-label" label="Estilo" onChange={(e) => handleStyleChange(e.target.value as AccompanimentStyle)}>
+                    <Select value={style} labelId="harmony-style-label" label="Estilo" onChange={(e) => handleStyleChange(e.target.value)}>
                         {STYLES.map(st => <MenuItem key={st.id} value={st.id}>{st.label}</MenuItem>)}
                     </Select>
                 </FormControl>

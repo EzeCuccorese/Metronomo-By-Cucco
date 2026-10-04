@@ -75,7 +75,7 @@ src/
 
 Solo se soportan los navegadores más recientes: Safari (iOS y macOS) y Chrome en su última versión. No hay transpilación ni polyfills para navegadores antiguos (`build.target: esnext`).
 
-Requiere Node 26 (CI y Docker usan Node 26; ver `.nvmrc`) y pnpm 11. Node 25+ ya no trae corepack, así que pnpm se instala con `npm i -g pnpm@11` (o mise/fnm). El typecheck corre con TypeScript 7 y ESLint usa TypeScript 6 (ver notas en el PR: typescript-eslint aún no soporta la API de TS 7).
+Requiere Node 26 (CI y Docker usan Node 26; ver `.nvmrc`) y pnpm 11. Node 25+ ya no trae corepack, así que pnpm se instala con `npm i -g pnpm@11` (o mise/fnm). Todo el tooling usa una sola versión de TypeScript (7.x): el typecheck es `tsc -b` y el lint es Oxlint con reglas que usan tipos (`oxlint-tsgolint`).
 
 ## Desarrollo
 
@@ -85,7 +85,7 @@ El gestor es **pnpm 11** (`packageManager` y `devEngines` en `package.json`). Po
 pnpm install
 pnpm dev               # servidor de desarrollo
 pnpm build             # build de producción (typecheck + vite)
-pnpm lint
+pnpm lint              # Oxlint (type-aware)
 pnpm typecheck
 pnpm test              # tests unitarios e integración (Vitest + Testing Library)
 pnpm test:coverage     # con umbrales de cobertura

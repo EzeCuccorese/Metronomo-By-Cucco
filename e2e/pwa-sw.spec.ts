@@ -16,6 +16,7 @@ let newVersion = false;
 test.use({ baseURL: `http://127.0.0.1:${PROXY_PORT}` });
 
 test.beforeAll(async () => {
+    // oxlint-disable-next-line typescript/no-misused-promises -- every failure is handled by the try/catch below
     server = createServer(async (req, res) => {
         try {
             const upstream = await fetch(UPSTREAM + req.url, { headers: { accept: String(req.headers.accept ?? '*/*') } });

@@ -337,7 +337,7 @@ describe('advanceAndPrune', () => {
             seen.push(n);
             return n === 5;
         });
-        expect(seen.sort()).toEqual([1, 2, 3, 4, 5]);
+        expect(seen.sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
         expect(out).toEqual([5]);
     });
 

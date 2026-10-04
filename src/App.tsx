@@ -193,7 +193,7 @@ function App() {
                   <InteractiveInstrumentVisual
                     pattern={currentPattern}
                     isPlaying={isPlaying}
-                    onPreviewInstrument={engine.previewInstrument}
+                    onPreviewInstrument={(instrument, modifier) => void engine.previewInstrument(instrument, modifier)}
                     sx={instrumentsCardSx}
                   />
                 </Fill>
@@ -206,7 +206,7 @@ function App() {
                     pattern={currentPattern}
                     onPatternUpdate={handlePatternUpdate}
                     isPlaying={isPlaying}
-                    onPreviewInstrument={engine.previewInstrument}
+                    onPreviewInstrument={(instrument, modifier) => void engine.previewInstrument(instrument, modifier)}
                     canRestore={canRestore}
                     onRestore={handleRestorePattern}
                   />

@@ -30,7 +30,7 @@ interface NavigatorAudioSession {
 }
 
 const needsResume = (context: AudioContext): boolean => {
-    const state = context.state as ContextState;
+    const state: ContextState = context.state;
     return state === 'suspended' || state === 'interrupted';
 };
 

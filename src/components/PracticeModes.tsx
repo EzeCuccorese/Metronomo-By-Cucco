@@ -201,7 +201,7 @@ export const PracticeModes: React.FC<PracticeModesProps> = ({
                                     valueLabelDisplay="auto"
                                     valueLabelFormat={(v) => `${v}%`}
                                     aria-label="Probabilidad de compás en silencio"
-                                    onChange={(_, v) => onSilenceChange({ ...silence, chance: (v as number) / 100 })}
+                                    onChange={(_, v) => onSilenceChange({ ...silence, chance: v / 100 })}
                                 />
                             </Stack>
                         </Box>
@@ -229,7 +229,7 @@ export const PracticeModes: React.FC<PracticeModesProps> = ({
                                         label="Forma"
                                         value={formas.genre}
                                         disabled={isPlaying}
-                                        onChange={(e) => onFormasChange({ ...formas, genre: e.target.value as FormGenre })}
+                                        onChange={(e) => onFormasChange({ ...formas, genre: e.target.value })}
                                     >
                                         {FORM_GENRES.map(g => <MenuItem key={g} value={g}>{g}</MenuItem>)}
                                     </Select>
