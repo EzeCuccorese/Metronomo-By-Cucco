@@ -36,12 +36,16 @@ import { GenreSelectorModal } from './components/GenreSelectorModal';
 import { useMetronomeEngine } from './hooks/useMetronomeEngine';
 import { usePersistentState } from './hooks/usePersistentState';
 import { useTapTempo } from './hooks/useTapTempo';
-import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useShortcutDispatcher, useShortcutHandlers } from './shortcuts/dispatcher';
+import ShortcutsDialog from './components/ShortcutsDialog';
+import CommandPalette from './components/CommandPalette';
+import type { PaletteCommand } from './components/CommandPalette';
 import { useWakeLock } from './hooks/useWakeLock';
 import { useLayout } from './hooks/useLayout';
 import { useMixer } from './hooks/useMixer';
 import { useHarmonySync, useMelodySync } from './hooks/useEngineSync';
 import { LayoutContext } from './state/LayoutContext';
+import { PANEL_IDS, PANEL_LABELS, PANEL_PRESET_ORDER, PRESET_LABELS } from './state/layout';
 import type { PanelId } from './state/layout';
 import { ViewMenu } from './components/ViewMenu';
 import { CompactTransport } from './components/CompactTransport';
@@ -138,10 +142,53 @@ function App() {
     if (!tempoLocked) setBpmRaw(prev => clampBpm(prev + delta));
   }, [tempoLocked, setBpmRaw]);
 
-  useKeyboardShortcuts({
-    onTogglePlay: toggle,
-    onTap: guardedTap,
-    onNudgeBpm: nudgeBpm,
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const rhythmCommands = useMemo<PaletteCommand[]>(() => PRESET_PATTERNS.map(p => ({
+    id: `rhythm.${p.id}`,
+    label: `Ritmo: ${p.name}`,
+    group: 'Ritmos',
+    keywords: ['ritmo', 'rhythm'],
+    run: () => loadPreset(p.id),
+  })), [loadPreset]);
+  const layout = useLayout();
+  // The view presets and panel switches are also palette commands (⌘K), next to the "Vista" menu.
+  const viewCommands = useMemo<PaletteCommand[]>(() => [
+    ...PANEL_PRESET_ORDER.map(preset => ({
+      id: `view.preset.${preset}`,
+      label: `Vista: ${PRESET_LABELS[preset]}`,
+      group: 'Vista',
+      keywords: ['vista', 'preset', 'paneles', 'layout'],
+      run: () => layout.setPreset(preset),
+    })),
+    ...PANEL_IDS.map(id => ({
+      id: `view.panel.${id}`,
+      label: `${layout.panels[id] === 'hidden' ? 'Mostrar' : 'Ocultar'} panel: ${PANEL_LABELS[id]}`,
+      group: 'Vista',
+      keywords: ['vista', 'panel', 'paneles'],
+      run: () => layout.setPanelState(id, layout.panels[id] === 'hidden' ? 'open' : 'hidden'),
+    })),
+  ], [layout]);
+  const paletteCommands = useMemo(() => [...rhythmCommands, ...viewCommands], [rhythmCommands, viewCommands]);
+  const setBpmFromPalette = useCallback((value: number) => { if (!tempoLocked) setBpmRaw(clampBpm(value)); }, [tempoLocked, setBpmRaw]);
+
+  const stepPreset = useCallback((delta: 1 | -1) => {
+    const ids = PRESET_PATTERNS.map(p => p.id);
+    const at = ids.indexOf(currentPattern.id);
+    const next = at < 0 ? (delta > 0 ? 0 : ids.length - 1) : (at + delta + ids.length) % ids.length;
+    loadPreset(ids[next]);
+  }, [currentPattern.id, loadPreset]);
+
+  useShortcutDispatcher();
+  useShortcutHandlers({
+    'transport.play': e => { if (!e.repeat) toggle(); },
+    'transport.tap': e => { if (!e.repeat) guardedTap(); },
+    'transport.bpm-up': e => { if (!tempoLocked) setBpmRaw(prev => clampBpm(prev + (e.shiftKey ? 5 : 1))); },
+    'transport.bpm-down': e => { if (!tempoLocked) setBpmRaw(prev => clampBpm(prev - (e.shiftKey ? 5 : 1))); },
+    'transport.prev-rhythm': () => stepPreset(-1),
+    'transport.next-rhythm': () => stepPreset(1),
+    'help.shortcuts': () => setShortcutsOpen(true),
+    'palette.open': () => setPaletteOpen(prev => !prev),
   });
 
   // The slim bar appears once the full header has scrolled away (not on portrait phones: their bar is always there).
@@ -149,7 +196,6 @@ function App() {
   const headerOutOfView = useElementOutOfView(headerEl);
 
   // Settings edited inside a card reach the engine from here, so a hidden or folded card keeps its sound.
-  const layout = useLayout();
   const mixer = useMixer(currentPattern, {
     onVolumeChange: engine.setChannelVolume,
     onPanChange: engine.setChannelPan,
@@ -309,6 +355,8 @@ function App() {
         </Box>
 
         <PwaUpdater isPlaying={isPlaying} />
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={paletteCommands} onSetBpm={setBpmFromPalette} tempoLocked={tempoLocked} />
+        <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
         <GenreSelectorModal
           open={libraryOpen}
           onClose={() => setLibraryOpen(false)}
