@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Button, Divider, Drawer, ListItemIcon, ListItemText, Menu, MenuItem, MenuList, Typography, useMediaQuery } from '@mui/material';
+import { Box, Button, Divider, Drawer, ListItemIcon, ListItemText, MenuItem, MenuList, Popover, Typography, useMediaQuery } from '@mui/material';
 import ViewQuiltIcon from '@mui/icons-material/ViewQuilt';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
@@ -18,7 +18,7 @@ const Heading: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 const ViewList: React.FC<{ extra?: React.ReactNode; onPick?: () => void }> = ({ extra, onPick }) => {
   const layout = useLayoutApi();
   return (
-    <MenuList dense aria-label="Vista" sx={{ py: 0 }}>
+    <MenuList dense autoFocusItem aria-label="Vista" sx={{ py: 0 }}>
       <Heading>Vista</Heading>
       {PANEL_PRESET_ORDER.map(preset => (
         <MenuItem
@@ -80,9 +80,10 @@ export const ViewMenu: React.FC<{ extra?: React.ReactNode }> = ({ extra }) => {
           <Box role="dialog" aria-label="Vista"><ViewList extra={extra} onPick={close} /></Box>
         </Drawer>
       ) : (
-        <Menu anchorEl={anchor} open={anchor !== null} onClose={close} slotProps={{ list: { sx: { py: 0 } } }}>
+        // A Popover around our own MenuList (a Menu would nest a second menu list inside).
+        <Popover anchorEl={anchor} open={anchor !== null} onClose={close} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}>
           <ViewList extra={extra} />
-        </Menu>
+        </Popover>
       )}
     </>
   );
