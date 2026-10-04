@@ -408,6 +408,44 @@ Datos al 2026-10-04 del registro de npm, la API de descargas de npm, bundlephobi
 
 ---
 
+## MIDI y navegadores
+
+Pregunta: ¿MIDI es mejor que lo que tenemos? ¿Conviene usar Chrome para todo (y en iPhone instalar Chrome)?
+
+**MIDI no reemplaza el teclado en pantalla ni el de la computadora: es una entrada adicional** para quien tiene un teclado MIDI físico (USB o Bluetooth). Lo que aporta: velocidad real (dinámica), pedal de sustain real (CC64) y rango completo (88 teclas). Quien no tiene teclado MIDI no gana nada, así que el teclado en pantalla y el de la PC siguen siendo la entrada principal.
+
+### Qué soporta cada navegador (verificado en octubre de 2026)
+
+- **Chrome y Edge de escritorio, Chrome en Android:** soportan Web MIDI (Chrome desde v43). Requiere contexto seguro (HTTPS) y un permiso del usuario. No hace falta `sysex`, así que el aviso de permiso es el simple.
+- **Firefox (v108+):** lo soporta, pero con un complemento de permiso para sitios. No es el foco.
+- **Safari en macOS e iOS: no lo soporta.** caniuse lo marca "no" en todas las versiones (hasta 26.5 y Technical Preview), y el bug de WebKit 107250 sigue en estado NEW (abierto desde 2013).
+- **Chrome en iPhone/iPad tampoco lo tiene.** Por la regla 2.5.6 de la App Store, todos los navegadores de iOS usan WebKit, de modo que Chrome para iOS hereda la falta de Web MIDI de Safari. Instalar Chrome en el iPhone **no** resuelve el problema.
+- **Excepción de la UE (iOS 17.4+):** Apple permite motores alternativos en la UE, pero a octubre de 2026 no hay un Chrome con Blink publicado en iOS. Los prototipos de Google, Microsoft y Mozilla existen y siguen sin lanzarse al público (nota de Gigazine, junio de 2026), y Apple restringe las pruebas a dispositivos ubicados físicamente en la UE. Aunque saliera, requeriría una app aparte y solo en la UE, y no encontré ninguna fuente que confirme que expondría Web MIDI. No se puede apoyar un diseño en eso.
+- **Bluetooth MIDI en Chrome para macOS:** funciona, pero el teclado se empareja primero en el sistema (Audio MIDI Setup > Window > Show MIDI Studio > Configure Bluetooth > Connect). Después aparece como un dispositivo MIDI normal para `requestMIDIAccess`. Los teclados USB no necesitan nada.
+
+**Conclusión:** "Chrome para todo" sirve en escritorio (macOS, Windows, Linux) y en Android, pero **no en iPhone/iPad**. No se debe pedir a nadie que instale Chrome en iOS para tener MIDI. Tampoco conviene forzar Chrome para el resto de la app: sigue funcionando en Safari, y la PWA en iPhone es un caso de uso central (ver iOS en [Hoy](#hoy-auditoría)).
+
+### Recomendación: mejora progresiva con aviso
+
+1. **Detección:** `'requestMIDIAccess' in navigator`. Si existe, aparece el botón "MIDI" en el panel del piano. Si no, aparece el aviso (punto 2).
+2. **Aviso chico y descartable** (el descarte se guarda en `localStorage`, con try/catch; se muestra solo una vez en el panel del piano, nunca como modal):
+   - iPhone/iPad (incluye iPadOS que se presenta como Mac: detectar con `navigator.maxTouchPoints > 1` y `platform`): *"MIDI no está disponible en iPhone/iPad (ningún navegador de iOS lo soporta). Usá el teclado en pantalla o abrí la app en Chrome en una computadora o Android."*
+   - Safari de escritorio: *"Para conectar un teclado MIDI, abrí la app en Chrome."*
+   - Otros navegadores sin la API (p. ej. Firefox sin el complemento): no mostrar nada.
+3. **Mensajes de entrada** (API nativa, ~40–80 líneas, sin dependencia; `WEBMIDI.js` solo si algún día se quiere salida o reloj):
+   - **note-on** (`0x9n`, velocidad > 0): `noteOn(nota, velocidad/127)`. **note-off** (`0x8n`, o note-on con velocidad 0): `noteOff(nota)`. La velocidad real alimenta la ganancia del sampler; si el sampler hoy usa velocidad fija, mapearla a una curva suave (p. ej. `(v/127)^0.8`) en vez de lineal.
+   - **Sustain (CC64):** valor ≥ 64 = pedal abajo, < 64 = arriba. Se conecta al mismo pedal que el Shift de U4, de modo que las notas sostenidas tengan una sola implementación (y un solo test).
+   - **Canal:** aceptar todos; ignorar el canal 10 (percusión) en el piano.
+   - **Hot-plug:** escuchar `access.onstatechange` y volver a enlazar `onmidimessage` en cada `input` con `state === 'connected'`; mostrar "Teclado conectado: <nombre>" y, al desconectarse, soltar todas las notas activas (equivalente a all-notes-off) para evitar notas pegadas.
+   - **Permisos:** `requestMIDIAccess()` solo tras un clic en el botón (gesto del usuario); si se rechaza, mostrar el estado "Permiso denegado" con cómo habilitarlo.
+4. **Ruteo:** a los mismos `noteOn` / `noteOff` de `PianoPanel` que ya cuentan fuentes (teclado en pantalla, teclado de PC, MIDI), de modo que una nota sostenida por dos fuentes no se corte, y por lo tanto el looper del piano graba MIDI sin cambios.
+5. **Tests:** Vitest con un `MIDIAccess` falso (note-on/off, velocidad 0 como off, CC64, `statechange` con desconexión que suelta notas); Playwright solo verifica que el botón y el aviso aparecen según la API (con y sin `requestMIDIAccess` stubbed vía `addInitScript`).
+
+### Esfuerzo y ubicación en el plan
+
+- **Esfuerzo: M** (≈ 1–1,5 días con tests): hook `useMidiInput` + botón/aviso + test del pedal compartido. Probar con un teclado real en Chrome (USB y Bluetooth) antes de cerrar el PR.
+- **Dónde:** es el PR 13 (U12), pero se **adelanta al final de la Fase 2**, después del PR 4 (que trae el pedal de sustain compartido y la fuente "teclado de PC" en el conteo de fuentes), porque depende de ambos. Si no hay tiempo, queda en Fase 3: es un extra para quien tiene teclado MIDI, no afecta al resto.
+
 ## Plan por fases y PRs sugeridos
 
 Cada PR lleva tests (Vitest y Testing Library para la lógica de estado; Playwright para los flujos) y capturas antes/después en `docs/screenshots/`.
@@ -438,7 +476,7 @@ Cada PR lleva tests (Vitest y Testing Library para la lógica de estado; Playwri
 |----|-----------|----------|
 | 11. `feat(ui): tips de primer uso` | U10 | S |
 | 12. `feat(ui): paleta de comandos` | U11 con cmdk sobre el registro de U5 | M |
-| 13. `feat(piano): entrada MIDI (Chrome)` | U12 con la API nativa | M |
+| 13. `feat(piano): entrada MIDI (Chrome)` | U12 con la API nativa y aviso donde no existe; ver [MIDI y navegadores](#midi-y-navegadores) (se puede adelantar al final de la Fase 2, después del PR 4) | M |
 | 14. (opcional) `feat(piano): distribución tracker de 2 filas` | U4.9 | S |
 | 15. (opcional) `feat(piano): etiquetas según layout` | U4.8 | S |
 
@@ -483,6 +521,11 @@ Cada PR lleva tests (Vitest y Testing Library para la lógica de estado; Playwri
 - Wake Lock:
   - Soporte: https://caniuse.com/wake-lock
   - Bug de WebKit 254545 (PWA en pantalla de inicio, corregido en iOS 18.4): https://bugs.webkit.org/show_bug.cgi?id=254545
+- MIDI y navegadores:
+  - Soporte de Web MIDI: https://caniuse.com/midi
+  - Bug de WebKit 107250 (Web MIDI): https://bugs.webkit.org/show_bug.cgi?id=107250
+  - Blink en iOS, solo prototipos (Gigazine, 2026-06-18): https://gigazine.net/gsc_news/en/20260618-blink-on-ios
+  - Bluetooth MIDI en macOS (Audio MIDI Setup): https://support.apple.com/guide/audio-midi-setup/ams33f013765/mac
 - Keyboard Map API: https://developer.mozilla.org/en-US/docs/Web/API/Keyboard/getLayoutMap
 - Convención de teclado de computadora como MIDI (A-W-S-E-D, Z/X octava, C/V velocidad): manual de Ableton Live, sección "Computer MIDI Keyboard".
 - Código auditado: `src/App.tsx`, `src/components/{Panel,HeaderToolbar,MixerConsole,HarmonyBuilder,PianoPanel,StudyTools,PracticeModes}.tsx`, `src/components/piano/{PianoKeyboard.tsx,piano.css}`, `src/hooks/{useKeyboardShortcuts,usePianoComputerKeyboard}.ts`, `src/audio/piano/notes.ts`.
