@@ -22,6 +22,8 @@ import { CUSTOM_PATTERN_ID } from '../rhythms/patternLibrary';
 import { MAX_BPM, MIN_BPM, clampBpm, isCompoundMeter } from '../rhythms/meter';
 import type { TimeSignature } from '../rhythms/meter';
 import { usePlayback } from '../state/PlaybackContext';
+import { shortcutById, withShortcut } from '../shortcuts/registry';
+import { usePianoGlobalMode } from '../shortcuts/dispatcher';
 
 export interface HeaderToolbarProps {
   isPlaying: boolean;
@@ -97,6 +99,8 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
 }) => {
   const queuedPatternId = usePlayback(s => s.queuedPatternId);
   const compound = isCompoundMeter(timeSignature);
+  const pianoKeysOwnT = usePianoGlobalMode();
+  const tapLabel = pianoKeysOwnT ? `Tap tempo (${shortcutById('transport.tap').display} no disponible con Teclado PC)` : withShortcut('Tap tempo', 'transport.tap');
 
   return (
     <Paper
@@ -301,13 +305,15 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           }}
         />
 
+        <Tooltip title={tapLabel}>
+        <span style={{ display: 'inline-flex' }}>
         <Button
           variant="contained"
           size="small"
           onClick={onTapTempo}
           disabled={tempoLocked}
           startIcon={<SpeedIcon />}
-          aria-label="Tap tempo (tecla T)"
+          aria-label={tapLabel}
           sx={{
             bgcolor: 'rgba(229, 169, 95, 0.15)',
             color: '#e5a95f',
@@ -325,6 +331,8 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
         >
           TAP
         </Button>
+        </span>
+        </Tooltip>
       </Stack>
 
       {/* Main Play / Stop Button */}
@@ -332,7 +340,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
         variant="contained"
         onClick={onTogglePlay}
         aria-pressed={isPlaying}
-        aria-label={isPlaying ? 'Detener (Espacio)' : 'Iniciar (Espacio)'}
+        aria-label={withShortcut(isPlaying ? 'Detener' : 'Iniciar', 'transport.play')}
         data-testid="play-toggle"
         className="play-button"
         startIcon={isPlaying ? <StopIcon sx={{ fontSize: 28 }} /> : <PlayArrowIcon sx={{ fontSize: 28 }} />}

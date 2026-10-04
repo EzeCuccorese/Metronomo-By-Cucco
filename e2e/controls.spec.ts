@@ -11,6 +11,16 @@ test.describe('controls', () => {
         expect(consoleErrors).toEqual([]);
     });
 
+    test('? opens the shortcut cheat sheet', async ({ page }) => {
+        await openApp(page);
+        await page.keyboard.press('Shift+Slash');
+        const dialog = page.getByRole('dialog', { name: 'Atajos de teclado' });
+        await expect(dialog).toBeVisible();
+        await expect(dialog).toContainText('Tap tempo');
+        await page.keyboard.press('Escape');
+        await expect(dialog).toBeHidden();
+    });
+
     test('tap tempo measures the tapped tempo', async ({ page }) => {
         await openApp(page);
         // Taps are fired from inside the page so test-runner latency doesn't skew the intervals.

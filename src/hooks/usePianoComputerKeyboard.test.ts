@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { usePianoComputerKeyboard, COMPUTER_KEY_VELOCITY } from './usePianoComputerKeyboard';
-import { useKeyboardShortcuts } from './useKeyboardShortcuts';
+import { useShortcutDispatcher, useShortcutHandlers } from '../shortcuts/dispatcher';
 
 const key = (type: 'keydown' | 'keyup', code: string, init: KeyboardEventInit = {}, target: EventTarget = document.body) => {
     const event = new KeyboardEvent(type, { code, bubbles: true, cancelable: true, ...init });
@@ -17,9 +17,10 @@ function setup(globalEnabled: boolean, baseMidi = 48) {
     const onNoteOn = vi.fn();
     const onNoteOff = vi.fn();
     const onOctaveShift = vi.fn();
-    const hook = renderHook((props: { globalEnabled: boolean; baseMidi: number }) => usePianoComputerKeyboard({
-        ...props, containerRef: { current: container }, onNoteOn, onNoteOff, onOctaveShift,
-    }), { initialProps: { globalEnabled, baseMidi } });
+    const hook = renderHook((props: { globalEnabled: boolean; baseMidi: number }) => {
+        useShortcutDispatcher();
+        usePianoComputerKeyboard({ ...props, containerRef: { current: container }, onNoteOn, onNoteOff, onOctaveShift });
+    }, { initialProps: { globalEnabled, baseMidi } });
     return { ...hook, container, inner, onNoteOn, onNoteOff, onOctaveShift };
 }
 
@@ -93,7 +94,7 @@ describe('usePianoComputerKeyboard', () => {
     it('takes T away from tap tempo only while it plays the piano (Space still plays/stops)', () => {
         const onTap = vi.fn();
         const onTogglePlay = vi.fn();
-        renderHook(() => useKeyboardShortcuts({ onTap, onTogglePlay, onNudgeBpm: vi.fn() }));
+        renderHook(() => useShortcutHandlers({ 'transport.tap': onTap, 'transport.play': onTogglePlay }));
         const { onNoteOn, rerender } = setup(true);
         key('keydown', 'KeyT');
         expect(onNoteOn).toHaveBeenCalledWith(54, COMPUTER_KEY_VELOCITY);

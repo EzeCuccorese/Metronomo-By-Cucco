@@ -6,6 +6,7 @@ import { createPlaybackStore } from '../../state/playbackStore';
 import type { PlaybackStore } from '../../state/playbackStore';
 import { STORAGE_PREFIX } from '../../state/storage';
 import type { Melody } from '../../audio/piano/melody';
+import { useShortcutDispatcher } from '../../shortcuts/dispatcher';
 import { melodyStatusText, velocityFromPointer } from '../piano/pianoUi';
 
 type Listener = (m: Melody, late: boolean) => void;
@@ -30,10 +31,16 @@ const makeEngine = (overrides: Partial<Record<string, unknown>> = {}) => {
 
 const TAKE: Melody = { bars: 1, subdivision: 4, notes: [{ step: 0, midi: 60, velocity: 0.9, length: 1 }] };
 
+/** The app mounts the single keyboard dispatcher at its root; the panel alone needs it too. */
+function WithDispatcher({ children }: { children: React.ReactNode }) {
+    useShortcutDispatcher();
+    return children;
+}
+
 function renderPanel(engine = makeEngine(), isPlaying = false, store: PlaybackStore = createPlaybackStore()) {
     const utils = render(
         <PlaybackContext.Provider value={store}>
-            <PianoPanel engine={engine as never} isPlaying={isPlaying} />
+            <WithDispatcher><PianoPanel engine={engine as never} isPlaying={isPlaying} /></WithDispatcher>
         </PlaybackContext.Provider>
     );
     return { ...utils, engine, store };
