@@ -220,6 +220,7 @@ function App() {
                     onVolumeChange={engine.setChannelVolume}
                     onPanChange={engine.setChannelPan}
                     onMuteChange={engine.setChannelMute}
+                    getChannelLevel={engine.getChannelLevel}
                   />
                 </Fill>
               </Grid>

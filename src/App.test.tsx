@@ -33,6 +33,7 @@ class FakeScheduler {
     setChannelVolume(...a: unknown[]) { this.record('setChannelVolume', a); }
     setChannelPan(...a: unknown[]) { this.record('setChannelPan', a); }
     setChannelMute(...a: unknown[]) { this.record('setChannelMute', a); }
+    getChannelLevel() { return 0; }
     setHarmonyProgression(...a: unknown[]) { this.record('setHarmonyProgression', a); }
     setHarmonyVolume(...a: unknown[]) { this.record('setHarmonyVolume', a); }
     setAccompanimentStyle(...a: unknown[]) { this.record('setAccompanimentStyle', a); }

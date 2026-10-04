@@ -82,7 +82,6 @@ function measureContent(img: HTMLImageElement): ContentBox {
 /** Which preloaded photo (INSTRUMENT_IMAGES key) represents each instrument; the rest are drawn procedurally. */
 const PHOTO_KEY: Partial<Record<ScaleKey, string>> = {
     clave: 'clave',
-    caja: 'caja',
     bombo_parche: 'bombo',
     hihat: 'hihat',
     snare: 'snare',
@@ -154,6 +153,60 @@ function drawCajon(ctx: CanvasRenderingContext2D, r: number) {
     ctx.beginPath();
     ctx.arc(0, h * 0.12, r * 0.2, 0, Math.PI * 2);
     ctx.fill();
+}
+
+/** Caja coplera: small double-headed frame drum, snares stretched across the head, played with one stick. */
+function drawCaja(ctx: CanvasRenderingContext2D, r: number, scale: number) {
+    const w = r * 1.15; // head diameter
+    const shell = r * 0.4;
+    const cy = -r * 0.08;
+    // shell (side of the drum)
+    const wood = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
+    wood.addColorStop(0, '#5a3419');
+    wood.addColorStop(0.5, '#b07a45');
+    wood.addColorStop(1, '#4d2c14');
+    ctx.fillStyle = wood;
+    ctx.beginPath();
+    ctx.ellipse(0, cy + shell, w / 2, r * 0.2, 0, 0, Math.PI);
+    ctx.lineTo(-w / 2, cy);
+    ctx.lineTo(w / 2, cy);
+    ctx.closePath();
+    ctx.fill();
+    // batter head
+    ctx.fillStyle = '#efe5d9';
+    ctx.beginPath();
+    ctx.ellipse(0, cy, w / 2, r * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#5d3a1e';
+    ctx.lineWidth = Math.max(1, r * 0.05);
+    ctx.stroke();
+    // snares (wires) across the head
+    ctx.strokeStyle = 'rgba(70, 48, 28, 0.85)';
+    ctx.lineWidth = Math.max(1, r * 0.025);
+    ctx.beginPath();
+    for (let i = -3; i <= 3; i++) {
+        const x = (i / 3.4) * (w / 2) * 0.82;
+        const half = Math.sqrt(Math.max(0, 1 - (x / (w / 2)) ** 2)) * r * 0.2;
+        ctx.moveTo(x, cy - half);
+        ctx.lineTo(x, cy + half);
+    }
+    ctx.stroke();
+    // single stick, raised while the instrument is hit
+    ctx.save();
+    ctx.translate(w * 0.32, cy - r * 0.02);
+    ctx.rotate(scale > 1.05 ? -0.9 : -0.45);
+    ctx.strokeStyle = '#d9b27a';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(1.5, r * 0.07);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(r * 0.62, -r * 0.02);
+    ctx.stroke();
+    ctx.fillStyle = '#d9b27a';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.07, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
 }
 
 function drawPalmas(ctx: CanvasRenderingContext2D, r: number, scale: number) {
@@ -231,6 +284,8 @@ function drawItem(
         ctx.fillRect(-r, -r, 2 * r, 2 * r);
     } else if (drum) {
         drawDrum(ctx, r, drum);
+    } else if (it.key === 'caja') {
+        drawCaja(ctx, r, scale);
     } else if (it.key === 'cajon') {
         drawCajon(ctx, r);
     } else if (it.key === 'palmas') {
@@ -277,6 +332,8 @@ export default function InteractiveInstrumentVisual({
     const layoutRef = useRef<InstrumentLayout>(computeLayout(380));
     const nameFontsRef = useRef<{ layout: InstrumentLayout | null; sizes: Map<string, number> }>({ layout: null, sizes: new Map() });
     const [canvasHeight, setCanvasHeight] = useState(() => computeLayout(380).height);
+    const [naturalHeight, setNaturalHeight] = useState(() => computeLayout(380).height);
+    const [stacked, setStacked] = useState(() => computeLayout(380).mode === 'stack');
     const contentBoxesRef = useRef<Record<string, ContentBox>>({});
     const particlesRef = useRef<SparkParticle[]>([]);
     const lastStepRef = useRef<number>(-1);
@@ -333,21 +390,27 @@ export default function InteractiveInstrumentVisual({
 
     // Layout is computed from the real container width (CSS px); backing store = CSS size x dpr.
     const lastDprRef = useRef(0);
+    const lastSizeRef = useRef({ h: 0 });
     const applySize = useCallback(() => {
         const canvas = canvasRef.current;
         const wrap = wrapRef.current;
         if (!canvas || !wrap) return;
         const width = wrap.clientWidth;
         if (!width) return;
+        // In row mode the wrapper stretches to the card's free height (the canvas is out of flow).
+        const height = wrap.clientHeight;
         const dpr = window.devicePixelRatio || 1;
         const prev = layoutRef.current;
-        if (prev.width === width && lastDprRef.current === dpr) return;
+        if (prev.width === width && lastSizeRef.current.h === height && lastDprRef.current === dpr) return;
         lastDprRef.current = dpr;
-        const layout = computeLayout(width, dpr);
+        lastSizeRef.current = { h: height };
+        const layout = computeLayout(width, height, dpr);
         layoutRef.current = layout;
         canvas.width = Math.round(layout.width * dpr);
         canvas.height = Math.round(layout.height * dpr);
         setCanvasHeight(layout.height);
+        setStacked(layout.mode === 'stack');
+        setNaturalHeight(computeLayout(width).height);
     }, []);
 
     useEffect(() => {
@@ -560,7 +623,13 @@ export default function InteractiveInstrumentVisual({
                 INSTRUMENTOS RÍTMICOS TÁCTILES (TOCA PARA PROBAR)
             </Typography>
 
-            <Box ref={wrapRef} sx={{ width: '100%', height: canvasHeight, position: 'relative' }}>
+            <Box
+                ref={wrapRef}
+                sx={stacked
+                    ? { width: '100%', height: canvasHeight, position: 'relative' }
+                    // Row mode: take the card's free height (never less than the single-row layout needs).
+                    : { width: '100%', flex: '1 1 auto', minHeight: naturalHeight, position: 'relative' }}
+            >
                 <canvas
                     ref={canvasRef}
                     onClick={handleCanvasClick}
@@ -573,6 +642,7 @@ export default function InteractiveInstrumentVisual({
                         width: '100%',
                         height: canvasHeight,
                         display: 'block',
+                        ...(stacked ? {} : { position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)' }),
                         touchAction: 'manipulation'
                     }}
                 />

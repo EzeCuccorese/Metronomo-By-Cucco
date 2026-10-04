@@ -266,6 +266,9 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
         schedulerRef.current?.setChannelMute(name, muted);
     }, [updateChannel]);
 
+    const getChannelLevel = useCallback((name: string): number =>
+        schedulerRef.current?.getChannelLevel(name) ?? 0, []);
+
     const setHarmonyProgression = useCallback((chords: string[][]) => {
         settingsRef.current.harmony = chords;
         schedulerRef.current?.setHarmonyProgression(chords);
@@ -359,6 +362,7 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
         setChannelVolume,
         setChannelPan,
         setChannelMute,
+        getChannelLevel,
         setHarmonyProgression,
         setHarmonyVolume,
         setAccompanimentStyle,
