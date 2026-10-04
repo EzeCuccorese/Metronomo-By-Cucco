@@ -62,7 +62,7 @@ vi.mock('./audio/Scheduler', async (importOriginal) => {
     const actual = await importOriginal<typeof import('./audio/Scheduler')>();
     return { ...actual, default: FakeScheduler };
 });
-vi.mock('./audio/AudioContextManager', () => ({ default: { getInstance: () => ({ resume: async () => {} }) } }));
+vi.mock('./audio/AudioContextManager', () => ({ default: { getInstance: () => ({ resume: async () => {}, onContextReplaced: () => () => {}, getOutputLatency: () => 0 }) } }));
 
 import App from './App';
 import { STORAGE_PREFIX } from './state/storage';
