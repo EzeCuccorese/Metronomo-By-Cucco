@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
  * Element fullscreen is not dependable on iPhone Safari (it only exists for video there), so the control is
@@ -9,35 +9,37 @@ export function isFullscreenSupported(): boolean {
     return !/iPhone|iPod/.test(navigator.userAgent);
 }
 
-/** Fullscreen for one element (the stage overlay). `supported` is false where the control should not appear. */
-export function useFullscreen(element: HTMLElement | null) {
+/**
+ * Enters fullscreen with the whole page. It is called synchronously from the click / key press that opens the stage:
+ * browsers only allow it while that user activation is fresh (it would expire before a dialog animation ends).
+ * A refusal is fine, the stage still works as a full-window view.
+ */
+export async function enterFullscreen(): Promise<void> {
+    if (!isFullscreenSupported() || document.fullscreenElement) return;
+    try {
+        await document.documentElement.requestFullscreen();
+    } catch {
+        // Refused (policy): nothing to do.
+    }
+}
+
+export async function exitFullscreen(): Promise<void> {
+    if (!document.fullscreenElement) return;
+    try {
+        await document.exitFullscreen();
+    } catch {
+        // Already leaving.
+    }
+}
+
+/** Fullscreen state for the stage's own button. `supported` is false where the control should not appear. */
+export function useFullscreen() {
     const supported = isFullscreenSupported();
     const [active, setActive] = useState(() => typeof document !== 'undefined' && Boolean(document.fullscreenElement));
-
     useEffect(() => {
         const onChange = () => setActive(Boolean(document.fullscreenElement));
         document.addEventListener('fullscreenchange', onChange);
         return () => document.removeEventListener('fullscreenchange', onChange);
     }, []);
-
-    const enter = useCallback(async () => {
-        if (!supported || !element || document.fullscreenElement) return;
-        try {
-            await element.requestFullscreen();
-        } catch {
-            // Refused (no user gesture, policy): the stage still works as a full-window view.
-        }
-    }, [supported, element]);
-
-    const exit = useCallback(async () => {
-        if (document.fullscreenElement) {
-            try {
-                await document.exitFullscreen();
-            } catch {
-                // Already leaving.
-            }
-        }
-    }, []);
-
-    return { supported, active, enter, exit };
+    return { supported, active, enter: enterFullscreen, exit: exitFullscreen };
 }
