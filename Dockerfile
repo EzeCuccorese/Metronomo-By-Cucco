@@ -4,9 +4,12 @@
 FROM node:26.10.0-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS builder
 WORKDIR /app
 
+# Node 26 no trae corepack: pnpm va en su propia capa (no se invalida con cada cambio de dependencias)
+RUN npm i -g pnpm@11
+
 # Copy package descriptors first to cache dependency layers
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN npm i -g pnpm@11 && pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 # Copy all source files and configuration
 COPY . .
