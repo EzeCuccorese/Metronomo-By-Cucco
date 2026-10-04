@@ -14,14 +14,28 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${PORT}`,
     trace: 'retain-on-failure',
     serviceWorkers: 'block',
-    launchOptions: {
-      args: ['--autoplay-policy=no-user-gesture-required'],
-      // Optional: reuse a locally installed Chromium instead of the one bundled with this Playwright version.
-      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
-    },
   },
   projects: [
-    { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
+    {
+      name: 'desktop-chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 900 },
+        launchOptions: {
+          args: ['--autoplay-policy=no-user-gesture-required'],
+          // Optional: reuse a locally installed Chromium instead of the one bundled with this Playwright version.
+          executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
+        },
+      },
+    },
+    {
+      // UI and PWA smoke tests on WebKit (the engine behind Safari). Playwright's WebKit is not iOS Safari and
+      // its audio output can't be probed the way Chromium's can, so the real-audio specs stay Chromium-only;
+      // audio on iOS is verified by hand on a device.
+      name: 'desktop-webkit',
+      testIgnore: ['**/audio.spec.ts', '**/piano.spec.ts'],
+      use: { ...devices['Desktop Safari'], viewport: { width: 1440, height: 900 } },
+    },
   ],
   webServer: {
     // The production bundle is what users get; `vite preview` serves it with the nginx security headers.
