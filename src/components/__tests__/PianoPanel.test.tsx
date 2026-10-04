@@ -439,6 +439,18 @@ describe('piano UI helpers', () => {
             expect(engine.setPianoSustain).toHaveBeenLastCalledWith(false);
         });
 
+        it('requests access only once when connect is triggered twice', async () => {
+            const access = new FakeMidiAccess();
+            const request = stubRequestMidiAccess(access);
+            renderPanel();
+            const button = screen.getByTestId('midi-connect');
+            fireEvent.click(button);
+            fireEvent.click(button);
+            await screen.findByTestId('midi-status');
+            expect(request).toHaveBeenCalledTimes(1);
+            expect(screen.getByRole('combobox', { name: /Teclado MIDI/ })).toHaveAttribute('aria-disabled', 'true');
+        });
+
         it('releases the held notes when the keyboard is unplugged', async () => {
             const access = new FakeMidiAccess();
             const keyboard = access.plug('k1', 'Keys');
