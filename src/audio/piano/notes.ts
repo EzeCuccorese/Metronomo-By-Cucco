@@ -5,65 +5,56 @@
  * (ES) Utilidades de notas para el piano: MIDI, frecuencias, nombres en español,
  * escalas y el mapeo del teclado de la computadora.
  */
+import * as Note from '@tonaljs/note';
+import { scaleChromas } from '../../theory/harmony';
+import type { ModeId } from '../../theory/harmony';
 
-const PITCH_CLASS: Record<string, number> = {
-    C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, Fb: 4, 'E#': 5, F: 5, 'F#': 6, Gb: 6,
-    G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11, Cb: 11, 'B#': 0,
-};
-
-const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const SPANISH_NAMES = ['Do', 'Do', 'Re', 'Re', 'Mi', 'Fa', 'Fa', 'Sol', 'Sol', 'La', 'La', 'Si'];
-const BLACK_PCS = new Set([1, 3, 6, 8, 10]);
+const SPANISH_LETTERS: Record<string, string> = { C: 'Do', D: 'Re', E: 'Mi', F: 'Fa', G: 'Sol', A: 'La', B: 'Si' };
 
 export const MIDI_A4 = 69;
 
 /** "C#4" / "Eb3" -> MIDI number (C4 = 60), or null when the name is not a note. */
 export function noteToMidi(note: string): number | null {
-    const match = /^([A-G])([#b]?)(-?\d)$/.exec(note.trim());
-    if (!match) return null;
-    const pc = PITCH_CLASS[match[1] + match[2]];
-    const octave = Number(match[3]);
-    // B#/Cb cross the octave boundary.
-    const octaveFix = match[1] + match[2] === 'B#' ? 1 : match[1] + match[2] === 'Cb' ? -1 : 0;
-    return (octave + 1 + octaveFix) * 12 + pc;
+    const trimmed = note.trim();
+    // Tonal accepts lower-case letters and octave-less names; the app only writes "C#4".
+    if (!/^[A-G]/.test(trimmed)) return null;
+    return Note.midi(trimmed);
 }
 
 /** MIDI number -> "C#4" (sharps). */
 export function midiToNoteName(midi: number): string {
-    return `${SHARP_NAMES[pitchClass(midi)]}${Math.floor(midi / 12) - 1}`;
+    return Note.fromMidiSharps(midi);
 }
 
 export const midiToFrequency = (midi: number): number => 440 * Math.pow(2, (midi - MIDI_A4) / 12);
 
 export const pitchClass = (midi: number): number => ((midi % 12) + 12) % 12;
 
-export const isBlackKey = (midi: number): boolean => BLACK_PCS.has(pitchClass(midi));
+// The 12 pitch classes parsed once by Tonal: the piano asks for these on every render.
+const PITCH_CLASSES = Array.from({ length: 12 }, (_, pc) => Note.get(Note.fromMidiSharps(60 + pc)));
+const parsed = (midi: number) => ({ ...PITCH_CLASSES[pitchClass(midi)], oct: Math.floor(midi / 12) - 1 });
+
+export const isBlackKey = (midi: number): boolean => PITCH_CLASSES[pitchClass(midi)].acc !== '';
 
 /** Visible Spanish name: "Do", "Do♯", "Sol". */
 export function spanishNoteName(midi: number): string {
-    const pc = pitchClass(midi);
-    return BLACK_PCS.has(pc) ? `${SPANISH_NAMES[pc]}♯` : SPANISH_NAMES[pc];
+    const note = PITCH_CLASSES[pitchClass(midi)];
+    return `${SPANISH_LETTERS[note.letter]}${note.acc ? '♯' : ''}`;
 }
 
 /** Screen-reader name with octave: "Do sostenido 4". */
 export function spanishNoteLabel(midi: number): string {
-    const pc = pitchClass(midi);
-    const octave = Math.floor(midi / 12) - 1;
-    return `${SPANISH_NAMES[pc]}${BLACK_PCS.has(pc) ? ' sostenido' : ''} ${octave}`;
+    const note = parsed(midi);
+    return `${SPANISH_LETTERS[note.letter]}${note.acc ? ' sostenido' : ''} ${note.oct}`;
 }
 
 // --- Scales ---
 
-export type ScaleMode = 'major' | 'minor';
-
-const SCALE_STEPS: Record<ScaleMode, number[]> = {
-    major: [0, 2, 4, 5, 7, 9, 11],
-    minor: [0, 2, 3, 5, 7, 8, 10],
-};
+export type ScaleMode = ModeId;
 
 /** Pitch classes (0-11) of a scale. */
 export function scalePitchClasses(rootPc: number, mode: ScaleMode): Set<number> {
-    return new Set(SCALE_STEPS[mode].map(s => pitchClass(rootPc + s)));
+    return new Set(scaleChromas(rootPc, mode));
 }
 
 /** Pitch classes of a chord given as note names (invalid names are ignored). */
@@ -116,9 +107,63 @@ export const COMPUTER_KEY_SEMITONES: Readonly<Record<string, number>> = {
 /** Keys that shift the playing octave. */
 export const OCTAVE_KEYS: Readonly<Record<string, -1 | 1>> = { KeyZ: -1, KeyX: 1 };
 
-/** Letter shown on the on-screen key for a semitone offset (for the hint labels). */
-export function computerKeyLabel(semitone: number): string | null {
-    const entry = Object.entries(COMPUTER_KEY_SEMITONES).find(([, s]) => s === semitone);
-    if (!entry) return null;
-    return entry[0] === 'Semicolon' ? 'Ñ' : entry[0].replace('Key', '');
+/**
+ * Computer-keyboard layouts. "Ableton": one row of white keys (A S D F…) with the black keys above.
+ * "Tracker" (FastTracker / qwerty-hancock style): two rows, Z S X D C V… for the low octave and
+ * Q 2 W 3 E R… for the one above, which covers all 25 visible keys. Octave and velocity move to
+ * other keys there because Z / X / C / V are notes.
+ */
+export type PianoLayout = 'ableton' | 'tracker';
+
+export interface ComputerLayout {
+    /** KeyboardEvent.code -> semitones above the lowest visible C. */
+    notes: Readonly<Record<string, number>>;
+    octave: { down: string; up: string };
+    velocity: { down: string; up: string };
 }
+
+export const COMPUTER_LAYOUTS: Readonly<Record<PianoLayout, ComputerLayout>> = {
+    ableton: {
+        notes: COMPUTER_KEY_SEMITONES,
+        octave: { down: 'KeyZ', up: 'KeyX' },
+        velocity: { down: 'KeyC', up: 'KeyV' },
+    },
+    tracker: {
+        notes: {
+            KeyZ: 0, KeyS: 1, KeyX: 2, KeyD: 3, KeyC: 4, KeyV: 5, KeyG: 6, KeyB: 7, KeyH: 8, KeyN: 9, KeyJ: 10, KeyM: 11,
+            KeyQ: 12, Digit2: 13, KeyW: 14, Digit3: 15, KeyE: 16, KeyR: 17, Digit5: 18, KeyT: 19, Digit6: 20, KeyY: 21, Digit7: 22, KeyU: 23, KeyI: 24,
+        },
+        octave: { down: 'Minus', up: 'Equal' },
+        velocity: { down: 'PageDown', up: 'PageUp' },
+    },
+};
+
+/** Label a key shows when the browser cannot tell us the real layout (QWERTY, Spanish Ñ). */
+export function fallbackKeyLabel(code: string): string {
+    if (code.startsWith('Key')) return code.slice(3);
+    if (code.startsWith('Digit')) return code.slice(5);
+    const named: Record<string, string> = { Semicolon: 'Ñ', Comma: ',', Period: '.', Slash: '/', Minus: '-', Equal: '=', PageUp: 'RePág', PageDown: 'AvPág' };
+    return named[code] ?? code;
+}
+
+const SEMITONE_TO_CODE: Readonly<Record<PianoLayout, ReadonlyMap<number, string>>> = {
+    ableton: new Map(Object.entries(COMPUTER_LAYOUTS.ableton.notes).map(([code, semitone]) => [semitone, code])),
+    tracker: new Map(Object.entries(COMPUTER_LAYOUTS.tracker.notes).map(([code, semitone]) => [semitone, code])),
+};
+
+/** Key of a layout that plays a semitone offset, if any. */
+export const computerKeyCode = (semitone: number, layout: PianoLayout = 'ableton'): string | null =>
+    SEMITONE_TO_CODE[layout].get(semitone) ?? null;
+
+/** Letter shown on the on-screen key for a semitone offset (for the hint labels). */
+export function computerKeyLabel(semitone: number, layout: PianoLayout = 'ableton'): string | null {
+    const code = computerKeyCode(semitone, layout);
+    return code ? fallbackKeyLabel(code) : null;
+}
+
+/** Highest semitone offset a layout reaches. */
+const LAYOUT_SPAN: Readonly<Record<PianoLayout, number>> = {
+    ableton: Math.max(...Object.values(COMPUTER_LAYOUTS.ableton.notes)),
+    tracker: Math.max(...Object.values(COMPUTER_LAYOUTS.tracker.notes)),
+};
+export const layoutSpan = (layout: PianoLayout): number => LAYOUT_SPAN[layout];

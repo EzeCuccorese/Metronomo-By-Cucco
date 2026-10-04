@@ -311,6 +311,10 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
         schedulerRef.current?.pianoNoteOff(midi);
     }, []);
 
+    const setPianoSustain = useCallback((down: boolean) => {
+        schedulerRef.current?.setPianoSustain(down);
+    }, []);
+
     const releaseAllPianoKeys = useCallback(() => {
         schedulerRef.current?.releaseAllPianoKeys();
     }, []);
@@ -373,6 +377,7 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
         pianoStatus,
         pianoNoteOn,
         pianoNoteOff,
+        setPianoSustain,
         releaseAllPianoKeys,
         preloadPiano,
         setMelody,

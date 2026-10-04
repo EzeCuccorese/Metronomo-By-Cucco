@@ -3,6 +3,7 @@ import type { AccompanimentStyle } from '../audio/PolyphonicSynth';
 import { isMelody } from '../audio/piano/melody';
 import type { Melody } from '../audio/piano/melody';
 import { usePersistentState } from './usePersistentState';
+import { MODES } from '../theory/harmony';
 import { isBoolean, isNumber, isPlainObject, isString } from '../state/storage';
 
 /**
@@ -34,7 +35,6 @@ const isSequence = (v: unknown): v is ChordStep[] => Array.isArray(v) && v.every
 const isVolume = (v: unknown): v is number => isNumber(v) && v >= 0 && v <= 1;
 const isStyle = (v: unknown): v is AccompanimentStyle => isString(v);
 
-const MODE_NAMES: Record<string, string> = { major: 'mayor', minor: 'menor', dorian: 'dórico', mixolydian: 'mixolidio' };
 
 /** Pushes the chord progression, style and volume to the engine; returns a one-line summary for the folded card. */
 export function useHarmonySync({ setHarmonyProgression, setHarmonyVolume, setAccompanimentStyle }: HarmonyEngine): string {
@@ -56,7 +56,7 @@ export function useHarmonySync({ setHarmonyProgression, setHarmonyVolume, setAcc
     }, [sequence, setHarmonyProgression]);
 
     const degrees = sequence.map(step => step.degree).join('–');
-    return `${rootKey} ${MODE_NAMES[mode] ?? mode} · ${degrees || 'sin acordes'}`;
+    return `${rootKey} ${MODES.find(m => m.id === mode)?.short ?? mode} · ${degrees || 'sin acordes'}`;
 }
 
 export interface MelodyEngine {
