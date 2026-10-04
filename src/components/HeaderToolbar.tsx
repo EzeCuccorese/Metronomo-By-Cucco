@@ -278,7 +278,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           min={MIN_BPM}
           max={MAX_BPM}
           disabled={tempoLocked}
-          onChange={(_, val) => onBpmChange(val as number)}
+          onChange={(_, val) => onBpmChange(val)}
           aria-label="Tempo"
           sx={{
             minWidth: 80,

@@ -44,7 +44,7 @@ class AudioContextManager {
      */
     public async resume(): Promise<void> {
         // iOS Safari reports 'interrupted' after calls or lock screen; it also needs resume().
-        const state = this.audioContext.state as AudioContextState | 'interrupted';
+        const state = this.audioContext.state;
         if (state === 'suspended' || state === 'interrupted') {
             await this.audioContext.resume();
         }

@@ -9,7 +9,7 @@ export interface TrailPoint extends Point {
     alpha: number;
 }
 
-export type CountingMode = 'numbers' | '1&2&' | '1e&a' | 'triplet_1la2la' | 'mnemonics_chacarera' | string | undefined;
+export type CountingMode = string | undefined;
 
 /** Syllable shown under the beat dots for a step ('' when the step is not counted). */
 export function getCountingText(
