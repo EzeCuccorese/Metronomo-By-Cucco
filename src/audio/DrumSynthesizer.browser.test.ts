@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import DrumSynthesizer from './DrumSynthesizer';
-import { frames, render, createOfflineContext } from '../test/browser/audioHarness';
+import { frames, render, createOfflineContext, restoreAudioContext } from '../test/browser/audioHarness';
 
 describe('DrumSynthesizer (real Web Audio, offline render)', () => {
-    afterEach(() => vi.unstubAllGlobals());
+    afterEach(restoreAudioContext);
 
     async function renderHits(hits: Array<[instrument: string, time: number, velocity: number]>, setup: (s: DrumSynthesizer) => void = () => {}) {
         const ctx = createOfflineContext(1.5);

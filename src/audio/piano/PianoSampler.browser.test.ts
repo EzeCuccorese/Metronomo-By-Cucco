@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { PianoSampler } from './PianoSampler';
-import { frames, render, createOfflineContext } from '../../test/browser/audioHarness';
+import { frames, render, createOfflineContext, restoreAudioContext } from '../../test/browser/audioHarness';
 
 describe('PianoSampler (real Web Audio, offline render)', () => {
-    afterEach(() => vi.unstubAllGlobals());
+    afterEach(restoreAudioContext);
 
     async function renderNotes(notes: Array<{ midi: number; time: number; velocity: number; duration: number }>) {
         const ctx = createOfflineContext(3);

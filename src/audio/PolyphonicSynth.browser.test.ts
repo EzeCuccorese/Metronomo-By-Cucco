@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { PolyphonicSynth } from './PolyphonicSynth';
-import { frames, render, createOfflineContext } from '../test/browser/audioHarness';
+import { frames, render, createOfflineContext, restoreAudioContext } from '../test/browser/audioHarness';
 
 const C_MAJOR = ['C4', 'E4', 'G4'];
 
 describe('PolyphonicSynth (real Web Audio, offline render)', () => {
-    afterEach(() => vi.unstubAllGlobals());
+    afterEach(restoreAudioContext);
 
     async function renderChord(style: Parameters<PolyphonicSynth['playChord']>[3], duration: number, beats = 2) {
         const ctx = createOfflineContext(3);
