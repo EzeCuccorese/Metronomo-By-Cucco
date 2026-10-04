@@ -29,6 +29,8 @@ test.describe('stage mode', () => {
         await expect(page.getByTestId('stage-bpm')).toHaveText(String(before + 1));
         await page.getByTestId('stage-play-toggle').click();
         await page.keyboard.press('Escape');
+        // Where fullscreen is on, the browser spends the first Esc leaving it; the second one closes the stage.
+        if (await page.getByTestId('stage-mode').count() > 0) await page.keyboard.press('Escape');
         await expect(page.getByTestId('stage-mode')).toHaveCount(0);
         await page.getByTestId('view-menu-button').click();
         await page.getByTestId('stage-menu-item').click();
