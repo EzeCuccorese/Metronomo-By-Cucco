@@ -241,7 +241,7 @@ Se implementa con `position: sticky; top: 0` en una versión compacta del encabe
 | `Esc` | Salir del modo escenario, del modo piano global o de un diálogo |
 | `1`…`5` | Presets de vista (solo con el modo piano apagado: los números quedan libres para un mapeo tracker futuro) |
 | `M` | Mute del click |
-| `[` / `]` | Ritmo anterior / siguiente |
+| `,` / `.` (`Comma` / `Period`) | Ritmo anterior / siguiente. No se usan `[` / `]` porque en el teclado español requieren AltGr y esas posiciones físicas son teclas muertas. |
 
 - Mantener la regla de `isTextEditing` / `ownsKeys`, que hoy está bien resuelta.
 
