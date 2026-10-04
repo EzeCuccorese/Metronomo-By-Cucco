@@ -23,6 +23,7 @@ class MockScheduler {
     setChannelVolume = vi.fn();
     setChannelPan = vi.fn();
     setChannelMute = vi.fn();
+    getChannelLevel = vi.fn(() => 0);
     setHarmonyProgression = vi.fn();
     setHarmonyVolume = vi.fn();
     setAccompanimentStyle = vi.fn();
@@ -49,7 +50,9 @@ class MockScheduler {
 
 vi.mock('../audio/Scheduler', () => ({ default: class { constructor() { return new MockScheduler(); } } }));
 const resume = vi.fn(async () => {});
-vi.mock('../audio/AudioContextManager', () => ({ default: { getInstance: () => ({ resume }) } }));
+let replaceContext: (() => void) | null = null;
+const onContextReplaced = vi.fn((listener: () => void) => { replaceContext = listener; return () => { replaceContext = null; }; });
+vi.mock('../audio/AudioContextManager', () => ({ default: { getInstance: () => ({ resume, onContextReplaced }) } }));
 
 import { useMetronomeEngine } from './useMetronomeEngine';
 
@@ -176,6 +179,100 @@ describe('useMetronomeEngine', () => {
 
         await act(async () => { await result.current.start(); }); // next attempt works
         expect(scheduler().start).toHaveBeenCalledTimes(1);
+    });
+
+    describe('AudioContext replacement', () => {
+        it('rebuilds the scheduler with every setting and keeps playing', async () => {
+            const { result, scheduler } = setup();
+            act(() => {
+                result.current.setChannelVolume('kick', 0.4);
+                result.current.setChannelMute('click', true);
+                result.current.setHarmonyProgression([['C4']]);
+            });
+            await act(async () => { await result.current.start(); });
+            const b = pattern('b');
+            act(() => result.current.queuePattern(b));
+            const old = scheduler();
+
+            act(() => replaceContext!());
+
+            const rebuilt = scheduler();
+            expect(rebuilt).not.toBe(old);
+            expect(old.dispose).toHaveBeenCalled();
+            expect(rebuilt.setChannelVolume).toHaveBeenCalledWith('kick', 0.4);
+            expect(rebuilt.setChannelMute).toHaveBeenCalledWith('click', true);
+            expect(rebuilt.setHarmonyProgression).toHaveBeenCalledWith([['C4']]);
+            expect(rebuilt.setTempo).toHaveBeenCalledWith(120);
+            expect(rebuilt.current?.id).toBe('a');
+            expect(rebuilt.start).toHaveBeenCalledTimes(1);
+            expect(rebuilt.queued?.id).toBe('b'); // the queued switch survives
+            expect(result.current.isPlaying).toBe(true);
+
+            act(() => result.current.stop());
+            expect(rebuilt.stop).toHaveBeenCalled();
+            expect(result.current.isPlaying).toBe(false);
+        });
+
+        it('rebuilds without starting when stopped', () => {
+            const { result, scheduler } = setup();
+            const old = scheduler();
+            act(() => replaceContext!());
+            expect(scheduler()).not.toBe(old);
+            expect(scheduler().start).not.toHaveBeenCalled();
+            expect(result.current.isPlaying).toBe(false);
+        });
+
+        it('a replacement during the start finishes the start on the new scheduler', async () => {
+            const { result, scheduler } = setup();
+            let release!: () => void;
+            scheduler().ready = new Promise<void>(r => { release = r; });
+            const old = scheduler();
+
+            let starting!: Promise<void>;
+            act(() => { starting = result.current.start(); });
+            await act(async () => { await Promise.resolve(); });
+            act(() => replaceContext!());
+            await act(async () => { release(); await starting; });
+
+            expect(old.start).not.toHaveBeenCalled();
+            expect(scheduler()).not.toBe(old);
+            expect(scheduler().start).toHaveBeenCalledTimes(1);
+            expect(result.current.isPlaying).toBe(true);
+        });
+
+        it('a replacement while the start awaits resume never starts the old scheduler', async () => {
+            const { result, scheduler } = setup();
+            const old = scheduler();
+            resume.mockImplementationOnce(async () => { replaceContext!(); }); // recreated by the resume timeout
+            await act(async () => { await result.current.start(); });
+            expect(old.start).not.toHaveBeenCalled();
+            expect(scheduler()).not.toBe(old);
+            expect(scheduler().start).toHaveBeenCalledTimes(1);
+            expect(result.current.isPlaying).toBe(true);
+        });
+
+        it('a stop pressed during the start wins over the rebuild', async () => {
+            const { result, scheduler } = setup();
+            let release!: () => void;
+            scheduler().ready = new Promise<void>(r => { release = r; });
+
+            let starting!: Promise<void>;
+            act(() => { starting = result.current.start(); });
+            await act(async () => { await Promise.resolve(); });
+            act(() => result.current.stop());
+            act(() => replaceContext!());
+            await act(async () => { release(); await starting; });
+
+            expect(scheduler().start).not.toHaveBeenCalled();
+            expect(result.current.isPlaying).toBe(false);
+        });
+
+        it('unsubscribes on unmount', () => {
+            const { unmount } = setup();
+            expect(replaceContext).not.toBeNull();
+            unmount();
+            expect(replaceContext).toBeNull();
+        });
     });
 
     describe('piano', () => {

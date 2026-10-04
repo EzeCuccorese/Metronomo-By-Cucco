@@ -94,7 +94,10 @@ export const NAME_H = 12;
 const BOTTOM_PAD = 12;
 const FIXED_H = TOP_PAD + LABEL_H + LABEL_GAP + NAME_GAP + NAME_H + BOTTOM_PAD;
 const PAD_FILL = 0.86; // pad diameter relative to its slot
-const MAX_PAD_ROW = 96;
+const MAX_PAD_ROW = 120;
+const ROW_GAP = 10;
+/** A 2-row arrangement must give pads at least this much bigger than 1 row to be chosen. */
+export const TWO_ROW_GAIN = 1.15;
 const MAX_PAD_STACK = 72;
 /** Lower bound so a collapsed/tiny container never yields a non-positive pad radius (ctx.arc would throw). */
 const MIN_PAD = 12;
@@ -133,6 +136,8 @@ export interface InstrumentLayout {
     mode: LayoutMode;
     sections: LayoutSection[];
     items: LayoutItem[];
+    /** Rows of pads per section (1 or 2 in row mode, 1 per stacked section otherwise). */
+    rows: number;
 }
 
 /** Rough text width for a letter-spaced uppercase label (renderer uses real measureText). */
@@ -141,38 +146,63 @@ export const estimateLabelWidth = (text: string, fontSize: number = LABEL_FONT):
 
 const snap = (v: number, dpr: number): number => Math.round(v * dpr) / dpr;
 
-/** Pure layout for a canvas of CSS `width`. Height is derived (the canvas defines its own height). */
-export function computeLayout(width: number, dpr: number = 1): InstrumentLayout {
+/**
+ * Pure layout for a canvas of CSS `width`. `height` is the vertical space the container offers
+ * (0/unknown = no constraint). In row mode the layout may use two rows of pads per section when
+ * that yields noticeably bigger pads inside `height`; the resulting `layout.height` never exceeds
+ * `height` once the single-row layout fits (the container reserves at least that much).
+ */
+export function computeLayout(width: number, height: number = 0, dpr: number = 1): InstrumentLayout {
     const w = Math.max(1, width);
+    const avail = height > 0 ? height : 0;
     const d = dpr > 0 ? dpr : 1;
     const mode: LayoutMode = w < STACK_BREAKPOINT ? 'stack' : 'row';
     const counts = SECTION_DEFS.map(s => ITEM_DEFS.filter(i => i.section === s.id).length);
     const maxCount = Math.max(...counts);
-    const totalCount = counts.reduce((a, b) => a + b, 0);
+
+    /** Pad diameter, rows of pads per section and resulting content height for one arrangement. */
+    const arrange = (rows: number) => {
+        const cols = counts.map(c => Math.ceil(c / rows));
+        const totalCols = cols.reduce((a, b) => a + b, 0);
+        const slot = (w - 2 * SEC_PAD_X * SECTION_DEFS.length - SEC_GAP * (SECTION_DEFS.length - 1)) / totalCols;
+        const chrome = TOP_PAD + LABEL_H + LABEL_GAP + BOTTOM_PAD + rows * (NAME_GAP + NAME_H) + (rows - 1) * ROW_GAP;
+        let pad = Math.min(MAX_PAD_ROW, slot * PAD_FILL);
+        if (avail > 0) pad = Math.min(pad, (avail - chrome) / rows);
+        pad = Math.max(MIN_PAD, pad);
+        return { rows, cols, slot, pad, h: chrome + rows * pad };
+    };
 
     let padD: number;
-    let height: number;
+    let height_: number;
+    let rows = 1;
+    let colsPerSection = counts;
+    let slotW = 0;
     const sectionRects: Rect[] = [];
 
     if (mode === 'row') {
-        const slot = (w - 2 * SEC_PAD_X * SECTION_DEFS.length - SEC_GAP * (SECTION_DEFS.length - 1)) / totalCount;
-        padD = Math.max(MIN_PAD, Math.min(MAX_PAD_ROW, slot * PAD_FILL));
-        height = padD + FIXED_H;
+        const one = arrange(1);
+        const two = arrange(2);
+        const best = avail > 0 && two.pad > one.pad * TWO_ROW_GAIN ? two : one;
+        rows = best.rows;
+        colsPerSection = best.cols;
+        slotW = best.slot;
+        padD = best.pad;
+        height_ = best.h;
         let x = 0;
-        counts.forEach((c, i) => {
-            const sw = c * slot + 2 * SEC_PAD_X;
-            sectionRects.push({ x, y: 0, w: sw, h: height });
-            x += sw + (i < counts.length - 1 ? SEC_GAP : 0);
+        best.cols.forEach((c, i) => {
+            const sw = c * best.slot + 2 * SEC_PAD_X;
+            sectionRects.push({ x, y: 0, w: sw, h: height_ });
+            x += sw + (i < best.cols.length - 1 ? SEC_GAP : 0);
         });
     } else {
         const slot = (w - 2 * SEC_PAD_X) / maxCount;
         padD = Math.max(MIN_PAD, Math.min(MAX_PAD_STACK, slot * PAD_FILL));
         const sh = padD + FIXED_H;
         counts.forEach((_, i) => sectionRects.push({ x: 0, y: i * (sh + STACK_GAP), w, h: sh }));
-        height = sh * counts.length + STACK_GAP * (counts.length - 1);
+        height_ = sh * counts.length + STACK_GAP * (counts.length - 1);
     }
     padD = snap(padD, d);
-    height = Math.ceil(height * d) / d;
+    height_ = Math.ceil(height_ * d) / d;
 
     const r = padD / 2;
     const sections: LayoutSection[] = SECTION_DEFS.map((def, i) => {
@@ -190,11 +220,16 @@ export function computeLayout(width: number, dpr: number = 1): InstrumentLayout 
     SECTION_DEFS.forEach((def, si) => {
         const rect = sectionRects[si];
         const defs = ITEM_DEFS.filter(i => i.section === def.id);
-        const innerW = rect.w - 2 * SEC_PAD_X;
-        const slotW = innerW / defs.length;
-        const cy = rect.y + TOP_PAD + LABEL_H + LABEL_GAP + r;
+        const cols = mode === 'row' ? colsPerSection[si] : defs.length;
+        const sw = mode === 'row' ? slotW : (rect.w - 2 * SEC_PAD_X) / defs.length;
+        const rowH = padD + NAME_GAP + NAME_H + ROW_GAP;
+        // Rows of a (possibly 2-row) section are centered vertically on the section's pad area.
         defs.forEach((it, k) => {
-            const cx = rect.x + SEC_PAD_X + slotW * (k + 0.5);
+            const row = Math.floor(k / cols);
+            const inRow = Math.min(cols, defs.length - row * cols);
+            const col = k - row * cols;
+            const cx = rect.x + rect.w / 2 + (col - (inRow - 1) / 2) * sw;
+            const cy = rect.y + TOP_PAD + LABEL_H + LABEL_GAP + r + row * rowH;
             items.push({
                 ...it,
                 cx,
@@ -203,12 +238,12 @@ export function computeLayout(width: number, dpr: number = 1): InstrumentLayout 
                 hitR: Math.max(r, MIN_HIT / 2),
                 nameX: cx,
                 nameY: cy + r + NAME_GAP,
-                nameMaxW: slotW - 4,
+                nameMaxW: sw - 4,
             });
         });
     });
 
-    return { width: w, height, mode, sections, items };
+    return { width: w, height: height_, mode, sections, items, rows };
 }
 
 export const itemByKey = (layout: InstrumentLayout, key: ScaleKey): LayoutItem | undefined =>

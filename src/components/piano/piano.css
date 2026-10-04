@@ -13,7 +13,7 @@
   overscroll-behavior-x: contain;
 }
 
-@media (min-width: 1000px) {
+@media (min-width: 900px) {
   .piano-scroll {
     --piano-white-w: 52px;
     --piano-black-w: 32px;

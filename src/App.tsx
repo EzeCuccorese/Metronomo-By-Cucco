@@ -3,6 +3,7 @@ import { Box, Grid } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import './App.css';
+import './adaptive.css';
 
 import type { FormGenre, TrainerConfig } from './audio/Scheduler';
 import { FORM_GENRES } from './audio/Scheduler';
@@ -31,11 +32,14 @@ import { darkTheme } from './theme/darkTheme';
 import { HeaderToolbar } from './components/HeaderToolbar';
 import { Fill, Panel } from './components/Panel';
 import type { SxProps, Theme } from '@mui/material/styles';
+import { PwaUpdater } from './pwa/PwaUpdater';
 import { GenreSelectorModal } from './components/GenreSelectorModal';
 import { useMetronomeEngine } from './hooks/useMetronomeEngine';
 import { usePersistentState } from './hooks/usePersistentState';
 import { useTapTempo } from './hooks/useTapTempo';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useWakeLock } from './hooks/useWakeLock';
+import { BluetoothNotice } from './components/BluetoothNotice';
 import { PlaybackContext } from './state/PlaybackContext';
 import { isBoolean, isNumber, isPlainObject, isString } from './state/storage';
 
@@ -92,6 +96,9 @@ function App() {
   });
   const { isPlaying, toggle, queuePattern, configureTrainer, setSilenceMode, configureFormas } = engine;
 
+  // Keep the screen on while the metronome sounds (the system would otherwise lock the phone mid-practice).
+  useWakeLock(isPlaying);
+
   useEffect(() => { configureTrainer(trainer); }, [trainer, configureTrainer]);
   useEffect(() => { setSilenceMode(silence.active, silence.chance); }, [silence, setSilenceMode]);
   useEffect(() => { configureFormas(formas.enabled, formas.genre, formas.introBars); }, [formas, configureFormas]);
@@ -146,7 +153,7 @@ function App() {
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
       <PlaybackContext.Provider value={engine.store}>
-        <Box component="main" sx={{ minHeight: '100dvh', width: '100%', display: 'flex', flexDirection: 'column', p: { xs: 0.5, sm: 1, md: 2 }, bgcolor: '#070605', overflowX: 'hidden', alignItems: 'center', boxSizing: 'border-box' }}>
+        <Box component="main" className="app-shell" sx={{ minHeight: '100dvh', width: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#070605', overflowX: 'hidden', alignItems: 'center', boxSizing: 'border-box' }}>
 
           <Box className="studio-chassis console-wood-edge" sx={{ width: '100%', maxWidth: '1440px', display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 2 }, p: { xs: 1, md: 2 }, boxSizing: 'border-box' }}>
 
@@ -164,11 +171,13 @@ function App() {
               tempoLocked={tempoLocked}
             />
 
+            <BluetoothNotice isPlaying={isPlaying} />
+
             {/* Rows of an aligned 12-column grid; every cell stretches to the row height. */}
             <Grid container spacing={{ xs: 1.5, md: 2 }} sx={{ width: '100%' }}>
 
               {/* Row 1: pulse (primary) + instruments */}
-              <Grid size={{ xs: 12, md: 5, lg: 4 }}>
+              <Grid size={{ xs: 12, md: 5, lg: 4 }} className="area-pulse">
                 <Panel title="Pulso">
                   <ConductorVisual
                     pattern={currentPattern}
@@ -213,6 +222,7 @@ function App() {
                     onVolumeChange={engine.setChannelVolume}
                     onPanChange={engine.setChannelPan}
                     onMuteChange={engine.setChannelMute}
+                    getChannelLevel={engine.getChannelLevel}
                   />
                 </Fill>
               </Grid>
@@ -253,6 +263,7 @@ function App() {
           </Box>
         </Box>
 
+        <PwaUpdater isPlaying={isPlaying} />
         <GenreSelectorModal
           open={libraryOpen}
           onClose={() => setLibraryOpen(false)}
