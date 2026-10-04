@@ -196,7 +196,7 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
             }
             // The user may have pressed stop (or the component unmounted) while we were waiting.
             // A context replacement during the wait rebuilds and restarts the scheduler on its own.
-            if (stopRequestedRef.current || isPlayingRef.current || !schedulerRef.current || schedulerRef.current !== scheduler) return;
+            if (stopRequestedRef.current || isPlayingRef.current || restartAfterRebuildRef.current || !schedulerRef.current || schedulerRef.current !== scheduler) return;
             scheduler.resetPracticeStats();
             scheduler.start();
             store.update({ step: 0, totalBars: 0, trainerBar: 0, formState: null });

@@ -308,6 +308,24 @@ describe('AudioContextManager', () => {
             expect(contexts).toHaveLength(4);
         });
 
+        it('a context still muted after the last recreation waits for a gesture', async () => {
+            const manager = await load();
+            const listener = vi.fn();
+            manager.onContextReplaced(listener);
+            await manager.resume();
+            await vi.advanceTimersByTimeAsync(500); // frozen -> recreation 1
+            await vi.advanceTimersByTimeAsync(500); // frozen -> recreation 2
+            expect(contexts).toHaveLength(3);
+            await vi.advanceTimersByTimeAsync(500); // frozen again: out of attempts
+            expect(contexts).toHaveLength(3);
+            expect(manager.pendingResume).toBe(true);
+
+            document.dispatchEvent(new Event('pointerdown'));
+            await vi.advanceTimersByTimeAsync(0);
+            expect(contexts).toHaveLength(4); // the gesture recreates the muted context
+            expect(listener).toHaveBeenCalledTimes(3);
+        });
+
         it('ignores a late result from a replaced context, and isolates failing listeners', async () => {
             const manager = await load();
             const error = vi.spyOn(console, 'error').mockImplementation(() => {});

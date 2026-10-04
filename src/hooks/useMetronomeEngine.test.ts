@@ -239,6 +239,17 @@ describe('useMetronomeEngine', () => {
             expect(result.current.isPlaying).toBe(true);
         });
 
+        it('a replacement while the start awaits resume never starts the old scheduler', async () => {
+            const { result, scheduler } = setup();
+            const old = scheduler();
+            resume.mockImplementationOnce(async () => { replaceContext!(); }); // recreated by the resume timeout
+            await act(async () => { await result.current.start(); });
+            expect(old.start).not.toHaveBeenCalled();
+            expect(scheduler()).not.toBe(old);
+            expect(scheduler().start).toHaveBeenCalledTimes(1);
+            expect(result.current.isPlaying).toBe(true);
+        });
+
         it('a stop pressed during the start wins over the rebuild', async () => {
             const { result, scheduler } = setup();
             let release!: () => void;

@@ -46,6 +46,7 @@ class AudioContextManager {
     private wantsAudio = false;
     private recreations = 0;
     private muteCheck: ReturnType<typeof setTimeout> | undefined;
+    private mutedPending = false;
 
     /** A resume failed (no user activation, call in progress...) and waits for the next gesture. */
     public pendingResume = false;
@@ -169,8 +170,10 @@ class AudioContextManager {
         if (this.wantsAudio && isPageVisible() && needsResume(this.audioContext)) this.autoResume();
     };
 
-    private markPending() {
+    /** @param muted the context runs but stays silent: the gesture must recreate it, not resume it. */
+    private markPending(muted = false) {
         this.pendingResume = true;
+        this.mutedPending ||= muted;
         if (this.gestureRetry) return;
         const controller = new AbortController();
         this.gestureRetry = controller;
@@ -178,7 +181,10 @@ class AudioContextManager {
             controller.abort(); // removes the other listener too
             if (this.gestureRetry === controller) this.gestureRetry = null;
             this.recreations = 0; // a real gesture deserves a fresh attempt
-            this.autoResume();
+            const muted = this.mutedPending;
+            this.mutedPending = false;
+            if (muted && !needsResume(this.audioContext)) this.recreate();
+            else this.autoResume();
         };
         const options = { once: true, capture: true, signal: controller.signal };
         document.addEventListener('pointerdown', retry, options);
@@ -204,6 +210,9 @@ class AudioContextManager {
             } else if (this.recreations < MAX_RECREATIONS) {
                 // 'running' but the audio clock is frozen: the muted context of WebKit bug 291892.
                 this.recreate();
+            } else {
+                // Out of automatic attempts: the next tap or key press starts a fresh round.
+                this.markPending(true);
             }
         }, MUTE_CHECK_MS);
     }
