@@ -31,7 +31,11 @@ export function useLayout(): LayoutApi {
     const first = useRef(layout);
     useEffect(() => {
         // Only the very first mount decides; later changes are saved by usePersistentState.
-        if (window.localStorage.getItem(STORAGE_PREFIX + LAYOUT_KEY) === null) writeStored(LAYOUT_KEY, first.current);
+        try {
+            if (window.localStorage.getItem(STORAGE_PREFIX + LAYOUT_KEY) === null) writeStored(LAYOUT_KEY, first.current);
+        } catch {
+            // Storage unavailable: the choice just is not remembered.
+        }
     }, []);
 
     const setPanelState = useCallback((id: PanelId, state: PanelState) => {
