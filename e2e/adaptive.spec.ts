@@ -71,6 +71,8 @@ test.describe('adaptive layout', () => {
             root.setProperty('--safe-bottom', `${i.bottom}px`);
             root.setProperty('--safe-left', `${i.left}px`);
         }, inset);
+        // The shell's padding transitions when the variables change: measure the settled layout.
+        await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
         const viewport = page.viewportSize()!;
         const header = (await page.locator('header.app-header').boundingBox())!;
         expect(header.y).toBeGreaterThanOrEqual(inset.top);

@@ -14,11 +14,23 @@ test.describe('visual regression: first screen', () => {
     test('first screen', async ({ page }) => {
         // Fixed time: nothing on the first screen should depend on the clock, but pin it anyway.
         await page.clock.install({ time: new Date('2026-01-01T12:00:00Z') });
-        await openApp(page);
+        // Dismiss the Bluetooth notice so the snapshots test the layout, not the notice.
+        await page.addInitScript(() => localStorage.setItem('metronomo:v1:bluetoothNoticeDismissed', 'true'));
+        await openApp(page, { keepStorage: true });
+        await expect(page.getByTestId('bluetooth-notice')).toHaveCount(0);
         await page.evaluate(() => document.fonts.ready);
         // Let the instrument photos decode and the layout settle.
         await page.waitForFunction(() => [...document.images].every(img => img.complete));
         await page.waitForTimeout(300);
         await expect(page).toHaveScreenshot('first-screen.png');
+    });
+
+    test('bluetooth notice renders and is dismissible', async ({ page }, testInfo) => {
+        test.skip(testInfo.project.name.includes('landscape') && testInfo.project.name.startsWith('iphone'), 'Hidden in phone landscape');
+        await openApp(page);
+        const notice = page.getByTestId('bluetooth-notice');
+        await expect(notice).toBeVisible();
+        await page.getByRole('button', { name: 'Cerrar aviso de Bluetooth' }).click();
+        await expect(notice).toHaveCount(0);
     });
 });
