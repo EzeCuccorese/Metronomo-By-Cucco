@@ -2,7 +2,7 @@ html, body {
   margin: 0;
   padding: 0;
   width: 100%;
-  min-height: 100vh;
+  min-height: 100svh;
   overflow-x: hidden;
   overflow-y: auto;
   background-color: #070605;
@@ -11,7 +11,7 @@ html, body {
 
 #root {
   width: 100%;
-  min-height: 100vh;
+  min-height: 100svh;
   margin: 0;
   padding: 0;
   overflow-x: hidden;
@@ -274,8 +274,11 @@ html, body {
 
 .mixer-console-rack { padding: 8px; }
 
-/* Phones and small tablets: one horizontally scrollable row that scrolls inside its own container. */
-@media (max-width: 899px) {
+/* The mixer adapts to its own width, not the window's (tablets keep a grid with room to spare). */
+.mixer-console-rack { container: mixer / inline-size; }
+
+/* Narrow rack (phones): one horizontally scrollable row that scrolls inside its own container. */
+@container mixer (max-width: 559px) {
   .mixer-channels-container {
     grid-template-columns: none;
     grid-auto-flow: column;
@@ -286,7 +289,7 @@ html, body {
     overscroll-behavior-x: contain;
   }
   .mixer-channel-strip { scroll-snap-align: start; }
-  .mute-button { min-height: 40px; min-width: 52px; font-size: 0.55rem; }
+  .mute-button { font-size: 0.55rem; }
 }
 
 .mixer-title-screen {

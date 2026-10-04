@@ -29,3 +29,6 @@ playwright-report/
 test-results/
 dev-dist/
 .wrangler/
+
+# Claude Code agent worktrees
+.claude/worktrees/

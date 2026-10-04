@@ -37,7 +37,7 @@ export default defineConfig({
     react(),
     cloudflareHeaders(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       workbox: {
         // Both sample formats are precached (a few hundred KB each) so every instrument sounds
@@ -46,6 +46,7 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024
       },
       manifest: {
+        id: '/',
         name: 'Metrónomo by Cucco',
         short_name: 'Metrónomo',
         description: 'Metrónomo profesional y entrenador rítmico con ritmos folclóricos.',
@@ -53,6 +54,7 @@ export default defineConfig({
         theme_color: '#13110f',
         background_color: '#070605',
         display: 'standalone',
+        display_override: ['standalone'],
         orientation: 'any',
         start_url: '/',
         scope: '/',
@@ -60,7 +62,12 @@ export default defineConfig({
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'maskable-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
           { src: 'maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+        ],
+        screenshots: [
+          { src: 'screenshots/narrow-390x844.png', sizes: '390x844', type: 'image/png', form_factor: 'narrow', label: 'Metrónomo en el teléfono: tempo, play y pulso' },
+          { src: 'screenshots/wide-1440x900.png', sizes: '1440x900', type: 'image/png', form_factor: 'wide', label: 'Estudio rítmico completo en escritorio' }
         ]
       }
     })

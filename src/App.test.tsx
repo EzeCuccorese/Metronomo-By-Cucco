@@ -33,6 +33,7 @@ class FakeScheduler {
     setChannelVolume(...a: unknown[]) { this.record('setChannelVolume', a); }
     setChannelPan(...a: unknown[]) { this.record('setChannelPan', a); }
     setChannelMute(...a: unknown[]) { this.record('setChannelMute', a); }
+    getChannelLevel() { return 0; }
     setHarmonyProgression(...a: unknown[]) { this.record('setHarmonyProgression', a); }
     setHarmonyVolume(...a: unknown[]) { this.record('setHarmonyVolume', a); }
     setAccompanimentStyle(...a: unknown[]) { this.record('setAccompanimentStyle', a); }
@@ -61,7 +62,7 @@ vi.mock('./audio/Scheduler', async (importOriginal) => {
     const actual = await importOriginal<typeof import('./audio/Scheduler')>();
     return { ...actual, default: FakeScheduler };
 });
-vi.mock('./audio/AudioContextManager', () => ({ default: { getInstance: () => ({ resume: async () => {} }) } }));
+vi.mock('./audio/AudioContextManager', () => ({ default: { getInstance: () => ({ resume: async () => {}, onContextReplaced: () => () => {}, getOutputLatency: () => 0 }) } }));
 
 import App from './App';
 import { STORAGE_PREFIX } from './state/storage';

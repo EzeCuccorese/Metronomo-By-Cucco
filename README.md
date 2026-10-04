@@ -111,9 +111,11 @@ Piano: [Salamander Grand Piano](https://archive.org/details/SalamanderGrandPiano
 
 La app es 100% estática, así que se publica en **Cloudflare Workers Static Assets** (CDN global y HTTPS gratis). Docker y nginx (sección Despliegue) siguen disponibles para self-hosting.
 
+> **Estado actual: el deploy está apagado.** Por ahora la app se usa solo en local y no se publica nada automáticamente (ni Cloudflare ni imagen Docker). Esta sección documenta cómo activarlo a mano cuando se quiera.
+
 - `wrangler.jsonc` sirve `dist/` con `not_found_handling: single-page-application` (rutas desconocidas devuelven `index.html`).
 - `vite build` genera `dist/_headers` a partir de `deploy/security-headers.conf` (CSP y demás headers de seguridad) más la política de caché de `nginx.conf`: `sw.js`, `index.html`, `registerSW.js`, `workbox-*` y el manifest con `no-cache`; `/assets/*` (con hash) inmutable por un año; audio, imágenes y fuentes por una semana. `deploy/cloudflareHeaders.test.ts` verifica que ambos destinos coincidan. Se comprobó con `wrangler dev` que cada ruta responde con los headers esperados.
-- `.github/workflows/deploy.yml` corre `wrangler deploy` después de que CI pasa en `main`, **solo si** existen el secret `CLOUDFLARE_API_TOKEN` y la variable `CLOUDFLARE_ACCOUNT_ID`. Si faltan, el job termina sin error y deja un aviso.
+- `.github/workflows/deploy.yml` es **solo manual** (`workflow_dispatch`): no se dispara solo después de CI ni en ningún otro evento. Si lo ejecutas a mano, necesita el secret `CLOUDFLARE_API_TOKEN` y la variable `CLOUDFLARE_ACCOUNT_ID`; si faltan, termina sin error y deja un aviso.
 
 Configuración única (una sola vez):
 
@@ -121,7 +123,7 @@ Configuración única (una sola vez):
 2. Copiar el **Account ID** (en el panel, Workers & Pages, columna derecha).
 3. Crear un **API token** (My Profile, API Tokens, Create Token) con la plantilla *Edit Cloudflare Workers* (o permisos `Workers Scripts: Edit` sobre tu cuenta).
 4. En GitHub, Settings, Secrets and variables, Actions: agregar el secret `CLOUDFLARE_API_TOKEN` y la variable (pestaña Variables) `CLOUDFLARE_ACCOUNT_ID`.
-5. Hacer un push a `main` (o volver a correr el workflow CI en `main`): la app queda en `https://metronomo-by-cucco.<tu-subdominio>.workers.dev`.
+5. Ejecutar a mano el workflow *Deploy (Cloudflare)* desde la pestaña Actions (o `pnpm build && pnpm exec wrangler deploy`): la app queda en `https://metronomo-by-cucco.<tu-subdominio>.workers.dev`.
 6. Opcional, dominio propio: en el panel, Workers & Pages, `metronomo-by-cucco`, Settings, Domains & Routes, Add, Custom domain (el dominio debe estar en tu cuenta de Cloudflare).
 
 Para probar localmente: `pnpm build && pnpm exec wrangler dev`. Para publicar a mano: `pnpm build && pnpm exec wrangler deploy` (requiere `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID` en el entorno, o `wrangler login`).

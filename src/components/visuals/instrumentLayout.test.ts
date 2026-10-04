@@ -72,7 +72,7 @@ describe('computeLayout', () => {
     });
 
     it.each(WIDTHS)('width %i: sections fit the canvas and never overlap', w => {
-        const l = computeLayout(w, 2);
+        const l = computeLayout(w, 0, 2);
         const canvas = { x: 0, y: 0, w: l.width, h: l.height };
         l.sections.forEach(s => expect(inside(s.rect, canvas)).toBe(true));
         for (let i = 0; i < l.sections.length; i++) {
@@ -126,7 +126,7 @@ describe('computeLayout', () => {
     });
 
     it('uses one pad size for all instruments and snaps the height to device pixels', () => {
-        const l = computeLayout(1000, 3);
+        const l = computeLayout(1000, 0, 3);
         expect(new Set(l.items.map(i => i.r)).size).toBe(1);
         expect(Math.abs(l.height * 3 - Math.round(l.height * 3))).toBeLessThan(1e-9);
     });
@@ -137,7 +137,7 @@ describe('computeLayout', () => {
         for (const w of [0, 1, 10, 16, 40, 100]) {
             computeLayout(w).items.forEach(it => expect(it.r).toBeGreaterThan(0));
         }
-        expect(computeLayout(-5, 0).width).toBe(1);
+        expect(computeLayout(-5, 0, 0).width).toBe(1);
     });
 });
 
@@ -358,5 +358,66 @@ describe('fitFontSize', () => {
     });
     it('never goes below the minimum', () => {
         expect(fitFontSize(measure, 12, 1)).toBe(8);
+    });
+});
+
+describe('computeLayout with available height', () => {
+    // [card width, card height] as seen at 1024 / 1440 / 1920 viewports.
+    const cards: [number, number][] = [[720, 330], [903, 340], [903, 420], [1000, 500]];
+    const overlaps = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) =>
+        a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+    it('uses two rows per section when the height allows bigger pads', () => {
+        const flat = computeLayout(903, 0);
+        const tall = computeLayout(903, 340);
+        expect(flat.rows).toBe(1);
+        expect(tall.rows).toBe(2);
+        expect(tall.items[0].r).toBeGreaterThan(flat.items[0].r * 1.4);
+    });
+
+    it('stays single-row when the height is unknown or tight', () => {
+        expect(computeLayout(903).rows).toBe(1);
+        expect(computeLayout(903, computeLayout(903).height).rows).toBe(1);
+    });
+
+    it('never exceeds the offered height (once the single-row layout fits)', () => {
+        cards.forEach(([w, h]) => {
+            expect(computeLayout(w, h).height).toBeLessThanOrEqual(Math.max(h, computeLayout(w).height) + 1);
+        });
+    });
+
+    it('keeps the stacked mobile layout independent of height', () => {
+        expect(computeLayout(390, 900).height).toBe(computeLayout(390).height);
+        expect(computeLayout(390, 900).rows).toBe(1);
+    });
+
+    it('never overlaps pads, keeps hit areas >= 44px and everything inside the canvas', () => {
+        cards.forEach(([w, h]) => {
+            const l = computeLayout(w, h);
+            l.items.forEach((a, i) => {
+                expect(a.hitR * 2).toBeGreaterThanOrEqual(MIN_HIT);
+                expect(a.cx - a.r).toBeGreaterThanOrEqual(0);
+                expect(a.cx + a.r).toBeLessThanOrEqual(l.width + 0.01);
+                expect(a.cy + a.r).toBeLessThanOrEqual(l.height);
+                l.items.slice(i + 1).forEach(b => expect(Math.hypot(a.cx - b.cx, a.cy - b.cy)).toBeGreaterThanOrEqual(a.r + b.r));
+            });
+        });
+    });
+
+    it('name boxes never overlap each other at 1024 / 1440 / 1920 widths', () => {
+        cards.forEach(([w, h]) => {
+            const l = computeLayout(w, h);
+            const boxes = l.items.map(it => ({ key: it.key, x: it.nameX - it.nameMaxW / 2, y: it.nameY, w: it.nameMaxW, h: 12 }));
+            boxes.forEach((a, i) => boxes.slice(i + 1).forEach(b => expect(overlaps(a, b), `${a.key} vs ${b.key} @${w}x${h}`).toBe(false)));
+        });
+    });
+
+    it('the longest folk names fit their box at the minimum font size', () => {
+        // Rough small-caps width: ~0.55em per character.
+        cards.forEach(([w, h]) => {
+            computeLayout(w, h).items
+                .filter(it => it.section === 'folklore')
+                .forEach(it => expect(it.name.length * 8 * 0.55).toBeLessThanOrEqual(it.nameMaxW));
+        });
     });
 });
