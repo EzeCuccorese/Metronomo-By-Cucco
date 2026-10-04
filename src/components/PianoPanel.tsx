@@ -3,7 +3,9 @@ import { Box, Button, Chip, Divider, FormControl, FormControlLabel, Switch, Icon
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import KeyboardIcon from '@mui/icons-material/Keyboard';
-import { shortcutById } from '../shortcuts/registry';
+import { shadowNote, shortcutById } from '../shortcuts/registry';
+import { setPianoLayout } from '../shortcuts/pianoLayout';
+import { useKeyLabels } from '../hooks/useKeyLabels';
 import PianoIcon from '@mui/icons-material/Piano';
 import type { MetronomeEngine } from '../hooks/useMetronomeEngine';
 import { usePersistentState } from '../hooks/usePersistentState';
@@ -11,7 +13,8 @@ import { DEFAULT_VELOCITY_LEVEL, VELOCITY_LEVELS, usePianoComputerKeyboard } fro
 import { usePlayback } from '../state/PlaybackContext';
 import { isBoolean, isNumber, isPlainObject, isString } from '../state/storage';
 import { chordPitchClasses, noteToMidi, pitchClass, scalePitchClasses, spanishNoteName } from '../audio/piano/notes';
-import type { ScaleMode } from '../audio/piano/notes';
+import { COMPUTER_LAYOUTS } from '../audio/piano/notes';
+import type { PianoLayout, ScaleMode } from '../audio/piano/notes';
 import { chordSymbol, MODES } from '../theory/harmony';
 import { isMelody, MELODY_BAR_OPTIONS } from '../audio/piano/melody';
 import type { Melody } from '../audio/piano/melody';
@@ -43,6 +46,8 @@ interface PianoSettings {
     showLetters?: boolean;
     /** Velocity level (C / V) of the computer keyboard, an index of VELOCITY_LEVELS. */
     velocityLevel?: number;
+    /** Computer-keyboard layout: one row (Ableton, default) or two rows (tracker). */
+    layout?: PianoLayout;
 }
 
 const MIN_OCTAVE = 2;
@@ -63,7 +68,8 @@ const isSettings = (v: unknown): v is PianoSettings =>
     isBoolean(v.computerKeys) && isString(v.scale) && SCALES.some(s => s.id === v.scale) &&
     isNumber(v.bars) && (MELODY_BAR_OPTIONS as readonly number[]).includes(v.bars) && isBoolean(v.loop) &&
     (v.showLetters === undefined || isBoolean(v.showLetters)) &&
-    (v.velocityLevel === undefined || (isNumber(v.velocityLevel) && Number.isInteger(v.velocityLevel) && v.velocityLevel >= 0 && v.velocityLevel < VELOCITY_LEVELS.length));
+    (v.velocityLevel === undefined || (isNumber(v.velocityLevel) && Number.isInteger(v.velocityLevel) && v.velocityLevel >= 0 && v.velocityLevel < VELOCITY_LEVELS.length)) &&
+    (v.layout === undefined || v.layout === 'ableton' || v.layout === 'tracker');
 
 const isStoredMelody = (v: unknown): v is Melody | null => v === null || isMelody(v);
 
@@ -139,6 +145,15 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
     }, [setSettings]);
 
     const [focusInside, setFocusInside] = useState(false);
+
+    // --- Layout of the computer keyboard (the shortcut registry follows it) and real key labels ---
+    const layout: PianoLayout = settings.layout ?? 'ableton';
+    const layoutDef = COMPUTER_LAYOUTS[layout];
+    const labelOf = useKeyLabels();
+    const tapNote = shadowNote(shortcutById('transport.tap'), layout);
+    const tapConflict = tapNote ? `${labelOf('KeyT')} = ${tapNote}` : 'T sigue siendo tap';
+    useEffect(() => { setPianoLayout(layout); }, [layout]);
+    useEffect(() => () => setPianoLayout('ableton'), []);
 
     // --- MIDI keyboard (Chrome/Android): same noteOn / noteOff / pedal as the other sources ---
     const [midiNoticeDismissed, setMidiNoticeDismissed] = usePersistentState('piano.midiNoticeDismissed', false, isBoolean);
@@ -238,7 +253,7 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
 
             <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
                 <Stack direction="row" sx={{ alignItems: 'center' }}>
-                    <Tooltip title="Bajar octava (Z)">
+                    <Tooltip title={`Bajar octava (${labelOf(layoutDef.octave.down)})`}>
                         <span>
                             <IconButton size="small" aria-label="Bajar octava" disabled={settings.octave <= MIN_OCTAVE} onClick={() => shiftOctave(-1)}>
                                 <ChevronLeftIcon sx={{ fontSize: 18 }} />
@@ -253,7 +268,7 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
                             Octava {settings.octave}
                         </Typography>
                     </Box>
-                    <Tooltip title="Subir octava (X)">
+                    <Tooltip title={`Subir octava (${labelOf(layoutDef.octave.up)})`}>
                         <span>
                             <IconButton size="small" aria-label="Subir octava" disabled={settings.octave >= MAX_OCTAVE} onClick={() => shiftOctave(1)}>
                                 <ChevronRightIcon sx={{ fontSize: 18 }} />
@@ -273,7 +288,7 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
                     Teclado PC
                 </Button>
 
-                <Tooltip title={`Velocidad del Teclado PC (${shortcutById('piano.velocity-down').display} / ${shortcutById('piano.velocity-up').display})`}>
+                <Tooltip title={`Velocidad del Teclado PC (${labelOf(layoutDef.velocity.down)} / ${labelOf(layoutDef.velocity.up)})`}>
                     <Box role="img" aria-label={`Velocidad del teclado PC: nivel ${velocityLevel + 1} de ${VELOCITY_LEVELS.length}`} data-testid="piano-velocity" data-level={velocityLevel}
                         sx={{ display: 'inline-flex', alignItems: 'flex-end', gap: '2px', height: 20, px: 0.5 }}>
                         {VELOCITY_LEVELS.map((_, i) => (
@@ -294,6 +309,14 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
                         Pedal
                     </Button>
                 </Tooltip>
+
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                    <InputLabel id="piano-layout-label">Distribución</InputLabel>
+                    <Select labelId="piano-layout-label" label="Distribución" value={layout} onChange={e => update({ layout: e.target.value })} data-testid="piano-layout">
+                        <MenuItem value="ableton">Ableton (1 fila)</MenuItem>
+                        <MenuItem value="tracker">Tracker (2 filas)</MenuItem>
+                    </Select>
+                </FormControl>
 
                 <FormControlLabel
                     sx={{ m: 0, '@media (pointer: coarse)': { display: 'none' }, '& .MuiFormControlLabel-label': { fontSize: 13 } }}
@@ -316,6 +339,8 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
                 chordRootPc={chordRootPc}
                 scalePcs={scalePcs}
                 showKeyHints={settings.showLetters !== false}
+                layout={layout}
+                labelOf={labelOf}
                 onNoteOn={noteOn}
                 onNoteOff={noteOff}
             />
@@ -323,7 +348,7 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
             <Box role="status" aria-live="polite" data-testid="piano-pc-status"
                 sx={{ mt: 0.5, minHeight: 20, color: settings.computerKeys || focusInside ? '#9fdcf7' : 'text.secondary', fontSize: 12, '@media (pointer: coarse)': { display: 'none' } }}>
                 {settings.computerKeys
-                    ? `⌨ Teclado PC activo · las letras tocan notas · T = Fa♯ (tap: botón TAP) · ${shortcutById('piano.exit').display} para salir`
+                    ? `⌨ Teclado PC activo · las letras tocan notas · ${tapConflict} (tap: botón TAP) · ${shortcutById('piano.exit').display} para salir`
                     : focusInside
                         ? 'Tocando con el teclado de la PC (el foco está en el piano)'
                         : 'Enfocá el piano o activá "Teclado PC" para tocar con las letras'}

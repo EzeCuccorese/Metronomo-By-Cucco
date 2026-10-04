@@ -412,6 +412,71 @@ describe('piano UI helpers', () => {
         expect(melodyStatusText({ ...base, melody: { bars: 3, subdivision: 4, notes: [TAKE.notes[0], TAKE.notes[0]] } })).toBe('2 notas · 3 compases · suena en loop al reproducir');
     });
 
+    describe('computer keyboard layouts', () => {
+        beforeEach(() => localStorage.clear());
+        afterEach(() => { delete (navigator as unknown as { keyboard?: unknown }).keyboard; });
+
+        const choose = (name: string) => {
+            fireEvent.mouseDown(screen.getByRole('combobox', { name: /Distribución/ }));
+            fireEvent.click(screen.getByRole('option', { name }));
+        };
+
+        it('switches to the two-row tracker layout: new keys play, old ones do not, labels follow', () => {
+            const { engine } = renderPanel();
+            expect(keyEl(48)).toHaveTextContent('A');
+            choose('Tracker (2 filas)');
+            expect(stored('piano.settings').layout).toBe('tracker');
+            expect(keyEl(48)).toHaveTextContent('Z');
+            expect(keyEl(49)).toHaveTextContent('S');
+            expect(keyEl(60)).toHaveTextContent('Q'); // upper row: the octave above
+            expect(keyEl(72)).toHaveTextContent('I');
+
+            keyEl(48).focus();
+            fireEvent.keyDown(keyEl(48), { code: 'KeyZ' });
+            fireEvent.keyDown(keyEl(48), { code: 'KeyQ' });
+            fireEvent.keyDown(keyEl(48), { code: 'KeyA' }); // not a note in the tracker layout
+            expect(engine.pianoNoteOn.mock.calls.map(c => c[0])).toEqual([48, 60]);
+        });
+
+        it('octave and velocity move to - / = and PageDown / PageUp, and the tooltips say so', () => {
+            renderPanel();
+            choose('Tracker (2 filas)');
+            keyEl(48).focus();
+            fireEvent.keyDown(keyEl(48), { code: 'Equal' });
+            expect(screen.getByTestId('piano-range')).toHaveTextContent('Do4–Do6');
+            keyEl(60).focus();
+            fireEvent.keyDown(keyEl(60), { code: 'Minus' });
+            expect(screen.getByTestId('piano-range')).toHaveTextContent('Do3–Do5');
+            fireEvent.keyDown(keyEl(48), { code: 'PageDown' });
+            expect(screen.getByTestId('piano-velocity')).toHaveAttribute('data-level', '2');
+            fireEvent.keyDown(keyEl(48), { code: 'KeyZ' }); // a note now, not "octave down"
+            expect(screen.getByTestId('piano-range')).toHaveTextContent('Do3–Do5');
+        });
+
+        it('explains the T conflict with the note T plays in the active layout', () => {
+            renderPanel();
+            choose('Tracker (2 filas)');
+            fireEvent.click(screen.getByRole('button', { name: 'Teclado PC' }));
+            expect(screen.getByTestId('piano-pc-status')).toHaveTextContent('T = Sol');
+        });
+
+        it('shows the letters printed on the keys when the browser exposes the layout (AZERTY)', async () => {
+            const map = { get: (code: string) => ({ KeyA: 'q', KeyQ: 'a', KeyW: 'z', KeyZ: 'w' } as Record<string, string>)[code] };
+            Object.defineProperty(navigator, 'keyboard', { configurable: true, value: Object.assign(new EventTarget(), { getLayoutMap: async () => map }) });
+            renderPanel();
+            await act(async () => {});
+            expect(keyEl(48)).toHaveTextContent('Q');
+            expect(keyEl(49)).toHaveTextContent('Z');
+            delete (navigator as unknown as { keyboard?: unknown }).keyboard;
+        });
+
+        it('rejects a corrupted stored layout', () => {
+            localStorage.setItem(STORAGE_PREFIX + 'piano.settings', JSON.stringify({ octave: 3, computerKeys: false, scale: 'none', bars: 2, loop: true, layout: 'dvorak' }));
+            renderPanel();
+            expect(keyEl(48)).toHaveTextContent('A');
+        });
+    });
+
     describe('MIDI input', () => {
         beforeEach(() => localStorage.clear());
         afterEach(() => { unstubRequestMidiAccess(); vi.unstubAllGlobals(); });

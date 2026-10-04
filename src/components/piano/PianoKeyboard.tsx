@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import { COMPUTER_KEY_SEMITONES, computerKeyLabel, isBlackKey, pitchClass, spanishNoteLabel, spanishNoteName } from '../../audio/piano/notes';
+import type { PianoLayout } from '../../audio/piano/notes';
+import { computerKeyCode, fallbackKeyLabel, isBlackKey, layoutSpan, pitchClass, spanishNoteLabel, spanishNoteName } from '../../audio/piano/notes';
 import { velocityFromPointer } from './pianoUi';
 import './piano.css';
 
@@ -17,11 +18,13 @@ export interface PianoKeyboardProps {
     scalePcs?: ReadonlySet<number> | null;
     /** Show the computer-keyboard letter on each key. */
     showKeyHints?: boolean;
+    /** Which computer-keyboard layout the hints and the mapped band follow. */
+    layout?: PianoLayout;
+    /** Label of a physical key (real layout when the browser tells us). */
+    labelOf?: (code: string) => string;
     onNoteOn: (midi: number, velocity: number) => void;
     onNoteOff: (midi: number) => void;
 }
-
-const MAPPED_SPAN = Math.max(...Object.values(COMPUTER_KEY_SEMITONES));
 
 const midiFromElement = (el: Element | null): number | null => {
     const key = el?.closest<HTMLElement>('[data-midi]');
@@ -38,12 +41,12 @@ const midiFromElement = (el: Element | null): number | null => {
  * (ES) Teclado de piano en pantalla: multitáctil y con glissando seguro.
  */
 export default function PianoKeyboard({
-    startMidi, octaves = 2, pressed, chordPcs, chordRootPc = null, scalePcs = null, showKeyHints = false, onNoteOn, onNoteOff,
+    startMidi, octaves = 2, pressed, chordPcs, chordRootPc = null, scalePcs = null, showKeyHints = false, layout = 'ableton', labelOf = fallbackKeyLabel, onNoteOn, onNoteOff,
 }: PianoKeyboardProps) {
     const keys = useMemo(() => Array.from({ length: octaves * 12 + 1 }, (_, i) => startMidi + i), [startMidi, octaves]);
     const whiteKeys = keys.filter(m => !isBlackKey(m));
     // White keys the computer keyboard reaches (the band over them; keys start at `startMidi`).
-    const mappedWhites = whiteKeys.filter(m => m <= startMidi + MAPPED_SPAN).length;
+    const mappedWhites = whiteKeys.filter(m => m <= startMidi + layoutSpan(layout)).length;
     const pointers = useRef(new Map<number, number>()); // pointerId -> MIDI note it holds
     const [focusMidi, setFocusMidi] = useState(startMidi);
     const keyRefs = useRef(new Map<number, HTMLButtonElement>());
@@ -141,8 +144,9 @@ export default function PianoKeyboard({
         const isRoot = inChord && chordRootPc === pc;
         const inScale = scalePcs?.has(pc) ?? false;
         const whiteIndex = whiteKeys.findIndex(w => w > midi); // first white key to the right
-        const hint = showKeyHints ? computerKeyLabel(midi - startMidi) : null;
-        const mapped = showKeyHints && midi >= startMidi && midi <= startMidi + MAPPED_SPAN;
+        const hintCode = showKeyHints ? computerKeyCode(midi - startMidi, layout) : null;
+        const hint = hintCode ? labelOf(hintCode) : null;
+        const mapped = showKeyHints && midi >= startMidi && midi <= startMidi + layoutSpan(layout);
         const classes = [
             'piano-key',
             black ? 'piano-key--black' : 'piano-key--white',
