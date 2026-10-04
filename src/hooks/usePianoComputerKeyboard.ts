@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 import { COMPUTER_KEY_SEMITONES } from '../audio/piano/notes';
 import { usePianoScope, useShortcutHandlers } from '../shortcuts/dispatcher';
@@ -47,6 +47,16 @@ export function usePianoComputerKeyboard(options: Options) {
 
     usePianoScope(options.globalEnabled, () => !!ref.current.containerRef.current?.contains(document.activeElement));
 
+    /** Lets go of every held note and the Shift pedal (focus lost, page hidden, leaving the mode). */
+    const releaseAll = useCallback(() => {
+        held.current.forEach(midi => ref.current.onNoteOff(midi));
+        held.current.clear();
+        if (shifts.current.size > 0) {
+            shifts.current.clear();
+            ref.current.onSustain?.(false);
+        }
+    }, []);
+
     useShortcutHandlers({
         'piano.notes': {
             down: e => {
@@ -78,19 +88,13 @@ export function usePianoComputerKeyboard(options: Options) {
                 ref.current.onSustain?.(false);
             },
         },
-        'piano.exit': () => ref.current.onExit?.(),
+        'piano.exit': () => {
+            releaseAll(); // keys still down when leaving the mode must not hang
+            ref.current.onExit?.();
+        },
     });
 
     useEffect(() => {
-        const map = held.current;
-        const releaseAll = () => {
-            map.forEach(midi => ref.current.onNoteOff(midi));
-            map.clear();
-            if (shifts.current.size > 0) {
-                shifts.current.clear();
-                ref.current.onSustain?.(false);
-            }
-        };
         const handleVisibility = () => {
             if (document.visibilityState !== 'visible') releaseAll();
         };
@@ -101,5 +105,5 @@ export function usePianoComputerKeyboard(options: Options) {
             document.removeEventListener('visibilitychange', handleVisibility);
             releaseAll();
         };
-    }, []);
+    }, [releaseAll]);
 }
