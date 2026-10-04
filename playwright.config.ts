@@ -25,7 +25,7 @@ export default defineConfig({
   ],
   webServer: {
     // The production bundle is what users get; `vite preview` serves it with the nginx security headers.
-    command: `npm run build && npx vite preview --port ${PORT} --strictPort --host 127.0.0.1`,
+    command: `pnpm build && pnpm exec vite preview --port ${PORT} --strictPort --host 127.0.0.1`,
     url: `http://127.0.0.1:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

@@ -5,14 +5,14 @@ FROM node:26.10.0-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8c
 WORKDIR /app
 
 # Copy package descriptors first to cache dependency layers
-COPY package*.json ./
-RUN npm ci
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN npm i -g pnpm@11 && pnpm install --frozen-lockfile
 
 # Copy all source files and configuration
 COPY . .
 
 # Build the production static bundle
-RUN npm run build
+RUN pnpm build
 
 # Stage 2: Serve the application using Nginx
 FROM nginx:1.31.0-alpine@sha256:2f07d83bf561b506400dc183b1b2003803e39efbd22451f848adaba14d28c7c7
