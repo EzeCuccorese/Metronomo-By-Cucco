@@ -31,3 +31,8 @@ if (typeof window !== 'undefined') {
         });
     }
 }
+
+// cmdk scrolls the selected item into view.
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
+}

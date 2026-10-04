@@ -15,6 +15,49 @@ async function choose(page: Page, combobox: string, option: string) {
 }
 
 test.describe('piano', () => {
+    test('the tracker layout plays two rows from the computer keyboard', async ({ page }) => {
+        await openApp(page);
+        await page.getByTestId('piano-panel').scrollIntoViewIfNeeded();
+        await page.getByRole('combobox', { name: /Distribución/ }).click();
+        await page.getByRole('option', { name: 'Tracker (2 filas)' }).click();
+        await page.getByRole('button', { name: 'Teclado PC' }).click();
+        await page.locator('body').click({ position: { x: 2, y: 2 } });
+        await page.keyboard.down('KeyZ'); // low row: C
+        await page.keyboard.down('KeyQ'); // high row: the C an octave up
+        await expect(page.getByTestId('piano-key-48')).toHaveAttribute('aria-pressed', 'true');
+        await expect(page.getByTestId('piano-key-60')).toHaveAttribute('aria-pressed', 'true');
+        await page.keyboard.up('KeyZ');
+        await page.keyboard.up('KeyQ');
+        await expect(page.getByTestId('piano-key-48')).toHaveAttribute('aria-pressed', 'false');
+        await expect(page.getByTestId('piano-key-60')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    test('a MIDI keyboard plays the on-screen keys, and hot-unplug lets go of them', async ({ page }) => {
+        await page.addInitScript(() => {
+            const input = { id: 'k1', name: 'Test Keys', state: 'connected', type: 'input', onmidimessage: null as null | ((e: unknown) => void) };
+            const access = Object.assign(new EventTarget(), { inputs: new Map([['k1', input]]) });
+            (window as unknown as Record<string, unknown>).__midi = { input, access };
+            (navigator as unknown as Record<string, unknown>).requestMIDIAccess = async () => access;
+        });
+        await openApp(page);
+        await page.getByTestId('piano-panel').scrollIntoViewIfNeeded();
+        await page.getByTestId('midi-connect').click();
+        await expect(page.getByTestId('midi-status')).toContainText('Test Keys');
+        await page.evaluate(() => {
+            const m = (window as unknown as { __midi: { input: { onmidimessage: (e: unknown) => void } } }).__midi;
+            m.input.onmidimessage({ data: new Uint8Array([0x90, 60, 100]), currentTarget: m.input });
+        });
+        await expect(page.getByTestId('piano-key-60')).toHaveAttribute('aria-pressed', 'true');
+        await page.evaluate(() => {
+            const m = (window as unknown as { __midi: { input: { state: string }; access: EventTarget } }).__midi;
+            m.input.state = 'disconnected';
+            const e = new Event('statechange');
+            Object.assign(e, { port: m.input });
+            m.access.dispatchEvent(e);
+        });
+        await expect(page.getByTestId('piano-key-60')).toHaveAttribute('aria-pressed', 'false');
+    });
+
     test('pressing a key plays a sampled piano note, and releasing it lets it fade', async ({ page, probe, consoleErrors }) => {
         await openApp(page);
         await waitForPianoSamples(page);
