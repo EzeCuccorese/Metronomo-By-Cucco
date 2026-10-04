@@ -9,7 +9,6 @@ import * as Note from '@tonaljs/note';
 import { scaleChromas } from '../../theory/harmony';
 import type { ModeId } from '../../theory/harmony';
 
-
 const SPANISH_LETTERS: Record<string, string> = { C: 'Do', D: 'Re', E: 'Mi', F: 'Fa', G: 'Sol', A: 'La', B: 'Si' };
 
 export const MIDI_A4 = 69;
@@ -31,13 +30,15 @@ export const midiToFrequency = (midi: number): number => 440 * Math.pow(2, (midi
 
 export const pitchClass = (midi: number): number => ((midi % 12) + 12) % 12;
 
-const parsed = (midi: number) => Note.get(Note.fromMidiSharps(midi));
+// The 12 pitch classes parsed once by Tonal: the piano asks for these on every render.
+const PITCH_CLASSES = Array.from({ length: 12 }, (_, pc) => Note.get(Note.fromMidiSharps(60 + pc)));
+const parsed = (midi: number) => ({ ...PITCH_CLASSES[pitchClass(midi)], oct: Math.floor(midi / 12) - 1 });
 
-export const isBlackKey = (midi: number): boolean => parsed(midi).acc !== '';
+export const isBlackKey = (midi: number): boolean => PITCH_CLASSES[pitchClass(midi)].acc !== '';
 
 /** Visible Spanish name: "Do", "Do♯", "Sol". */
 export function spanishNoteName(midi: number): string {
-    const note = parsed(midi);
+    const note = PITCH_CLASSES[pitchClass(midi)];
     return `${SPANISH_LETTERS[note.letter]}${note.acc ? '♯' : ''}`;
 }
 

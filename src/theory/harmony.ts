@@ -44,9 +44,16 @@ export const KEYS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb',
 
 /** Pitch classes (0-11) of a scale built on `rootPc`. */
 export function scaleChromas(rootPc: number, mode: ModeId): number[] {
-    const notes = Scale.get(`C ${modeInfo(mode).tonal}`).notes;
-    return notes.map(n => (Note.chroma(n) + rootPc + 12) % 12);
+    let offsets = MODE_OFFSETS.get(mode);
+    if (!offsets) {
+        offsets = Scale.get(`C ${modeInfo(mode).tonal}`).notes.map(n => Note.chroma(n));
+        MODE_OFFSETS.set(mode, offsets);
+    }
+    return offsets.map(o => (o + rootPc + 12) % 12);
 }
+
+/** Semitones above the tonic of each mode, computed once per mode. */
+const MODE_OFFSETS = new Map<ModeId, number[]>();
 
 export interface BuiltChord {
     /** Roman-numeral degree, e.g. "ii", "vii°", "V7", "Imaj7". */
@@ -98,7 +105,12 @@ export function chordSymbol(notes: readonly string[]): string {
 export function buildDiatonicChord(
     rootKey: string, mode: ModeId, degreeIndex: number, octave: number, sevenths = false,
 ): BuiltChord {
-    const scale = Scale.get(`${rootKey} ${modeInfo(mode).tonal}`).notes;
+    let scale = Scale.get(`${rootKey} ${modeInfo(mode).tonal}`).notes;
+    if (scale.length < 7) {
+        // Unknown tonic: fall back to C so the builder never emits "undefined4".
+        rootKey = 'C';
+        scale = Scale.get(`C ${modeInfo(mode).tonal}`).notes;
+    }
     const rootChroma = Note.chroma(rootKey);
     // Semitones above the tonic of every scale degree (always ascending within one octave).
     const offsets = scale.map(n => (Note.chroma(n) - rootChroma + 12) % 12);
