@@ -39,7 +39,7 @@ import { useTapTempo } from './hooks/useTapTempo';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useWakeLock } from './hooks/useWakeLock';
 import { useLayout } from './hooks/useLayout';
-import { useMixer } from './hooks/useMixer';
+import { CHANNEL_LABELS, useMixer } from './hooks/useMixer';
 import { useHarmonySync, useMelodySync } from './hooks/useEngineSync';
 import { LayoutContext } from './state/LayoutContext';
 import type { PanelId } from './state/layout';
@@ -158,8 +158,13 @@ function App() {
   useMelodySync(engine);
 
   const shown = (id: PanelId) => layout.panels[id] !== 'hidden';
-  const mutedChannels = mixer.channels.filter(ch => ch.isMuted);
-  const mixerSummary = `${mixer.channels.length} canales · ${mutedChannels.length === 0 ? 'sin mutes' : mutedChannels.length === 1 ? `${mutedChannels[0].name} en mute` : `${mutedChannels.length} en mute`}`;
+  const mutedChannels = mixer.visibleChannels.filter(ch => ch.isMuted);
+  const soloNames = mixer.visibleChannels.filter(ch => mixer.solo.has(ch.id)).map(ch => CHANNEL_LABELS[ch.id]);
+  const mixerSummary = [
+    `${mixer.visibleChannels.length} canales`,
+    mutedChannels.length === 0 ? 'sin mutes' : mutedChannels.length === 1 ? `${CHANNEL_LABELS[mutedChannels[0].id]} en mute` : `${mutedChannels.length} en mute`,
+    ...(soloNames.length > 0 ? [`Solo ${soloNames.join(', ')}`] : []),
+  ].join(' · ');
 
   const canRestore = currentPattern.id !== CUSTOM_PATTERN_ID && !!overrides[currentPattern.id];
 
@@ -254,7 +259,13 @@ function App() {
                 <Grid size={{ xs: 12, lg: shown('practice') || shown('harmony') ? 8 : 12 }}>
                   <Panel id="mixer" title="Mezclador" summary={mixerSummary}>
                     <MixerConsole
-                      channels={mixer.channels}
+                      channels={mixer.visibleChannels}
+                      view={mixer.view}
+                      onViewChange={mixer.setView}
+                      showAll={mixer.showAll}
+                      onShowAllChange={mixer.setShowAll}
+                      solo={mixer.solo}
+                      onToggleSolo={mixer.toggleSolo}
                       onVolume={mixer.setVolume}
                       onPan={mixer.setPan}
                       onToggleMute={mixer.toggleMute}

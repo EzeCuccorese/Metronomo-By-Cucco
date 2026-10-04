@@ -64,6 +64,7 @@ test.describe('controls', () => {
         await openApp(page);
         await selectPreset(page, 'Zamba');
         await setBpm(page, 97);
+        await page.getByRole('switch', { name: 'Mostrar todos' }).click();
         await page.getByTestId('mute-shaker').click();
         await page.getByTestId('cell-palmas-2').dispatchEvent('pointerdown', { button: 0 });
 

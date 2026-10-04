@@ -11,11 +11,19 @@ const metronome = PRESET_PATTERNS.find(p => p.id === METRONOME_PATTERN_ID)!;
 const rock = PRESET_PATTERNS.find(p => p.id === 'rock_basic')!;
 
 /** What App does: the mix lives in `useMixer`, the card only draws it. */
-const MixerHarness = ({ pattern, isPlaying = false, getChannelLevel, ...engine }: { pattern: RhythmPattern; isPlaying?: boolean; getChannelLevel?: (id: string) => number } & MixerEngine) => {
+const MixerHarness = ({ pattern, isPlaying = false, getChannelLevel, all = true, ...engine }: { pattern: RhythmPattern; isPlaying?: boolean; all?: boolean; getChannelLevel?: (id: string) => number } & MixerEngine) => {
     const mixer = useMixer(pattern, engine);
+    // Most tests look at specific strips: show every strip unless a test asks for the real default.
+    const showAll = all || mixer.showAll;
     return (
         <MixerConsole
-            channels={mixer.channels}
+            channels={showAll ? mixer.channels : mixer.visibleChannels}
+            view={mixer.view}
+            onViewChange={mixer.setView}
+            showAll={showAll}
+            onShowAllChange={mixer.setShowAll}
+            solo={mixer.solo}
+            onToggleSolo={mixer.toggleSolo}
             onVolume={mixer.setVolume}
             onPan={mixer.setPan}
             onToggleMute={mixer.toggleMute}
@@ -75,7 +83,7 @@ describe('MixerConsole', () => {
 
     it('pans with the keyboard', () => {
         const { onPanChange } = renderMixer(rock);
-        const knob = screen.getByRole('slider', { name: 'Paneo KICK' });
+        const knob = screen.getByRole('slider', { name: 'Paneo Bombo de batería' });
         fireEvent.keyDown(knob, { key: 'ArrowRight' });
         expect(onPanChange).toHaveBeenLastCalledWith('kick', 0.05);
         fireEvent.keyDown(knob, { key: 'Home' });
@@ -84,13 +92,13 @@ describe('MixerConsole', () => {
 
     it('changes the volume from the fader', () => {
         const { onVolumeChange } = renderMixer(rock);
-        fireEvent.change(screen.getByLabelText('Volumen KICK'), { target: { value: '0.5' } });
+        fireEvent.change(screen.getByLabelText('Volumen Bombo de batería'), { target: { value: '0.5' } });
         expect(onVolumeChange).toHaveBeenLastCalledWith('kick', 0.5);
     });
 
     it('has a PIANO strip', () => {
         const { onVolumeChange } = renderMixer();
-        expect(screen.getByTestId('mixer-channel-piano')).toHaveTextContent('PIANO');
+        expect(screen.getByTestId('mixer-channel-piano')).toHaveTextContent('Piano');
         expect(onVolumeChange).toHaveBeenCalledWith('piano', 0.9);
     });
 
@@ -167,6 +175,112 @@ describe('MixerConsole', () => {
             setup({});
             expect(litSegments('synth')).toBe(0);
             expect(litSegments('piano')).toBe(0);
+        });
+    });
+
+    describe('channels in use, solo and the compact view', () => {
+        const chacarera = PRESET_PATTERNS.find(p => p.id === 'chacarera_simple') ?? PRESET_PATTERNS[2];
+
+        it('shows only the channels the rhythm uses (plus the click) until "Mostrar todos" is on', () => {
+            render(<MixerHarness pattern={rock} all={false} onVolumeChange={vi.fn()} onPanChange={vi.fn()} onMuteChange={vi.fn()} />);
+            expect(screen.getByTestId('mixer-channel-kick')).toBeInTheDocument();
+            expect(screen.getByTestId('mixer-channel-snare')).toBeInTheDocument();
+            expect(screen.getByTestId('mixer-channel-hihat')).toBeInTheDocument();
+            expect(screen.getByTestId('mixer-channel-click')).toBeInTheDocument();
+            expect(screen.queryByTestId('mixer-channel-bombo')).toBeNull();
+            expect(screen.queryByTestId('mixer-channel-piano')).toBeNull();
+            fireEvent.click(screen.getByRole('switch', { name: 'Mostrar todos' }));
+            expect(screen.getByTestId('mixer-channel-bombo')).toBeInTheDocument();
+            expect(screen.getByTestId('mixer-channel-piano')).toBeInTheDocument();
+            expect(localStorage.getItem('metronomo:v1:mixer.showAll')).toBe('true');
+        });
+
+        it('adds the keyboard and piano strips once a harmony exists', () => {
+            localStorage.setItem('metronomo:v1:harmony.sequence', JSON.stringify([{ degree: 'I', durationUnits: 2, notes: ['C4'] }]));
+            render(<MixerHarness pattern={rock} all={false} onVolumeChange={vi.fn()} onPanChange={vi.fn()} onMuteChange={vi.fn()} />);
+            expect(screen.getByTestId('mixer-channel-synth')).toBeInTheDocument();
+            expect(screen.getByTestId('mixer-channel-piano')).toBeInTheDocument();
+        });
+
+        it('adds the piano strip when a melody is recorded', () => {
+            localStorage.setItem('metronomo:v1:piano.melody.v1', JSON.stringify({ bars: 1, subdivision: 4, notes: [{ step: 0, midi: 60, velocity: 0.9, length: 1 }] }));
+            render(<MixerHarness pattern={rock} all={false} onVolumeChange={vi.fn()} onPanChange={vi.fn()} onMuteChange={vi.fn()} />);
+            expect(screen.getByTestId('mixer-channel-piano')).toBeInTheDocument();
+            expect(screen.queryByTestId('mixer-channel-synth')).toBeNull();
+        });
+
+        it('solo mutes every other channel in the engine and restores the user mutes afterwards', () => {
+            const { onMuteChange } = renderMixer(rock);
+            fireEvent.click(screen.getByTestId('mute-snare'));
+            fireEvent.click(screen.getByTestId('solo-kick'));
+            expect(screen.getByTestId('solo-kick')).toHaveAttribute('aria-pressed', 'true');
+            expect(onMuteChange).toHaveBeenLastCalledWith('piano', true);
+            expect(onMuteChange).toHaveBeenCalledWith('hihat', true);
+            expect(onMuteChange.mock.calls.filter(c => c[0] === 'kick').at(-1)).toEqual(['kick', false]);
+            fireEvent.click(screen.getByTestId('solo-kick'));
+            // Back to the user's own mutes: the snare was muted by hand, the hi-hat was not.
+            expect(onMuteChange.mock.calls.filter(c => c[0] === 'snare').at(-1)).toEqual(['snare', true]);
+            expect(onMuteChange.mock.calls.filter(c => c[0] === 'hihat').at(-1)).toEqual(['hihat', false]);
+        });
+
+        it('lets a soloed channel win over its own mute', () => {
+            const { onMuteChange } = renderMixer(rock);
+            fireEvent.click(screen.getByTestId('mute-kick'));
+            fireEvent.click(screen.getByTestId('solo-kick'));
+            expect(onMuteChange.mock.calls.filter(c => c[0] === 'kick').at(-1)).toEqual(['kick', false]);
+        });
+
+        it('keeps a soloed strip on screen even if the rhythm does not use it', () => {
+            render(<MixerHarness pattern={rock} all={false} onVolumeChange={vi.fn()} onPanChange={vi.fn()} onMuteChange={vi.fn()} />);
+            fireEvent.click(screen.getByRole('switch', { name: 'Mostrar todos' }));
+            fireEvent.click(screen.getByTestId('solo-bombo'));
+            fireEvent.click(screen.getByRole('switch', { name: 'Mostrar todos' }));
+            expect(screen.getByTestId('mixer-channel-bombo')).toBeInTheDocument();
+        });
+
+        it('switches to the compact rows with horizontal sliders and a dB readout', () => {
+            const { onVolumeChange, onPanChange } = renderMixer(rock);
+            fireEvent.click(screen.getByRole('button', { name: 'Compacta' }));
+            expect(localStorage.getItem('metronomo:v1:mixer.view')).toBe('"compact"');
+            expect(document.querySelector('.mixer-channels-container')).toBeNull();
+            expect(screen.getByTestId('db-kick')).toHaveTextContent('0 dB');
+            const volume = screen.getByRole('slider', { name: 'Volumen Bombo de batería' });
+            fireEvent.change(volume, { target: { value: '0.5' } });
+            expect(onVolumeChange).toHaveBeenLastCalledWith('kick', 0.5);
+            expect(screen.getByTestId('db-kick')).toHaveTextContent('−6 dB');
+            const pan = screen.getByRole('slider', { name: 'Paneo Bombo de batería' });
+            fireEvent.change(pan, { target: { value: '0.25' } });
+            expect(onPanChange).toHaveBeenLastCalledWith('kick', 0.25);
+            fireEvent.doubleClick(pan);
+            expect(onPanChange).toHaveBeenLastCalledWith('kick', 0);
+            // The same mute / solo buttons work here.
+            fireEvent.click(screen.getByTestId('mute-kick'));
+            expect(screen.getByTestId('mute-kick')).toHaveAttribute('aria-pressed', 'true');
+            fireEvent.click(screen.getByRole('button', { name: 'Consola' }));
+            expect(document.querySelector('.mixer-channels-container')).not.toBeNull();
+        });
+
+        it('starts compact on a phone unless the user chose a view', () => {
+            vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('599.98'), media: q, addEventListener: () => {}, removeEventListener: () => {} }));
+            renderMixer(rock);
+            expect(document.querySelector('.mixer-rows')).not.toBeNull();
+            cleanup();
+            localStorage.setItem('metronomo:v1:mixer.view', '"console"');
+            renderMixer(rock);
+            expect(document.querySelector('.mixer-channels-container')).not.toBeNull();
+            vi.unstubAllGlobals();
+        });
+
+        it('paints the level bar of a compact row', () => {
+            const frames: FrameRequestCallback[] = [];
+            vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb));
+            vi.stubGlobal('cancelAnimationFrame', () => {});
+            localStorage.setItem('metronomo:v1:mixer.view', '"compact"');
+            render(<MixerHarness pattern={chacarera} isPlaying onVolumeChange={vi.fn()} onPanChange={vi.fn()} onMuteChange={vi.fn()} getChannelLevel={(id) => (id === 'piano' ? 0.8 : 0)} />);
+            act(() => { frames.shift()?.(0); });
+            const fill = screen.getByTestId('mixer-channel-piano').querySelector<HTMLElement>('.vu-fill')!;
+            expect(fill.style.transform).toBe('scaleX(0.8)');
+            vi.unstubAllGlobals();
         });
     });
 });

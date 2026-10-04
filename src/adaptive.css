@@ -43,7 +43,10 @@ button, [role='button'], [role='slider'], [role='switch'], [role='tab'], .MuiSli
 
 /* L6: 44 px targets on touch screens. */
 @media (pointer: coarse) {
-  .mute-button { min-height: 44px; min-width: 52px; }
+  .mute-button, .solo-button { min-height: 44px; min-width: 44px; }
+  /* Two 44 px buttons do not fit side by side in a console strip. */
+  .channel-ms { flex-direction: column; }
+  .mixer-row__head .mute-button, .mixer-row__head .solo-button { min-height: 44px; }
   .instrument-preview-button { min-height: 44px; min-width: 44px; }
   .piano-scroll.piano-scroll { --piano-white-w: 44px; --piano-black-w: 28px; }
   .tempo-panel .MuiInputBase-root { min-height: 44px; min-width: 44px; justify-content: center; }

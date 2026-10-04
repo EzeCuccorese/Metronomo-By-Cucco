@@ -111,6 +111,8 @@ export const Panel: React.FC<PanelProps> = ({ id, title, summary, actions, colla
           gap: collapsed ? 0 : 1.5,
         },
         ...asArray(sx),
+        // A folded card is just its title bar, whatever stretching the layout asks for.
+        collapsed ? { flex: 'none', height: 'auto' } : {},
       ]}
     >
       {title && (
