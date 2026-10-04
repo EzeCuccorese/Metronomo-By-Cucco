@@ -44,8 +44,8 @@ const PIANO_NOTE_CODES = Object.keys(COMPUTER_KEY_SEMITONES);
 /** Order matters: the dispatcher tries them in this order (piano before global). */
 export const SHORTCUTS: readonly ShortcutDef[] = [
     { id: 'piano.notes', label: 'Tocar notas', group: 'Piano', scope: 'piano', codes: PIANO_NOTE_CODES, display: PIANO_NOTE_CODES.map(c => computerKeyLabel(COMPUTER_KEY_SEMITONES[c]) ?? c).join(' '), separateKeys: true, preventDefault: true },
-    { id: 'piano.octave-down', label: 'Bajar octava', group: 'Piano', scope: 'piano', codes: [Object.keys(OCTAVE_KEYS)[0]], display: 'Z', preventDefault: true },
-    { id: 'piano.octave-up', label: 'Subir octava', group: 'Piano', scope: 'piano', codes: [Object.keys(OCTAVE_KEYS)[1]], display: 'X', preventDefault: true },
+    { id: 'piano.octave-down', label: 'Bajar octava', group: 'Piano', scope: 'piano', codes: Object.keys(OCTAVE_KEYS).filter(k => OCTAVE_KEYS[k] === -1), display: 'Z', preventDefault: true },
+    { id: 'piano.octave-up', label: 'Subir octava', group: 'Piano', scope: 'piano', codes: Object.keys(OCTAVE_KEYS).filter(k => OCTAVE_KEYS[k] === 1), display: 'X', preventDefault: true },
     { id: 'piano.velocity-down', label: 'Menos velocidad (más suave)', group: 'Piano', scope: 'piano', codes: ['KeyC'], display: 'C', preventDefault: true },
     { id: 'piano.velocity-up', label: 'Más velocidad (más fuerte)', group: 'Piano', scope: 'piano', codes: ['KeyV'], display: 'V', preventDefault: true },
     { id: 'piano.sustain', label: 'Pedal de sustain (mantener)', group: 'Piano', scope: 'piano', codes: ['ShiftLeft', 'ShiftRight'], display: 'Shift', preventDefault: false },
