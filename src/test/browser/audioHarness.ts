@@ -23,21 +23,36 @@ export function createOfflineContext(seconds: number, sampleRate = SAMPLE_RATE):
     return ctx;
 }
 
+/** Undoes createOfflineContext(): the global constructor and the engine singleton go back to normal. */
+export function restoreAudioContext(): void {
+    vi.unstubAllGlobals();
+    (AudioContextManager as unknown as { instance?: AudioContextManager }).instance = undefined;
+}
+
 /**
  * Renders the context, pausing every few milliseconds of audio time so `onTick(time)` can schedule
  * events exactly like the Worker clock does in real time (the lookahead scheduler reads `currentTime`).
  */
 export async function render(ctx: OfflineAudioContext, onTick?: (time: number) => void): Promise<RenderedAudio> {
+    // An error thrown by onTick must not leave the context suspended (startRendering would hang): resume
+    // anyway, skip the remaining ticks and rethrow once the render ends.
+    let tickError: unknown = null;
     if (onTick) {
         for (let frame = 0; frame < ctx.length; frame += TICK_FRAMES) {
             const time = frame / ctx.sampleRate;
-            void ctx.suspend(time).then(() => {
-                onTick(time);
-                return ctx.resume();
+            void ctx.suspend(time).then(async () => {
+                try {
+                    if (tickError === null) onTick(time);
+                } catch (error) {
+                    tickError = error ?? new Error('onTick failed');
+                } finally {
+                    await ctx.resume();
+                }
             });
         }
     }
     const buffer = await ctx.startRendering();
+    if (tickError !== null) throw tickError;
     return new RenderedAudio(buffer);
 }
 

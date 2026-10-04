@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Scheduler from './Scheduler';
 import { PRESET_PATTERNS } from '../rhythms/RhythmPatterns';
-import { frames, render, createOfflineContext } from '../test/browser/audioHarness';
+import { frames, render, createOfflineContext, restoreAudioContext } from '../test/browser/audioHarness';
 
 // The Worker clock is replaced by the harness: it ticks the scheduler at audio-time intervals
 // while the OfflineAudioContext renders, which is what the real clock does in wall-clock time.
@@ -31,7 +31,7 @@ async function renderScheduler(seconds: number, setup: (scheduler: Scheduler) =>
 }
 
 describe('Scheduler (real Web Audio, offline render)', () => {
-    afterEach(() => vi.unstubAllGlobals());
+    afterEach(restoreAudioContext);
 
     it('places the metronome click on every beat of a 4/4 bar at 120 BPM', async () => {
         const audio = await renderScheduler(2.3);
