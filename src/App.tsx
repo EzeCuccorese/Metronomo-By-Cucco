@@ -36,7 +36,10 @@ import { GenreSelectorModal } from './components/GenreSelectorModal';
 import { useMetronomeEngine } from './hooks/useMetronomeEngine';
 import { usePersistentState } from './hooks/usePersistentState';
 import { useTapTempo } from './hooks/useTapTempo';
-import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useShortcutDispatcher, useShortcutHandlers } from './shortcuts/dispatcher';
+import ShortcutsDialog from './components/ShortcutsDialog';
+import CommandPalette from './components/CommandPalette';
+import type { PaletteCommand } from './components/CommandPalette';
 import { useWakeLock } from './hooks/useWakeLock';
 import { useLayout } from './hooks/useLayout';
 import { useMixer } from './hooks/useMixer';
@@ -132,12 +135,34 @@ function App() {
   const tempoLocked = trainer.active && isPlaying;
   const guardedTap = useCallback(() => { if (!tempoLocked) handleTap(); }, [tempoLocked, handleTap]);
 
-  useKeyboardShortcuts({
-    onTogglePlay: toggle,
-    onTap: guardedTap,
-    onNudgeBpm: useCallback((delta: number) => {
-      if (!tempoLocked) setBpmRaw(prev => clampBpm(prev + delta));
-    }, [tempoLocked, setBpmRaw]),
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const rhythmCommands = useMemo<PaletteCommand[]>(() => PRESET_PATTERNS.map(p => ({
+    id: `rhythm.${p.id}`,
+    label: `Ritmo: ${p.name}`,
+    group: 'Ritmos',
+    keywords: ['ritmo', 'rhythm'],
+    run: () => loadPreset(p.id),
+  })), [loadPreset]);
+  const setBpmFromPalette = useCallback((value: number) => { if (!tempoLocked) setBpmRaw(clampBpm(value)); }, [tempoLocked, setBpmRaw]);
+
+  const stepPreset = useCallback((delta: 1 | -1) => {
+    const ids = PRESET_PATTERNS.map(p => p.id);
+    const at = ids.indexOf(currentPattern.id);
+    const next = at < 0 ? (delta > 0 ? 0 : ids.length - 1) : (at + delta + ids.length) % ids.length;
+    loadPreset(ids[next]);
+  }, [currentPattern.id, loadPreset]);
+
+  useShortcutDispatcher();
+  useShortcutHandlers({
+    'transport.play': e => { if (!e.repeat) toggle(); },
+    'transport.tap': e => { if (!e.repeat) guardedTap(); },
+    'transport.bpm-up': e => { if (!tempoLocked) setBpmRaw(prev => clampBpm(prev + (e.shiftKey ? 5 : 1))); },
+    'transport.bpm-down': e => { if (!tempoLocked) setBpmRaw(prev => clampBpm(prev - (e.shiftKey ? 5 : 1))); },
+    'transport.prev-rhythm': () => stepPreset(-1),
+    'transport.next-rhythm': () => stepPreset(1),
+    'help.shortcuts': () => setShortcutsOpen(true),
+    'palette.open': () => setPaletteOpen(prev => !prev),
   });
 
   // Settings edited inside a card reach the engine from here, so a hidden or folded card keeps its sound.
@@ -285,6 +310,8 @@ function App() {
         </Box>
 
         <PwaUpdater isPlaying={isPlaying} />
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={rhythmCommands} onSetBpm={setBpmFromPalette} tempoLocked={tempoLocked} />
+        <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
         <GenreSelectorModal
           open={libraryOpen}
           onClose={() => setLibraryOpen(false)}
