@@ -15,6 +15,7 @@ import { isBoolean, isNumber, isPlainObject, isString } from '../state/storage';
 import { chordPitchClasses, noteToMidi, pitchClass, scalePitchClasses, spanishNoteName } from '../audio/piano/notes';
 import { COMPUTER_LAYOUTS } from '../audio/piano/notes';
 import type { PianoLayout, ScaleMode } from '../audio/piano/notes';
+import { chordSymbol, MODES } from '../theory/harmony';
 import { isMelody, MELODY_BAR_OPTIONS } from '../audio/piano/melody';
 import type { Melody } from '../audio/piano/melody';
 import type { PianoStatus } from '../audio/piano/PianoSampler';
@@ -56,9 +57,9 @@ const HISTORY_LIMIT = 20;
 
 const SCALES: { id: string; label: string }[] = [
     { id: 'none', label: 'Sin escala' },
-    ...Array.from({ length: 12 }, (_, pc) => (['major', 'minor'] as ScaleMode[]).map(mode => ({
-        id: `${pc}-${mode}`,
-        label: `${spanishNoteName(pc + 60)} ${mode === 'major' ? 'mayor' : 'menor'}`,
+    ...Array.from({ length: 12 }, (_, pc) => MODES.map(mode => ({
+        id: `${pc}-${mode.id}`,
+        label: `${spanishNoteName(pc + 60)} ${mode.short}`,
     }))).flat(),
 ];
 
@@ -245,7 +246,7 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
                 />
                 {chord && (
                     <Typography variant="caption" sx={{ color: '#e5a95f' }} data-testid="piano-chord">
-                        Acorde: {chord.map(n => { const m = noteToMidi(n); return m === null ? n : spanishNoteName(m); }).join(' · ')}
+                        Acorde: {chordSymbol(chord)} ({chord.map(n => { const m = noteToMidi(n); return m === null ? n : spanishNoteName(m); }).join(' · ')})
                     </Typography>
                 )}
             </Stack>
