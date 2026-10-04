@@ -105,7 +105,7 @@ export interface MixerApi {
     toggleMute: (id: ChannelId) => void;
 }
 
-const isSequenceNotEmpty = (v: unknown): v is unknown[] => Array.isArray(v);
+const isSequenceArray = (v: unknown): v is unknown[] => Array.isArray(v);
 const isStoredMelody = (v: unknown): v is Melody | null => v === null || isMelody(v);
 
 /**
@@ -120,7 +120,7 @@ export function useMixer(pattern: RhythmPattern, { onVolumeChange, onPanChange, 
     const [storedView, setView] = usePersistentState<MixerView | null>('mixer.view', null, (v): v is MixerView | null => v === null || isMixerView(v));
     const [solo, setSolo] = useState<ReadonlySet<ChannelId>>(() => new Set());
     // Same persisted values the harmony and piano cards write (see usePersistentState): no state is threaded through.
-    const [sequence] = usePersistentState<unknown[]>('harmony.sequence', [], isSequenceNotEmpty);
+    const [sequence] = usePersistentState<unknown[]>('harmony.sequence', [], isSequenceArray);
     const [melody] = usePersistentState<Melody | null>('piano.melody.v1', null, isStoredMelody);
     const channels = mixer.channels;
 
@@ -164,7 +164,7 @@ export function useMixer(pattern: RhythmPattern, { onVolumeChange, onPanChange, 
         const ids = new Set<ChannelId>(['click']);
         pattern.steps.forEach(step => ids.add(getChannelForInstrument(step.instrument)));
         if (sequence.length > 0) { ids.add('synth'); ids.add('piano'); }
-        if (melody) ids.add('piano');
+        if (melody && melody.notes.length > 0) ids.add('piano');
         return ids;
     }, [pattern, sequence.length, melody]);
     // A soloed channel stays on screen so its Solo can be switched off.
