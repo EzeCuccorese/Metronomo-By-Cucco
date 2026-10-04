@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
+import { COMPUTER_KEY_VELOCITY } from '../../hooks/usePianoComputerKeyboard';
 import PianoPanel from '../PianoPanel';
 import { PlaybackContext } from '../../state/PlaybackContext';
 import { createPlaybackStore } from '../../state/playbackStore';
@@ -18,6 +19,7 @@ const makeEngine = (overrides: Partial<Record<string, unknown>> = {}) => {
         pianoStatus: 'idle' as const,
         pianoNoteOn: vi.fn(),
         pianoNoteOff: vi.fn(),
+        setPianoSustain: vi.fn(),
         releaseAllPianoKeys: vi.fn(),
         preloadPiano: vi.fn(),
         setMelody: vi.fn(),
@@ -158,7 +160,7 @@ describe('PianoPanel', () => {
         const { engine } = renderPanel();
         keyEl(48).focus();
         fireEvent.keyDown(keyEl(48), { code: 'KeyD' });
-        expect(engine.pianoNoteOn).toHaveBeenCalledWith(52, 0.8);
+        expect(engine.pianoNoteOn).toHaveBeenCalledWith(52, COMPUTER_KEY_VELOCITY);
         fireEvent.keyUp(keyEl(48), { code: 'KeyD' });
         expect(engine.pianoNoteOff).toHaveBeenCalledWith(52);
         // Two sources holding the same key: it sounds until both let go.
@@ -171,11 +173,102 @@ describe('PianoPanel', () => {
 
         const toggle = screen.getByRole('button', { name: 'Teclado PC' });
         expect(toggle).toHaveAttribute('aria-pressed', 'false');
-        expect(keyEl(48)).not.toHaveTextContent('A');
+        // The letters are always there (hidden by CSS on touch devices), and the toggle turns the global mode on.
+        expect(keyEl(48)).toHaveTextContent('A');
         fireEvent.click(toggle);
         expect(toggle).toHaveAttribute('aria-pressed', 'true');
-        expect(keyEl(48)).toHaveTextContent('A');
         expect(stored('piano.settings').computerKeys).toBe(true);
+    });
+
+    it('can hide the letters, and shows the mapped-range band only with them', () => {
+        renderPanel();
+        expect(screen.getByTestId('piano-band')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('switch', { name: 'Mostrar letras' }));
+        expect(keyEl(48)).not.toHaveTextContent('A');
+        expect(screen.queryByTestId('piano-band')).not.toBeInTheDocument();
+        expect(stored('piano.settings').showLetters).toBe(false);
+    });
+
+    it('shows the "Teclado PC activo" indicator and Esc turns the mode off', () => {
+        renderPanel();
+        const status = screen.getByTestId('piano-pc-status');
+        expect(status).toHaveAttribute('aria-live', 'polite');
+        fireEvent.click(screen.getByRole('button', { name: 'Teclado PC' }));
+        expect(status).toHaveTextContent('Teclado PC activo');
+        expect(status).toHaveTextContent('Esc para salir');
+        fireEvent.keyDown(document.body, { code: 'Escape' });
+        expect(screen.getByRole('button', { name: 'Teclado PC' })).toHaveAttribute('aria-pressed', 'false');
+        expect(status).not.toHaveTextContent('Teclado PC activo');
+    });
+
+    it('lights up the panel while the focus is inside it', () => {
+        renderPanel();
+        const panel = screen.getByTestId('piano-panel');
+        expect(panel).toHaveAttribute('data-pc-keys', 'off');
+        act(() => keyEl(48).focus());
+        expect(panel).toHaveAttribute('data-pc-keys', 'focus');
+        expect(screen.getByTestId('piano-pc-status')).toHaveTextContent('Tocando con el teclado de la PC');
+        act(() => keyEl(48).blur());
+        expect(panel).toHaveAttribute('data-pc-keys', 'off');
+    });
+
+    it('C / V change the keyboard velocity and the notes use it', () => {
+        const { engine } = renderPanel();
+        const meter = screen.getByTestId('piano-velocity');
+        expect(meter).toHaveAttribute('data-level', '3');
+        keyEl(48).focus();
+        fireEvent.keyDown(keyEl(48), { code: 'KeyC' });
+        fireEvent.keyDown(keyEl(48), { code: 'KeyC' });
+        expect(meter).toHaveAttribute('data-level', '1');
+        fireEvent.keyDown(keyEl(48), { code: 'KeyA' });
+        expect(engine.pianoNoteOn).toHaveBeenCalledWith(48, 0.55);
+        for (let i = 0; i < 6; i++) fireEvent.keyDown(keyEl(48), { code: 'KeyV' });
+        expect(meter).toHaveAttribute('data-level', '4');
+        expect(stored('piano.settings').velocityLevel).toBe(4);
+    });
+
+    it('sustain: holding Shift or the Pedal button shares one pedal', () => {
+        const { engine } = renderPanel();
+        keyEl(48).focus();
+        fireEvent.keyDown(keyEl(48), { code: 'ShiftLeft' });
+        expect(engine.setPianoSustain).toHaveBeenLastCalledWith(true);
+        fireEvent.keyUp(keyEl(48), { code: 'ShiftLeft' });
+        expect(engine.setPianoSustain).toHaveBeenLastCalledWith(false);
+
+        const pedal = screen.getByRole('button', { name: 'Pedal de sustain' });
+        fireEvent.click(pedal);
+        expect(pedal).toHaveAttribute('aria-pressed', 'true');
+        expect(engine.setPianoSustain).toHaveBeenLastCalledWith(true);
+        // Shift on top of the button does not lift the pedal.
+        fireEvent.keyDown(keyEl(48), { code: 'ShiftRight' });
+        fireEvent.keyUp(keyEl(48), { code: 'ShiftRight' });
+        expect(engine.setPianoSustain).toHaveBeenLastCalledWith(true);
+        fireEvent.click(pedal);
+        expect(engine.setPianoSustain).toHaveBeenLastCalledWith(false);
+    });
+
+    it('Esc releases held keys and the Shift pedal on its way out', () => {
+        const { engine } = renderPanel();
+        fireEvent.click(screen.getByRole('button', { name: 'Teclado PC' }));
+        fireEvent.keyDown(document.body, { code: 'KeyA' });
+        fireEvent.keyDown(document.body, { code: 'ShiftLeft' });
+        fireEvent.keyDown(document.body, { code: 'Escape' });
+        expect(engine.pianoNoteOff).toHaveBeenCalledWith(48);
+        expect(engine.setPianoSustain).toHaveBeenLastCalledWith(false);
+        expect(screen.getByRole('button', { name: 'Teclado PC' })).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('lifts the Shift pedal when the window loses focus', () => {
+        const { engine } = renderPanel();
+        keyEl(48).focus();
+        fireEvent.keyDown(keyEl(48), { code: 'ShiftLeft' });
+        act(() => { window.dispatchEvent(new Event('blur')); });
+        expect(engine.setPianoSustain).toHaveBeenLastCalledWith(false);
+    });
+
+    it('shows the octave next to the range', () => {
+        renderPanel();
+        expect(screen.getByTestId('piano-octave')).toHaveTextContent('Octava 3');
     });
 
     it('shifts octaves with the buttons and with Z / X, within C2..C6', () => {

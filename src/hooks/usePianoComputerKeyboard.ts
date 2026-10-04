@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 import { COMPUTER_KEY_SEMITONES } from '../audio/piano/notes';
 import { usePianoScope, useShortcutHandlers } from '../shortcuts/dispatcher';
@@ -12,9 +12,20 @@ interface Options {
     onNoteOn: (midi: number, velocity: number) => void;
     onNoteOff: (midi: number) => void;
     onOctaveShift: (delta: -1 | 1) => void;
+    /** Velocity (0..1) for the notes played from the computer keyboard. */
+    velocity?: number;
+    /** C / V: one level softer / louder. */
+    onVelocityShift?: (delta: -1 | 1) => void;
+    /** Shift held = sustain pedal down. */
+    onSustain?: (down: boolean) => void;
+    /** Esc */
+    onExit?: () => void;
 }
 
-export const COMPUTER_KEY_VELOCITY = 0.8;
+/** Five velocity levels for the computer keyboard (C / V), like the Ableton convention. */
+export const VELOCITY_LEVELS = [0.4, 0.55, 0.7, 0.85, 1] as const;
+export const DEFAULT_VELOCITY_LEVEL = 3;
+export const COMPUTER_KEY_VELOCITY = VELOCITY_LEVELS[DEFAULT_VELOCITY_LEVEL];
 
 /**
  * Plays the piano from the computer keyboard: A W S E D F T G Y H U J K O L P Ñ (one octave
@@ -32,7 +43,19 @@ export function usePianoComputerKeyboard(options: Options) {
 
     const held = useRef(new Map<string, number>()); // KeyboardEvent.code -> MIDI note it started
 
+    const shifts = useRef(new Set<string>()); // Shift keys held (the pedal)
+
     usePianoScope(options.globalEnabled, () => !!ref.current.containerRef.current?.contains(document.activeElement));
+
+    /** Lets go of every held note and the Shift pedal (focus lost, page hidden, leaving the mode). */
+    const releaseAll = useCallback(() => {
+        held.current.forEach(midi => ref.current.onNoteOff(midi));
+        held.current.clear();
+        if (shifts.current.size > 0) {
+            shifts.current.clear();
+            ref.current.onSustain?.(false);
+        }
+    }, []);
 
     useShortcutHandlers({
         'piano.notes': {
@@ -41,7 +64,7 @@ export function usePianoComputerKeyboard(options: Options) {
                 if (semitone === undefined || held.current.has(e.code)) return;
                 const midi = ref.current.baseMidi + semitone;
                 held.current.set(e.code, midi);
-                ref.current.onNoteOn(midi, COMPUTER_KEY_VELOCITY);
+                ref.current.onNoteOn(midi, ref.current.velocity ?? COMPUTER_KEY_VELOCITY);
             },
             up: e => {
                 const midi = held.current.get(e.code);
@@ -53,14 +76,25 @@ export function usePianoComputerKeyboard(options: Options) {
         },
         'piano.octave-down': () => ref.current.onOctaveShift(-1),
         'piano.octave-up': () => ref.current.onOctaveShift(1),
+        'piano.velocity-down': () => ref.current.onVelocityShift?.(-1),
+        'piano.velocity-up': () => ref.current.onVelocityShift?.(1),
+        'piano.sustain': {
+            down: e => {
+                shifts.current.add(e.code);
+                if (shifts.current.size === 1) ref.current.onSustain?.(true);
+            },
+            up: e => {
+                if (!shifts.current.delete(e.code) || shifts.current.size > 0) return;
+                ref.current.onSustain?.(false);
+            },
+        },
+        'piano.exit': () => {
+            releaseAll(); // keys still down when leaving the mode must not hang
+            ref.current.onExit?.();
+        },
     });
 
     useEffect(() => {
-        const map = held.current;
-        const releaseAll = () => {
-            map.forEach(midi => ref.current.onNoteOff(midi));
-            map.clear();
-        };
         const handleVisibility = () => {
             if (document.visibilityState !== 'visible') releaseAll();
         };
@@ -71,5 +105,5 @@ export function usePianoComputerKeyboard(options: Options) {
             document.removeEventListener('visibilitychange', handleVisibility);
             releaseAll();
         };
-    }, []);
+    }, [releaseAll]);
 }

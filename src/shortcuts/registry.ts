@@ -14,7 +14,7 @@ export type ShortcutScope = 'global' | 'piano';
 export type ShortcutGroup = 'Transporte' | 'Piano' | 'Ayuda';
 
 export type ShortcutId =
-    | 'piano.notes' | 'piano.octave-down' | 'piano.octave-up'
+    | 'piano.notes' | 'piano.octave-down' | 'piano.octave-up' | 'piano.velocity-down' | 'piano.velocity-up' | 'piano.sustain' | 'piano.exit'
     | 'transport.play' | 'transport.tap' | 'transport.bpm-up' | 'transport.bpm-down' | 'transport.prev-rhythm' | 'transport.next-rhythm'
     | 'help.shortcuts';
 
@@ -29,6 +29,8 @@ export interface ShortcutDef {
     chars?: readonly string[];
     /** What to print in tooltips and the cheat sheet. */
     display: string;
+    /** Print each space-separated token of `display` as its own keycap (the note row). */
+    separateKeys?: boolean;
     /** Cancel the browser default (page scroll, button activation…). */
     preventDefault: boolean;
     /** Deliver auto-repeat keydowns too (held arrows keep nudging the tempo). */
@@ -41,9 +43,13 @@ const PIANO_NOTE_CODES = Object.keys(COMPUTER_KEY_SEMITONES);
 
 /** Order matters: the dispatcher tries them in this order (piano before global). */
 export const SHORTCUTS: readonly ShortcutDef[] = [
-    { id: 'piano.notes', label: 'Tocar notas', group: 'Piano', scope: 'piano', codes: PIANO_NOTE_CODES, display: PIANO_NOTE_CODES.map(c => computerKeyLabel(COMPUTER_KEY_SEMITONES[c]) ?? c).join(' '), preventDefault: true },
+    { id: 'piano.notes', label: 'Tocar notas', group: 'Piano', scope: 'piano', codes: PIANO_NOTE_CODES, display: PIANO_NOTE_CODES.map(c => computerKeyLabel(COMPUTER_KEY_SEMITONES[c]) ?? c).join(' '), separateKeys: true, preventDefault: true },
     { id: 'piano.octave-down', label: 'Bajar octava', group: 'Piano', scope: 'piano', codes: Object.keys(OCTAVE_KEYS).filter(k => OCTAVE_KEYS[k] === -1), display: 'Z', preventDefault: true },
     { id: 'piano.octave-up', label: 'Subir octava', group: 'Piano', scope: 'piano', codes: Object.keys(OCTAVE_KEYS).filter(k => OCTAVE_KEYS[k] === 1), display: 'X', preventDefault: true },
+    { id: 'piano.velocity-down', label: 'Menos velocidad (más suave)', group: 'Piano', scope: 'piano', codes: ['KeyC'], display: 'C', preventDefault: true },
+    { id: 'piano.velocity-up', label: 'Más velocidad (más fuerte)', group: 'Piano', scope: 'piano', codes: ['KeyV'], display: 'V', preventDefault: true },
+    { id: 'piano.sustain', label: 'Pedal de sustain (mantener)', group: 'Piano', scope: 'piano', codes: ['ShiftLeft', 'ShiftRight'], display: 'Shift', preventDefault: false },
+    { id: 'piano.exit', label: 'Salir del Teclado PC', group: 'Piano', scope: 'piano', codes: ['Escape'], display: 'Esc', preventDefault: false },
     { id: 'transport.play', label: 'Iniciar / detener', group: 'Transporte', scope: 'global', codes: ['Space'], display: 'Espacio', preventDefault: true, swallowKeyup: true },
     { id: 'transport.tap', label: 'Tap tempo', group: 'Transporte', scope: 'global', codes: ['KeyT'], display: 'T', preventDefault: false },
     { id: 'transport.bpm-up', label: 'Subir tempo (Shift: ±5)', group: 'Transporte', scope: 'global', codes: ['ArrowUp'], display: '↑', preventDefault: true, allowRepeat: true },

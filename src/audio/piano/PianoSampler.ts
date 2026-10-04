@@ -105,6 +105,8 @@ interface Voice {
     source: AudioBufferSourceNode;
     env: GainNode;
     released: boolean;
+    /** Key lifted while the pedal was down: the voice rings until the pedal comes up. */
+    sustained?: boolean;
 }
 
 export class PianoSampler {
@@ -118,6 +120,7 @@ export class PianoSampler {
     private loading: Promise<boolean> | null = null;
     private statusListeners = new Set<(status: PianoStatus) => void>();
     private disposed = false;
+    private sustainDown = false;
     private fallback: PianoFallback | null;
     public status: PianoStatus = 'idle';
 
@@ -235,10 +238,15 @@ export class PianoSampler {
     }
 
     /** Lifts the key: the damper fades the voice out. */
-    public noteOff(id: number | null, time: number, tau = RELEASE_TAU) {
+    public noteOff(id: number | null, time: number, tau = RELEASE_TAU, ignoreSustain = false) {
         if (id === null) return;
         const voice = this.voices.get(id);
         if (!voice || voice.released) return;
+        if (this.sustainDown && voice.bus === 'live' && !ignoreSustain) {
+            voice.sustained = true; // the damper stays up: keep ringing
+            return;
+        }
+        voice.sustained = false;
         voice.released = true;
         const param = voice.env.gain;
         const at = Math.max(time, this.context.currentTime);
@@ -249,6 +257,20 @@ export class PianoSampler {
         } catch {
             // Already stopped.
         }
+    }
+
+    /** Sustain pedal (live keyboard only): lifting it damps every note whose key is already up. */
+    public setSustain(down: boolean, time = this.context.currentTime) {
+        if (this.sustainDown === down) return;
+        this.sustainDown = down;
+        if (down) return;
+        for (const voice of Array.from(this.voices.values())) {
+            if (voice.sustained) this.noteOff(voice.id, time);
+        }
+    }
+
+    public get sustaining(): boolean {
+        return this.sustainDown;
     }
 
     /** Schedules a whole note (accompaniment and melody playback). */
@@ -266,7 +288,7 @@ export class PianoSampler {
         victim ??= this.voices.values().next().value;
         if (!victim) return;
         victim.released = false; // force the fast fade even if a release was already scheduled
-        this.noteOff(victim.id, time, STEAL_TAU);
+        this.noteOff(victim.id, time, STEAL_TAU, true);
         this.voices.delete(victim.id);
     }
 
@@ -276,7 +298,7 @@ export class PianoSampler {
         for (const voice of Array.from(this.voices.values())) {
             if (!buses.includes(voice.bus)) continue;
             voice.released = false; // force a fresh fade even if a release was scheduled
-            this.noteOff(voice.id, now, STEAL_TAU);
+            this.noteOff(voice.id, now, STEAL_TAU, true);
             this.voices.delete(voice.id);
         }
     }

@@ -42,7 +42,7 @@ export default function ShortcutsDialog({ open, onClose }: ShortcutsDialogProps)
                                             {def.scope === 'piano' && <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>Con Teclado PC activo o con el foco en el piano</Typography>}
                                         </Box>
                                         <Box component="dd" sx={{ m: 0, display: 'flex', flexWrap: 'wrap', gap: 0.5, justifyContent: 'flex-end', maxWidth: '55%' }}>
-                                            {def.display.split(' ').map((k, i) => <Chip key={`${k}-${i}`} size="small" label={k} sx={keycapSx} />)}
+                                            {(def.separateKeys ? def.display.split(' ') : [def.display]).map((k, i) => <Chip key={`${k}-${i}`} size="small" label={k} sx={keycapSx} />)}
                                         </Box>
                                     </Box>
                                 );
