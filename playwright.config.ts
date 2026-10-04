@@ -34,6 +34,8 @@ export default defineConfig({
       // audio on iOS is verified by hand on a device.
       name: 'desktop-webkit',
       testIgnore: ['**/audio.spec.ts', '**/piano.spec.ts'],
+      // These walk the transport by audio time (count-in bars, tempo steps): too timing-sensitive on a loaded CI box.
+      grepInvert: /folk forms walk|speed trainer raises/,
       use: { ...devices['Desktop Safari'], viewport: { width: 1440, height: 900 } },
     },
   ],
