@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
     Box, Typography, Button, Stack, Paper, IconButton,
-    CircularProgress, List, ListItem, ListItemText,
+    CircularProgress, Chip, List, ListItem, ListItemText,
     TextField, Checkbox, Dialog, DialogTitle,
     DialogContent, DialogActions,
     Collapse, Snackbar
@@ -10,8 +10,6 @@ import { usePomodoro, formatTime } from '../hooks/usePomodoro';
 import { useStudyTasks } from '../hooks/useStudyTasks';
 import { usePlayback } from '../state/PlaybackContext';
 import { Panel } from './Panel';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import PauseIcon from '@mui/icons-material/Pause';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -90,14 +88,13 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
         >
         <Box sx={{
             display: 'grid', gap: { xs: 1.5, md: 2 }, alignContent: 'start', flex: 1, minHeight: 0,
-            // Stacked on phones; timer | stats on tablets with the plan below; three columns on desktop.
-            gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))', lg: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr)' },
+            // Stacked on phones; timer | plan from tablets up.
+            gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) minmax(0, 1.4fr)' },
             gridTemplateAreas: {
-                xs: '"timer" "stats" "head" "list"',
-                md: '"timer stats" "head head" "list list"',
-                lg: '"timer stats head" "timer stats list"',
+                xs: '"timer" "head" "list"',
+                md: '"timer head" "timer list"',
             },
-            gridTemplateRows: { lg: 'auto minmax(0, 1fr)' },
+            gridTemplateRows: { md: 'auto minmax(0, 1fr)' },
         }}>
 
             {/* TIMER VISUAL */}
@@ -123,7 +120,7 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
                             fontFamily: '"Outfit", sans-serif',
                             '&:hover': { bgcolor: timerType === 'pomodoro' ? '#ffd54f' : 'rgba(229, 169, 95, 0.1)' } 
                         }}
-                    > Focus </Button>
+                    > Foco </Button>
                     <Button size="small" variant={timerType === 'break' ? "contained" : "text"}
                         onClick={() => setMode('break')}
                         sx={{ 
@@ -163,26 +160,30 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
                     </Box>
                 </Box>
 
-                <Stack direction="row" spacing={2} sx={{ justifyContent: 'center' }}>
-                    <IconButton onClick={toggleTimer} aria-label={isActive ? 'Pausar temporizador' : 'Iniciar temporizador'} size="large" sx={{
-                        bgcolor: isActive ? 'rgba(255,255,255,0.1)' : (timerType === 'pomodoro' ? '#ef5350' : '#ffa726'),
-                        color: 'white',
-                        '&:hover': { transform: 'scale(1.1)' },
-                        transition: 'all 0.2s'
-                    }}>
-                        {isActive ? <PauseIcon fontSize="large" /> : <PlayArrowIcon fontSize="large" />}
-                    </IconButton>
+                {/* Outlined, tomato-coloured and labelled: it must not read as a second Play of the metronome. */}
+                <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'center', alignItems: 'center' }}>
+                    <Button
+                        onClick={toggleTimer}
+                        aria-label={isActive ? 'Pausar temporizador' : 'Iniciar temporizador'}
+                        variant="outlined"
+                        startIcon={<TomatoIcon filled={true} size={18} />}
+                        sx={{
+                            minWidth: 132, minHeight: 44, borderRadius: 2, fontWeight: 800, textTransform: 'none',
+                            color: isActive ? 'text.primary' : '#ff8a80', borderColor: isActive ? 'rgba(255,255,255,0.3)' : '#ff8a80', borderWidth: 2,
+                            '&:hover': { borderWidth: 2, bgcolor: 'rgba(239, 83, 80, 0.12)' },
+                        }}
+                    >
+                        {isActive ? 'Pausar' : 'Iniciar'}
+                    </Button>
                     <IconButton onClick={resetTimer} aria-label="Reiniciar temporizador" sx={{ color: 'text.secondary' }}><RefreshIcon /></IconButton>
                 </Stack>
+                <Chip
+                    size="small"
+                    variant="outlined"
+                    sx={{ mt: 2, color: 'primary.main', borderColor: 'rgba(229, 169, 95, 0.4)' }}
+                    label={<><span data-testid="bars-practiced">{totalBarsPracticed}</span> {totalBarsPracticed === 1 ? 'compás practicado' : 'compases practicados'}</>}
+                />
             </Box>
-
-            {/* STATS */}
-            <Paper sx={{ gridArea: 'stats', p: 1, bgcolor: '#1a1a1a', border: '1px solid #333', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>COMPASES PRACTICADOS</Typography>
-                <Typography variant="h5" color="primary" sx={{ fontWeight: 'bold' }} data-testid="bars-practiced">
-                    {totalBarsPracticed}
-                </Typography>
-            </Paper>
 
             {/* TASK LIST HEADER */}
             <Stack direction="row" sx={{ gridArea: 'head', justifyContent: 'space-between', alignItems: 'center', px: 1 }}>

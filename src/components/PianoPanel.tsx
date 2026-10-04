@@ -174,14 +174,15 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
             sx={{ minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }}
         >
             <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
-                <Chip
+                {/* Only when it tells something: loading, or the synthesised fallback. */}
+                <span className="visually-hidden" role="status" data-testid="piano-status" data-status={engine.pianoStatus}>{STATUS_LABEL[engine.pianoStatus]}</span>
+                {(engine.pianoStatus === 'loading' || engine.pianoStatus === 'failed') && <Chip
                     size="small"
                     label={STATUS_LABEL[engine.pianoStatus]}
-                    data-testid="piano-status"
-                    data-status={engine.pianoStatus}
-                    color={engine.pianoStatus === 'ready' ? 'success' : engine.pianoStatus === 'failed' ? 'warning' : 'default'}
+                    data-testid="piano-status-badge"
+                    color={engine.pianoStatus === 'failed' ? 'warning' : 'default'}
                     variant="outlined"
-                />
+                />}
                 {chord && (
                     <Typography variant="caption" sx={{ color: '#e5a95f' }} data-testid="piano-chord">
                         Acorde: {chord.map(n => { const m = noteToMidi(n); return m === null ? n : spanishNoteName(m); }).join(' · ')}

@@ -14,6 +14,8 @@ export const darkTheme = createTheme({
     secondary: {
       main: '#ff6d00',
     },
+    // White text on this red reaches 4.98:1 (MUI's default red is 3.7:1).
+    error: { main: '#d32f2f' },
     background: {
       default: '#070605',
       paper: '#161412',
