@@ -48,6 +48,7 @@ class FakeScheduler {
     preloadPiano() { this.record('preloadPiano', []); return Promise.resolve(true); }
     pianoNoteOn(...a: unknown[]) { this.record('pianoNoteOn', a); }
     pianoNoteOff(...a: unknown[]) { this.record('pianoNoteOff', a); }
+    setPianoSustain(...a: unknown[]) { this.record('setPianoSustain', a); }
     releaseAllPianoKeys() {}
     armMelodyRecording(...a: unknown[]) { this.record('armMelodyRecording', a); }
     cancelMelodyRecording() {}
@@ -160,6 +161,19 @@ describe('App (integration with a scripted engine)', () => {
         fireEvent.change(input, { target: { value: '88' } });
         fireEvent.click(screen.getByText('Poner tempo 88 BPM'));
         expect(bpmInput().value).toBe('88');
+    });
+
+    it('offers the view presets and panel switches in the command palette', async () => {
+        render(<App />);
+        fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
+        const input = await screen.findByPlaceholderText(/Buscá un comando/);
+        fireEvent.change(input, { target: { value: 'solo metr' } });
+        fireEvent.click(await screen.findByText('Vista: Solo metrónomo'));
+        expect(document.querySelectorAll('[data-panel]')).toHaveLength(2);
+        fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
+        fireEvent.change(await screen.findByPlaceholderText(/Buscá un comando/), { target: { value: 'panel: piano' } });
+        fireEvent.click(await screen.findByText('Mostrar panel: Piano'));
+        expect(document.querySelector('[data-panel="piano"]')).not.toBeNull();
     });
 
     it('Ctrl+K toggles the command palette closed again', async () => {

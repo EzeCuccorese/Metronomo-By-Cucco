@@ -45,6 +45,7 @@ import { useLayout } from './hooks/useLayout';
 import { useMixer } from './hooks/useMixer';
 import { useHarmonySync, useMelodySync } from './hooks/useEngineSync';
 import { LayoutContext } from './state/LayoutContext';
+import { PANEL_IDS, PANEL_LABELS, PANEL_PRESET_ORDER, PRESET_LABELS } from './state/layout';
 import type { PanelId } from './state/layout';
 import { ViewMenu } from './components/ViewMenu';
 import { BluetoothNotice } from './components/BluetoothNotice';
@@ -144,6 +145,25 @@ function App() {
     keywords: ['ritmo', 'rhythm'],
     run: () => loadPreset(p.id),
   })), [loadPreset]);
+  const layout = useLayout();
+  // The view presets and panel switches are also palette commands (⌘K), next to the "Vista" menu.
+  const viewCommands = useMemo<PaletteCommand[]>(() => [
+    ...PANEL_PRESET_ORDER.map(preset => ({
+      id: `view.preset.${preset}`,
+      label: `Vista: ${PRESET_LABELS[preset]}`,
+      group: 'Vista',
+      keywords: ['vista', 'preset', 'paneles', 'layout'],
+      run: () => layout.setPreset(preset),
+    })),
+    ...PANEL_IDS.map(id => ({
+      id: `view.panel.${id}`,
+      label: `${layout.panels[id] === 'hidden' ? 'Mostrar' : 'Ocultar'} panel: ${PANEL_LABELS[id]}`,
+      group: 'Vista',
+      keywords: ['vista', 'panel', 'paneles'],
+      run: () => layout.setPanelState(id, layout.panels[id] === 'hidden' ? 'open' : 'hidden'),
+    })),
+  ], [layout]);
+  const paletteCommands = useMemo(() => [...rhythmCommands, ...viewCommands], [rhythmCommands, viewCommands]);
   const setBpmFromPalette = useCallback((value: number) => { if (!tempoLocked) setBpmRaw(clampBpm(value)); }, [tempoLocked, setBpmRaw]);
 
   const stepPreset = useCallback((delta: 1 | -1) => {
@@ -166,7 +186,6 @@ function App() {
   });
 
   // Settings edited inside a card reach the engine from here, so a hidden or folded card keeps its sound.
-  const layout = useLayout();
   const mixer = useMixer(currentPattern, {
     onVolumeChange: engine.setChannelVolume,
     onPanChange: engine.setChannelPan,
@@ -310,7 +329,7 @@ function App() {
         </Box>
 
         <PwaUpdater isPlaying={isPlaying} />
-        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={rhythmCommands} onSetBpm={setBpmFromPalette} tempoLocked={tempoLocked} />
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={paletteCommands} onSetBpm={setBpmFromPalette} tempoLocked={tempoLocked} />
         <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
         <GenreSelectorModal
           open={libraryOpen}
