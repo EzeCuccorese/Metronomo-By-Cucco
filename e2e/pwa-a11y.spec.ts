@@ -10,6 +10,12 @@ test.describe('PWA', () => {
         expect(manifest.name).toBe('Metrónomo by Cucco');
         expect(manifest.lang).toBe('es');
         expect(manifest.icons.some((i: { purpose?: string }) => i.purpose === 'maskable')).toBe(true);
+        expect(manifest.id).toBe('/');
+        expect(manifest.icons.filter((i: { purpose?: string }) => i.purpose === 'maskable').map((i: { sizes: string }) => i.sizes).sort()).toEqual(['192x192', '512x512']);
+        expect(manifest.screenshots.map((s: { form_factor: string }) => s.form_factor).sort()).toEqual(['narrow', 'wide']);
+        for (const shot of manifest.screenshots) {
+            expect((await request.get(`/${shot.src}`)).status(), shot.src).toBe(200);
+        }
         for (const icon of manifest.icons) {
             const res = await request.get(`/${icon.src}`);
             expect(res.status(), icon.src).toBe(200);

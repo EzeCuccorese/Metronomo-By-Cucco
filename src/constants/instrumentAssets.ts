@@ -1,7 +1,6 @@
 export const INSTRUMENT_IMAGES: Record<string, string> = {
     bombo_leguero: '/instruments/bombo_leguero.webp',
     bombo: '/instruments/bombo_leguero.webp',
-    caja: '/instruments/tom.webp',
     cajon: '/instruments/tom.webp',
     palmas: '/instruments/claves.webp',
     candombe_chico: '/instruments/tom.webp',
