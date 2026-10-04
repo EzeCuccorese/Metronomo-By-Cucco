@@ -458,4 +458,23 @@ describe('App (integration with a scripted engine)', () => {
         await waitForElementToBeRemoved(() => screen.queryByRole('dialog', { name: 'Modo escenario' }));
         expect(scheduler().playing).toBe(true); // closing the stage does not stop the metronome
     });
+
+    it('toggles the stage mode with F, and lists it in the cheat sheet and the palette', async () => {
+        render(<App />);
+        fireEvent.keyDown(document.body, { code: 'KeyF', key: 'f' });
+        expect(await screen.findByRole('dialog', { name: 'Modo escenario' })).toBeInTheDocument();
+        fireEvent.keyDown(document.body, { code: 'KeyF', key: 'f' });
+        await waitForElementToBeRemoved(() => screen.queryByRole('dialog', { name: 'Modo escenario' }));
+
+        fireEvent.keyDown(document.body, { code: 'Slash', key: '?', shiftKey: true });
+        const sheet = await screen.findByRole('dialog', { name: 'Atajos de teclado' });
+        expect(within(sheet).getByText('Modo escenario (atril)')).toBeInTheDocument();
+        fireEvent.keyDown(sheet, { key: 'Escape' });
+        await waitForElementToBeRemoved(() => screen.queryByRole('dialog', { name: 'Atajos de teclado' }));
+
+        fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
+        fireEvent.change(await screen.findByPlaceholderText(/Buscá un comando/), { target: { value: 'escenario' } });
+        fireEvent.click(await screen.findByText('Modo escenario (atril)'));
+        expect(await screen.findByRole('dialog', { name: 'Modo escenario' })).toBeInTheDocument();
+    });
 });

@@ -189,6 +189,7 @@ function App() {
     'transport.bpm-down': e => { if (!tempoLocked) setBpmRaw(prev => clampBpm(prev - (e.shiftKey ? 5 : 1))); },
     'transport.prev-rhythm': () => stepPreset(-1),
     'transport.next-rhythm': () => stepPreset(1),
+    'view.stage': e => { if (!e.repeat) setStageOpen(prev => !prev); },
     'help.shortcuts': () => setShortcutsOpen(true),
     'palette.open': () => setPaletteOpen(prev => !prev),
   });
