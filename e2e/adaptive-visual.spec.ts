@@ -7,7 +7,9 @@ import { test, expect, openApp } from './fixtures';
  */
 test.describe('visual regression: first screen', () => {
     test.skip(process.platform !== 'linux', 'Baselines are Linux-rendered');
-    test.skip(({ }, testInfo) => ['pixel-7', 'iphone-max-landscape'].includes(testInfo.project.name), 'Covered by the other phone viewports');
+    test.beforeEach(({ page: _page }, testInfo) => {
+        test.skip(['pixel-7', 'iphone-max-landscape'].includes(testInfo.project.name), 'Covered by the other phone viewports');
+    });
 
     test('first screen', async ({ page }) => {
         // Fixed time: nothing on the first screen should depend on the clock, but pin it anyway.
