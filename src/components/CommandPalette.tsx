@@ -50,11 +50,15 @@ export default function CommandPalette({ open, onClose, commands, onSetBpm, temp
     const all = useMemo(() => [...shortcutCommands(), ...commands], [commands]);
     const groups = useMemo(() => {
         const map = new Map<string, PaletteCommand[]>();
-        for (const c of all) map.set(c.group, [...(map.get(c.group) ?? []), c]);
+        for (const c of all) {
+            const list = map.get(c.group);
+            if (list) list.push(c); else map.set(c.group, [c]);
+        }
         return Array.from(map.entries());
     }, [all]);
 
-    const typedBpm = /^\d{2,3}$/.test(search.trim()) ? Number(search.trim()) : null;
+    const bpmMatch = /^(\d{2,3})(?:\s*bpm)?$/i.exec(search.trim());
+    const typedBpm = bpmMatch ? Number(bpmMatch[1]) : null;
     const bpmValid = typedBpm !== null && typedBpm >= MIN_BPM && typedBpm <= MAX_BPM;
 
     const close = () => { setSearch(''); onClose(); };
@@ -83,7 +87,7 @@ export default function CommandPalette({ open, onClose, commands, onSetBpm, temp
                     {groups.map(([group, items]) => (
                         <Command.Group key={group} heading={group}>
                             {items.map(c => (
-                                <Command.Item key={c.id} value={`${c.group} ${c.label}`} keywords={c.keywords} onSelect={() => run(c.run)}>
+                                <Command.Item key={c.id} value={`${c.group} ${c.label}`} keywords={[...(c.keywords ?? []), ...(c.hint ? [c.hint] : [])]} onSelect={() => run(c.run)}>
                                     <span>{c.label}</span>
                                     {c.hint && <span className="palette-hint">{c.hint}</span>}
                                 </Command.Item>

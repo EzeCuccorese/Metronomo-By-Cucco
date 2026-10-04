@@ -50,6 +50,17 @@ describe('CommandPalette', () => {
         expect(screen.getByText(/fuera de/)).toBeInTheDocument();
     });
 
+    it('accepts a trailing "bpm" and finds shortcuts by their key', () => {
+        const p = setup();
+        const input = screen.getByPlaceholderText(/Buscá un comando/);
+        fireEvent.change(input, { target: { value: '95 bpm' } });
+        fireEvent.click(screen.getByText('Poner tempo 95 BPM'));
+        expect(p.onSetBpm).toHaveBeenCalledWith(95);
+        fireEvent.change(input, { target: { value: 'Espacio' } });
+        expect(screen.getByText('Iniciar / detener')).toBeInTheDocument();
+        expect(screen.queryByText('Ritmo: Chacarera')).not.toBeInTheDocument();
+    });
+
     it('does not offer the tempo while the trainer owns it', () => {
         const p = setup({ tempoLocked: true });
         fireEvent.change(screen.getByPlaceholderText(/Buscá un comando/), { target: { value: '90' } });

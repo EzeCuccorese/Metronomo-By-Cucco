@@ -248,6 +248,17 @@ describe('PianoPanel', () => {
         expect(engine.setPianoSustain).toHaveBeenLastCalledWith(false);
     });
 
+    it('Esc releases held keys and the Shift pedal on its way out', () => {
+        const { engine } = renderPanel();
+        fireEvent.click(screen.getByRole('button', { name: 'Teclado PC' }));
+        fireEvent.keyDown(document.body, { code: 'KeyA' });
+        fireEvent.keyDown(document.body, { code: 'ShiftLeft' });
+        fireEvent.keyDown(document.body, { code: 'Escape' });
+        expect(engine.pianoNoteOff).toHaveBeenCalledWith(48);
+        expect(engine.setPianoSustain).toHaveBeenLastCalledWith(false);
+        expect(screen.getByRole('button', { name: 'Teclado PC' })).toHaveAttribute('aria-pressed', 'false');
+    });
+
     it('lifts the Shift pedal when the window loses focus', () => {
         const { engine } = renderPanel();
         keyEl(48).focus();
