@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Cloudflare Workers Static Assets: the build output is served as-is, no Worker script.
+  "name": "metronomo-by-cucco",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    // Unknown paths get index.html (the app is a SPA); real files and the _headers file are served as usual.
+    "not_found_handling": "single-page-application"
+  }
+}
