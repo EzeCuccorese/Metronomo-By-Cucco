@@ -6,10 +6,22 @@ const PORT = Number(process.env.E2E_PORT ?? 4173);
  * Device projects run on Chromium with the device's touch/pointer emulation (iOS Safari itself is
  * checked by hand on the phone). Viewports are the ones the layouts are designed for.
  */
+const chromiumLaunchOptions = {
+  args: [
+    '--autoplay-policy=no-user-gesture-required',
+    // The audio probe reads the Web Audio graph (AnalyserNode), not the speakers:
+    // mute the device output so local runs don't play the metronome out loud.
+    '--mute-audio',
+  ],
+  // Optional: reuse a locally installed Chromium instead of the one bundled with this Playwright version.
+  executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
+};
+
 const chromiumDevice = (descriptor: keyof typeof devices, viewport: { width: number; height: number }) => ({
   ...devices[descriptor],
   defaultBrowserType: 'chromium' as const,
   viewport,
+  launchOptions: chromiumLaunchOptions,
 });
 
 // Only the adaptive specs run on every viewport; the audio/controls specs stay on desktop.
@@ -31,22 +43,23 @@ export default defineConfig({
     serviceWorkers: 'block',
     // The visual baselines and layout checks must not depend on the OS animation setting.
     reducedMotion: 'reduce',
-    launchOptions: {
-      args: [
-        '--autoplay-policy=no-user-gesture-required',
-        // The audio probe reads the Web Audio graph (AnalyserNode), not the speakers:
-        // mute the device output so local runs don't play the metronome out loud.
-        '--mute-audio',
-      ],
-      // Optional: reuse a locally installed Chromium instead of the one bundled with this Playwright version.
-      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
-    },
   },
   projects: [
     {
       name: 'desktop-chromium',
       testIgnore: [SERVICE_WORKER],
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 }, launchOptions: chromiumLaunchOptions },
+    },
+    {
+      // UI and PWA smoke tests on WebKit (the engine behind Safari). Playwright's WebKit is not iOS Safari and
+      // its audio output can't be probed the way Chromium's can, so the real-audio specs stay Chromium-only;
+      // audio on iOS is verified by hand on a device. The service-worker and visual-regression specs are
+      // Chromium-only too (the baselines are per project and Linux-only).
+      name: 'desktop-webkit',
+      testIgnore: ['**/audio.spec.ts', '**/piano.spec.ts', SERVICE_WORKER, /adaptive-visual\.spec\.ts/],
+      // These walk the transport by audio time (count-in bars, tempo steps): too timing-sensitive on a loaded CI box.
+      grepInvert: /folk forms walk|speed trainer raises/,
+      use: { ...devices['Desktop Safari'], viewport: { width: 1440, height: 900 } },
     },
     // Phone (iPhone 15 emulation) portrait and landscape, plus the Pro Max-sized landscape.
     { name: 'iphone-portrait', testMatch: ADAPTIVE, use: chromiumDevice('iPhone 15', { width: 390, height: 844 }) },
@@ -56,12 +69,12 @@ export default defineConfig({
     { name: 'ipad-portrait', testMatch: ADAPTIVE, use: chromiumDevice('iPad (gen 11)', { width: 820, height: 1180 }) },
     { name: 'ipad-landscape', testMatch: ADAPTIVE, use: chromiumDevice('iPad (gen 11) landscape', { width: 1180, height: 820 }) },
     // Android phone on Chrome.
-    { name: 'pixel-7', testMatch: ADAPTIVE, use: { ...devices['Pixel 7'] } },
+    { name: 'pixel-7', testMatch: ADAPTIVE, use: { ...devices['Pixel 7'], launchOptions: chromiumLaunchOptions } },
     // The only project with real service workers: offline use and the update prompt.
     {
       name: 'pwa-service-worker',
       testMatch: SERVICE_WORKER,
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 }, serviceWorkers: 'allow' },
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 }, serviceWorkers: 'allow', launchOptions: chromiumLaunchOptions },
     },
   ],
   webServer: {

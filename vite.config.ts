@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import { playwright } from '@vitest/browser-playwright'
 import { VitePWA } from 'vite-plugin-pwa'
 
 /**
@@ -76,11 +77,36 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./src/test/setup.ts'],
     // Full-app integration tests render the whole MUI tree; coverage instrumentation makes them slow.
     testTimeout: 20000,
-    include: ['src/**/*.test.{ts,tsx}'],
+    projects: [
+      {
+        // Hooks, UI and pure logic against jsdom with mocked Web Audio.
+        extends: true,
+        test: {
+          name: 'unit',
+          environment: 'jsdom',
+          setupFiles: ['./src/test/setup.ts'],
+          include: ['src/**/*.test.{ts,tsx}'],
+          exclude: ['src/**/*.browser.test.{ts,tsx}']
+        }
+      },
+      {
+        // Real Web Audio in Chromium: renders audio with OfflineAudioContext and measures it.
+        extends: true,
+        test: {
+          name: 'browser',
+          include: ['src/**/*.browser.test.{ts,tsx}'],
+          browser: {
+            enabled: true,
+            headless: true,
+            // Offline rendering makes no sound; --mute-audio keeps the headless browser silent on a dev machine anyway.
+            provider: playwright({ launchOptions: { args: ['--mute-audio'] } }),
+            instances: [{ browser: 'chromium' }]
+          }
+        }
+      }
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

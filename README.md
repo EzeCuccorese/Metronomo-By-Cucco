@@ -87,7 +87,9 @@ pnpm dev               # servidor de desarrollo
 pnpm build             # build de producción (typecheck + vite)
 pnpm lint              # Oxlint (type-aware)
 pnpm typecheck
-pnpm test              # tests unitarios e integración (Vitest + Testing Library)
+pnpm test              # Vitest: proyectos unit (jsdom) y browser (Chromium real)
+pnpm test:unit         # solo el proyecto unit
+pnpm test:browser      # solo el proyecto browser (audio real con OfflineAudioContext)
 pnpm test:coverage     # con umbrales de cobertura
 pnpm test:e2e          # Playwright contra el build de producción
 pnpm check             # todo lo anterior
@@ -97,8 +99,9 @@ La app requiere un contexto seguro (`crypto.randomUUID`, Web Audio, service work
 
 ### Tests
 
-- **Unitarios e integración (Vitest).** Cubren el Scheduler (timing, cambios de patrón, trainer, silencios y formas), los sintetizadores (ruteo, corte de voces), los hooks, la persistencia y la app completa con un motor simulado.
-- **End-to-end (Playwright).** Corren sobre el bundle de producción servido con los mismos headers de seguridad que nginx. Una sonda intercepta la salida del `AudioContext` y mide el audio que realmente se escucha. Así se verifica, por ejemplo, que el preset Metrónomo marca cada tiempo, que una edición de la grilla suena en el compás siguiente y que detener deja el audio en silencio. También se prueban el teclado, la persistencia, la PWA y la accesibilidad (axe).
+- **Unitarios e integración (Vitest, proyecto `unit`, jsdom).** Cubren el Scheduler (timing, cambios de patrón, trainer, silencios y formas), los sintetizadores (ruteo, corte de voces), los hooks, la persistencia y la app completa con un motor simulado. Web Audio está simulado con mocks.
+- **Audio real (Vitest Browser Mode, proyecto `browser`, Chromium vía `@vitest/browser-playwright`).** Los archivos `*.browser.test.ts` corren el motor de verdad (Scheduler, DrumSynthesizer, PolyphonicSynth, PianoSampler) sobre un `OfflineAudioContext`: renderizan audio y miden las muestras. Por ejemplo, que el click caiga cada 0,5 s a 120 BPM con diferencia de pocas muestras, que el acento sea más fuerte, que un canal silenciado no suene y que stop() corte el sonido. Los helpers están en `src/test/browser/audioHarness.ts`. Hace falta Chromium de Playwright (`pnpm exec playwright install chromium`). La cobertura v8 funciona en Chromium y se combina con la del proyecto `unit`: los umbrales se evalúan sobre el total, así que `pnpm test:browser` solo (sin los tests unit) no los alcanza; usar `pnpm test:coverage`.
+- **End-to-end (Playwright, proyectos `desktop-chromium` y `desktop-webkit`).** Corren sobre el bundle de producción servido con los mismos headers de seguridad que nginx. Una sonda intercepta la salida del `AudioContext` y mide el audio que realmente se escucha. Así se verifica, por ejemplo, que el preset Metrónomo marca cada tiempo, que una edición de la grilla suena en el compás siguiente y que detener deja el audio en silencio. También se prueban el teclado, la persistencia, la PWA y la accesibilidad (axe). El proyecto WebKit (el motor de Safari) corre solo los tests de UI y PWA (`controls` y `pwa-a11y`, sin los dos que avanzan por tiempo de audio: formas folklóricas y speed trainer): el WebKit de Playwright no es Safari de iOS y no permite medir el audio como Chromium, así que las pruebas de audio real son solo de Chromium y el audio en iPhone se verifica a mano. Para correrlo localmente: `pnpm exec playwright install webkit`.
 
 ## Créditos
 
