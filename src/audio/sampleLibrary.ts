@@ -7,26 +7,26 @@
  * (ES) Carga de samples compartida: se descarga y decodifica una sola vez por contexto.
  */
 
-const SAMPLE_ASSETS: { name: string; url: string }[] = [
-    { name: 'kick', url: '/audio/kick.wav' },
-    { name: 'snare', url: '/audio/snare.wav' },
-    { name: 'hihat', url: '/audio/hihat.wav' },
-    { name: 'hihat-open', url: '/audio/hihat-open.wav' },
-    { name: 'ride', url: '/audio/ride.wav' },
-    { name: 'surdo', url: '/audio/surdo.wav' },
-    { name: 'tom_high', url: '/audio/tom1.wav' },
-    { name: 'tom_low', url: '/audio/tom2.wav' },
-    { name: 'tom_floor', url: '/audio/tom3.wav' },
-    { name: 'bombo_parche_raw', url: '/audio/bombo_parche.ogg' },
-    { name: 'bombo_aro_raw', url: '/audio/bombo_aro.ogg' },
-    { name: 'caja_raw', url: '/audio/caja.ogg' },
-    { name: 'cajon_raw', url: '/audio/cajon.ogg' },
-    { name: 'palmas_raw', url: '/audio/palmas.ogg' },
-    { name: 'shaker_real_raw', url: '/audio/shaker_real.ogg' },
-    { name: 'clave_raw', url: '/audio/clave.ogg' },
-    { name: 'candombe_chico_raw', url: '/audio/candombe_chico.ogg' },
-    { name: 'candombe_repique_raw', url: '/audio/candombe_repique.ogg' },
-    { name: 'candombe_piano_raw', url: '/audio/candombe_piano.ogg' }
+const SAMPLE_ASSETS: { name: string; base: string }[] = [
+    { name: 'kick', base: '/audio/kick' },
+    { name: 'snare', base: '/audio/snare' },
+    { name: 'hihat', base: '/audio/hihat' },
+    { name: 'hihat-open', base: '/audio/hihat-open' },
+    { name: 'ride', base: '/audio/ride' },
+    { name: 'surdo', base: '/audio/surdo' },
+    { name: 'tom_high', base: '/audio/tom1' },
+    { name: 'tom_low', base: '/audio/tom2' },
+    { name: 'tom_floor', base: '/audio/tom3' },
+    { name: 'bombo_parche_raw', base: '/audio/bombo_parche' },
+    { name: 'bombo_aro_raw', base: '/audio/bombo_aro' },
+    { name: 'caja_raw', base: '/audio/caja' },
+    { name: 'cajon_raw', base: '/audio/cajon' },
+    { name: 'palmas_raw', base: '/audio/palmas' },
+    { name: 'shaker_real_raw', base: '/audio/shaker_real' },
+    { name: 'clave_raw', base: '/audio/clave' },
+    { name: 'candombe_chico_raw', base: '/audio/candombe_chico' },
+    { name: 'candombe_repique_raw', base: '/audio/candombe_repique' },
+    { name: 'candombe_piano_raw', base: '/audio/candombe_piano' }
 ];
 
 /** Raw recordings are trimmed to the attack (first sample above `threshold`) and shortened. */
@@ -45,15 +45,16 @@ const TRIMS: { from: string; to: string; threshold: number; seconds: number }[] 
 
 const cache = new WeakMap<BaseAudioContext, Promise<Map<string, AudioBuffer>>>();
 
-async function loadSample(context: BaseAudioContext, url: string): Promise<AudioBuffer | null> {
+/** Every sample ships as Opus-in-Ogg, which every supported browser decodes. */
+async function loadSample(context: BaseAudioContext, base: string): Promise<AudioBuffer | null> {
+    const url = `${base}.ogg`;
     try {
-        const baseUrl = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'http://localhost';
-        const response = await fetch(new URL(url, baseUrl).href);
+        const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return await context.decodeAudioData(await response.arrayBuffer());
     } catch (e) {
-        // The synthesizer falls back to its synthesized voice for this instrument.
         console.error(`Failed to load sample ${url}`, e);
+        // The synthesizer falls back to its synthesized voice for this instrument.
         return null;
     }
 }
@@ -62,7 +63,8 @@ export function trimBuffer(context: BaseAudioContext, buffer: AudioBuffer, thres
     const sampleRate = buffer.sampleRate;
     const numChannels = buffer.numberOfChannels;
     const trimLength = Math.min(buffer.length, Math.floor(durationSec * sampleRate));
-    
+    const decayStart = Math.floor(trimLength * 0.75);
+
     // Find peak index in first channel
     const firstChanData = buffer.getChannelData(0);
     let peakIndex = 0;
@@ -86,8 +88,7 @@ export function trimBuffer(context: BaseAudioContext, buffer: AudioBuffer, thres
             } else {
                 dstData[i] = 0;
             }
-            
-            const decayStart = Math.floor(trimLength * 0.75);
+
             if (i > decayStart) {
                 const decayProgress = (i - decayStart) / (trimLength - decayStart);
                 dstData[i] *= Math.exp(-decayProgress * 4.0);
@@ -112,8 +113,12 @@ export function loadSamples(context: BaseAudioContext): Promise<Map<string, Audi
     if (!pending) {
         pending = (async () => {
             const buffers = new Map<string, AudioBuffer>();
-            const decoded = await Promise.all(SAMPLE_ASSETS.map(a => loadSample(context, a.url)));
-            decoded.forEach((buffer, i) => { if (buffer) buffers.set(SAMPLE_ASSETS[i].name, buffer); });
+            const decoded = await Promise.all(SAMPLE_ASSETS.map(a => loadSample(context, a.base)));
+            decoded.forEach((buffer, i) => {
+                if (!buffer) return;
+                const { name } = SAMPLE_ASSETS[i];
+                buffers.set(name, buffer);
+            });
             addTrimmedSamples(context, buffers);
             return buffers;
         })();

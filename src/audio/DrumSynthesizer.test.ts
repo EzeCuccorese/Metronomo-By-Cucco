@@ -119,7 +119,6 @@ class MockOfflineAudioContext {
 
 (globalThis as any).window = {
     AudioContext: MockAudioContext,
-    webkitAudioContext: MockAudioContext,
 } as any;
 
 (globalThis as any).OfflineAudioContext = MockOfflineAudioContext as any;

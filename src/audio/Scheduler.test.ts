@@ -23,13 +23,40 @@ vi.mock('./DrumSynthesizer', () => ({
 
 const poly = {
     playChord: vi.fn(),
+    playNote: vi.fn(),
     silence: vi.fn(),
     dispose: vi.fn(),
     connect: vi.fn(),
     setVolume: vi.fn(),
 };
+// Each Scheduler builds the harmony synth first, then the piano's fallback voice.
+const pianoFallback = { ...poly, playNote: vi.fn(), silence: vi.fn(), dispose: vi.fn(), connect: vi.fn() };
+let polyInstances = 0;
 vi.mock('./PolyphonicSynth', () => ({
-    PolyphonicSynth: class { constructor() { return poly; } }
+    PolyphonicSynth: class { constructor() { return polyInstances++ % 2 === 0 ? poly : pianoFallback; } }
+}));
+
+let nextVoice = 1;
+const piano = {
+    status: 'idle',
+    connect: vi.fn(),
+    load: vi.fn(async () => true),
+    onStatusChange: vi.fn(() => () => {}),
+    setHarmonyVolume: vi.fn(),
+    noteOn: vi.fn(() => nextVoice++),
+    noteOff: vi.fn(),
+    play: vi.fn(),
+    silence: vi.fn(),
+    dispose: vi.fn(),
+};
+let pianoFallbackVoice: ((midi: number, time: number, velocity: number, duration: number) => void) | null = null;
+vi.mock('./piano/PianoSampler', () => ({
+    PianoSampler: class {
+        constructor(_ctx: unknown, fallback: typeof pianoFallbackVoice) {
+            pianoFallbackVoice = fallback;
+            return piano;
+        }
+    }
 }));
 
 const worker = { postMessage: vi.fn(), terminate: vi.fn(), onmessage: null as unknown };
@@ -37,8 +64,6 @@ vi.mock('./clock.worker?worker', () => ({
     default: class { constructor() { return worker; } }
 }));
 
-// jsdom has no Worker: the Scheduler only creates its clock when the API exists.
-globalThis.Worker = class {} as unknown as typeof Worker;
 
 let rafCallbacks: FrameRequestCallback[] = [];
 globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
@@ -594,6 +619,245 @@ describe('Scheduler', () => {
             expect(scheduler.getIsPlaying()).toBe(false);
             expect(events.at(-1)?.formState).toMatchObject({ finished: true, totalFormBars: totalBars });
             expect(events.some(e => e.formState?.part === 2)).toBe(true);
+        });
+    });
+
+    describe('piano', () => {
+        // 4/4 at 120 BPM on a quarter-note grid: bar = 2 s, step = 0.5 s; the first bar starts at 0.05 s.
+        const BAR = 2;
+        const T0 = 0.05;
+        const melodyPlays = () => piano.play.mock.calls.filter(c => c[4] === 'melody').map(c => ({ midi: c[0] as number, time: c[1] as number }));
+
+        beforeEach(() => {
+            piano.status = 'idle';
+            (ctx as { outputLatency?: number }).outputLatency = undefined;
+            scheduler.setPattern(makePattern({ subdivision: 4, steps: [] }));
+            scheduler.setTempo(120);
+        });
+
+        it('routes the piano styles to the sampler, voice-led, on the harmony bus', () => {
+            scheduler.setAccompanimentStyle('piano');
+            expect(piano.load).toHaveBeenCalled();
+            scheduler.setHarmonyVolume(0.4);
+            expect(piano.setHarmonyVolume).toHaveBeenCalledWith(0.4);
+            scheduler.setHarmonyProgression([['C4', 'E4', 'G4'], ['G4', 'B4', 'D5']]);
+            scheduler.start();
+            run(scheduler, 1.1);
+
+            expect(poly.playChord).not.toHaveBeenCalled();
+            const calls = piano.play.mock.calls;
+            expect(calls.every(c => c[4] === 'harmony')).toBe(true);
+            const first = calls.filter(c => (c[1] as number) < T0 + 0.01).map(c => c[0]);
+            expect(first).toEqual([36, 60, 64, 67]); // bass + C major
+            const second = calls.filter(c => Math.abs((c[1] as number) - (T0 + 1)) < 0.01).map(c => c[0]);
+            expect(second).toEqual([43, 59, 62, 67]); // bass + G major voice-led (G stays)
+        });
+
+        it('keeps the synth styles on the synth', () => {
+            scheduler.setAccompanimentStyle('pad');
+            scheduler.setHarmonyProgression([['C4', 'E4', 'G4']]);
+            scheduler.start();
+            run(scheduler, 0.2);
+            expect(poly.playChord).toHaveBeenCalled();
+            expect(piano.play).not.toHaveBeenCalled();
+        });
+
+        it('plays the arpeggio in triplets in 6/8', () => {
+            scheduler.setPattern(makePattern({ timeSignature: [6, 8], subdivision: 12, steps: [] }));
+            scheduler.setAccompanimentStyle('piano_arpeggio');
+            scheduler.setHarmonyProgression([['C4', 'E4', 'G4']]);
+            scheduler.start();
+            run(scheduler, 0.7); // first half bar of 6/8 at ♩=120 lasts 0.75 s
+            const times = piano.play.mock.calls.map(c => Math.round(((c[1] as number) - T0) * 1000) / 1000);
+            expect(times).toEqual([0, 0.25, 0.5]);
+        });
+
+        it('plays live notes now, retriggers a held key and releases it', () => {
+            ctx.currentTime = 3;
+            scheduler.pianoNoteOn(60, 0.7);
+            expect(piano.noteOn).toHaveBeenLastCalledWith(60, 3, 0.7, 'live');
+            const firstVoice = piano.noteOn.mock.results.at(-1)!.value;
+            scheduler.pianoNoteOn(60, 0.9);
+            expect(piano.noteOff).toHaveBeenCalledWith(firstVoice, 3);
+            scheduler.pianoNoteOn(64, 0.9);
+            scheduler.pianoNoteOff(99); // never pressed
+            scheduler.releaseAllPianoKeys();
+            expect(piano.noteOff).toHaveBeenCalledTimes(3);
+            scheduler.pianoNoteOff(64); // already released
+            expect(piano.noteOff).toHaveBeenCalledTimes(3);
+        });
+
+        it('exposes the sample status and preloading', async () => {
+            piano.status = 'ready';
+            expect(scheduler.getPianoStatus()).toBe('ready');
+            await scheduler.preloadPiano();
+            const listener = vi.fn();
+            scheduler.onPianoStatusChange(listener);
+            expect(piano.onStatusChange).toHaveBeenCalledWith(listener);
+        });
+
+        it('records a take after the count-in bar and loops it at once', () => {
+            const recorded = vi.fn();
+            const events: PlaybackEvent[] = [];
+            scheduler.setOnMelodyRecorded(recorded);
+            scheduler.setOnPlaybackUpdate(e => events.push(e));
+            scheduler.start();
+            scheduler.armMelodyRecording(1, 1);
+            expect(scheduler.getMelodyState()).toBe('armed');
+
+            run(scheduler, T0 + BAR + 0.05); // into bar 2 (the recorded one)
+            expect(scheduler.getMelodyState()).toBe('recording');
+            scheduler.pianoNoteOn(60, 0.9); // on the downbeat of the take
+            run(scheduler, 0.5);
+            scheduler.pianoNoteOff(60);
+            scheduler.pianoNoteOn(65, 0.5);
+            run(scheduler, 0.25);
+            scheduler.pianoNoteOff(65);
+            expect(recorded).not.toHaveBeenCalled();
+
+            run(scheduler, BAR); // the take ends at the next bar line
+            expect(recorded).toHaveBeenCalledTimes(1);
+            expect(recorded).toHaveBeenCalledWith({
+                bars: 1,
+                subdivision: 4,
+                notes: [
+                    { step: 0, midi: 60, velocity: 0.9, length: 1 },
+                    { step: 1, midi: 65, velocity: 0.5, length: 1 },
+                ],
+            }, false);
+            expect(scheduler.getMelodyState()).toBe('idle');
+
+            // Visual events follow the recorder: armed during the count-in, then recording bar 0.
+            const states = events.map(e => e.melodyState);
+            expect(states.indexOf('armed')).toBeLessThan(states.indexOf('recording'));
+            expect(events.find(e => e.melodyState === 'recording')!.recordingBar).toBe(0);
+
+            // The loop starts on the bar line that closed the take and repeats every bar.
+            run(scheduler, BAR);
+            const loop = melodyPlays();
+            expect(loop.filter(p => p.midi === 60).map(p => p.time)).toEqual([T0 + 2 * BAR, T0 + 3 * BAR]);
+            expect(loop.filter(p => p.midi === 65).map(p => p.time)).toEqual([T0 + 2 * BAR + 0.5, T0 + 3 * BAR + 0.5]);
+        });
+
+        it('compensates the output latency when quantizing', () => {
+            (ctx as { outputLatency?: number }).outputLatency = 0.2; // a key pressed "with" the heard beat 2
+            const recorded = vi.fn();
+            scheduler.setOnMelodyRecorded(recorded);
+            scheduler.start();
+            scheduler.armMelodyRecording(1, 0);
+            run(scheduler, T0 + 0.5 + 0.15); // audio clock 0.7, heard 0.5 -> step 1 (0.55)
+            scheduler.pianoNoteOn(62, 1);
+            run(scheduler, BAR);
+            expect(recorded.mock.calls[0][0].notes).toEqual([{ step: 1, midi: 62, velocity: 1, length: 3 }]);
+        });
+
+        it('takes a note played just before the closing downbeat (wraps to beat 1)', () => {
+            const recorded = vi.fn();
+            scheduler.setOnMelodyRecorded(recorded);
+            scheduler.start();
+            scheduler.armMelodyRecording(1, 0);
+            run(scheduler, 1.975); // the closing bar line (2.05) is already scheduled
+            expect(recorded).toHaveBeenCalledTimes(1);
+            scheduler.pianoNoteOn(67, 0.8);
+            expect(recorded).toHaveBeenCalledTimes(2);
+            expect(recorded.mock.calls[1]).toEqual([{ bars: 1, subdivision: 4, notes: [{ step: 0, midi: 67, velocity: 0.8, length: 1 }] }, true]);
+            run(scheduler, 1);
+            scheduler.pianoNoteOn(69, 0.8); // too late now: just played, not recorded
+            expect(recorded).toHaveBeenCalledTimes(2);
+        });
+
+        it('waits for the form count-in before recording', () => {
+            const events: PlaybackEvent[] = [];
+            scheduler.setOnPlaybackUpdate(e => events.push(e));
+            scheduler.configureFormas(true, 'Zamba', 1);
+            scheduler.start();
+            scheduler.armMelodyRecording(2, 0);
+            run(scheduler, 3 * BAR + 0.2);
+            const firstRecording = events.find(e => e.melodyState === 'recording')!;
+            expect(firstRecording.formState?.sectionName).toMatch(/INTRODUCCI/);
+            expect(firstRecording.totalBars).toBe(2); // after the two count-in bars
+        });
+
+        it('loops a stored multi-bar melody in sync with the bar, also on a finer grid', () => {
+            scheduler.setPattern(makePattern({ subdivision: 16, steps: [] }));
+            scheduler.setMelody({ bars: 2, subdivision: 4, notes: [
+                { step: 0, midi: 60, velocity: 1, length: 1 },
+                { step: 6, midi: 67, velocity: 1, length: 2 },
+            ] });
+            expect(piano.load).toHaveBeenCalled();
+            scheduler.start();
+            run(scheduler, 2 * BAR * 2 - 0.2);
+            expect(melodyPlays()).toEqual([
+                { midi: 60, time: T0 },
+                { midi: 67, time: T0 + BAR + 1 },
+                { midi: 60, time: T0 + 2 * BAR },
+                { midi: 67, time: T0 + 3 * BAR + 1 },
+            ]);
+            const durations = piano.play.mock.calls.filter(c => c[4] === 'melody').map(c => c[3]);
+            expect(durations[1]).toBeCloseTo(1, 9);
+        });
+
+        it('does not play the old melody while recording, nor in silent bars', () => {
+            scheduler.setMelody({ bars: 1, subdivision: 4, notes: [{ step: 0, midi: 72, velocity: 1, length: 1 }] });
+            scheduler.start();
+            scheduler.armMelodyRecording(1, 0);
+            run(scheduler, BAR - 0.2);
+            expect(melodyPlays()).toEqual([]);
+            scheduler.setMelody(null);
+            scheduler.setSilenceMode(true, 1);
+            scheduler.setMelody({ bars: 1, subdivision: 4, notes: [{ step: 0, midi: 72, velocity: 1, length: 1 }] });
+            run(scheduler, 2 * BAR);
+            expect(melodyPlays().filter(p => p.midi === 72)).toEqual([]);
+        });
+
+        it('does not play the old melody over the count-in of an armed take', () => {
+            scheduler.setMelody({ bars: 1, subdivision: 4, notes: [{ step: 0, midi: 72, velocity: 1, length: 1 }] });
+            scheduler.start();
+            scheduler.armMelodyRecording(1, 2);
+            run(scheduler, 2 * BAR - 0.2);
+            expect(scheduler.getMelodyState()).toBe('armed');
+            expect(melodyPlays()).toEqual([]);
+        });
+
+        it('drops a take if the meter changes under it, and cancel/stop clear the recorder', () => {
+            const recorded = vi.fn();
+            scheduler.setOnMelodyRecorded(recorded);
+            scheduler.start();
+            scheduler.armMelodyRecording(2, 0);
+            run(scheduler, 0.3);
+            expect(scheduler.getMelodyState()).toBe('recording');
+            scheduler.setPattern(makePattern({ id: 'test', subdivision: 8, steps: [] }));
+            run(scheduler, BAR + 0.2);
+            expect(scheduler.getMelodyState()).toBe('idle');
+            expect(recorded).not.toHaveBeenCalled();
+
+            scheduler.armMelodyRecording(1, 3);
+            expect(scheduler.getMelodyState()).toBe('armed');
+            scheduler.cancelMelodyRecording();
+            expect(scheduler.getMelodyState()).toBe('idle');
+
+            scheduler.armMelodyRecording(1, 0);
+            run(scheduler, BAR + 0.2);
+            expect(scheduler.getMelodyState()).toBe('recording');
+            scheduler.stop();
+            expect(scheduler.getMelodyState()).toBe('idle');
+            expect(piano.silence).toHaveBeenCalledWith(['harmony', 'melody']);
+            expect(pianoFallback.silence).toHaveBeenCalled();
+        });
+
+        it('dispose() releases the piano too', () => {
+            scheduler.dispose();
+            expect(piano.dispose).toHaveBeenCalled();
+            expect(pianoFallback.dispose).toHaveBeenCalled();
+        });
+
+        it('falls back to the synth voice with note names', () => {
+            // The sampler receives a fallback that plays through the second PolyphonicSynth, on the piano strip.
+            expect(piano.connect).toHaveBeenCalled();
+            expect(pianoFallback.connect).toHaveBeenCalled();
+            expect(drum.getChannelNode).toHaveBeenCalledWith('piano');
+            pianoFallbackVoice!(61, 1.5, 0.6, 0.4);
+            expect(pianoFallback.playNote).toHaveBeenCalledWith('C#4', 0.4, 1.5);
         });
     });
 });

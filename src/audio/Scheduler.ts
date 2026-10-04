@@ -3,7 +3,14 @@ import DrumSynthesizer from './DrumSynthesizer';
 import type { RhythmPattern, RhythmStep } from '../rhythms/RhythmPatterns';
 import { PolyphonicSynth } from './PolyphonicSynth';
 import type { AccompanimentStyle } from './PolyphonicSynth';
-import { getBarDurationSeconds, getClickVelocity, getGroupCount } from '../rhythms/meter';
+import { getBarDurationSeconds, getClickVelocity, getGroupCount, isCompoundMeter } from '../rhythms/meter';
+import { PianoSampler } from './piano/PianoSampler';
+import type { PianoStatus } from './piano/PianoSampler';
+import { buildPianoSegment, isPianoStyle } from './piano/pianoAccompaniment';
+import { melodyNotesForStep } from './piano/melody';
+import type { Melody } from './piano/melody';
+import { MelodyRecorder } from './piano/MelodyRecorder';
+import { midiToNoteName } from './piano/notes';
 import ClockWorker from './clock.worker?worker'; // Vite Worker Import
 
 export const FORM_GENRES = ['Chacarera Simple', 'Chacarera Doble', 'Zamba', 'Cueca Norteña', 'Gato Norteño'] as const;
@@ -29,6 +36,9 @@ export interface FormState {
 
 export type TrainerMode = 'linear' | 'resistance_loop';
 
+/** Melody recorder state: waiting for its bar line (count-in), recording, or neither. */
+export type MelodyRecordState = 'idle' | 'armed' | 'recording';
+
 export interface TrainerConfig {
     active: boolean;
     startBpm: number;
@@ -49,6 +59,9 @@ export interface PlaybackEvent {
     formState: FormState | null;
     chordIndex: number;
     queuedPatternId: string | null;
+    melodyState: MelodyRecordState;
+    /** 0-based bar of the take being recorded (only meaningful while recording). */
+    recordingBar: number;
 }
 
 interface VisualQueueEvent extends PlaybackEvent {
@@ -127,6 +140,18 @@ class Scheduler {
     private currentChordIndex: number = -1;
     private accompanimentStyle: AccompanimentStyle = 'pad';
 
+    // Piano: accompaniment, live keyboard and recorded melody
+    private piano: PianoSampler;
+    private pianoFallback: PolyphonicSynth;
+    private lastPianoVoicing: number[] = [];
+    private liveVoices = new Map<number, number | null>();
+    private melody: Melody | null = null;
+    private melodyBar = 0;
+    private melodyBarPlayed = false;
+    private pendingTake: { bars: number; countIn: number } | null = null;
+    private take: MelodyRecorder | null = null;
+    private onMelodyRecorded: ((melody: Melody, isLateUpdate: boolean) => void) | null = null;
+
     // Timing variables
     private isPlaying: boolean = false;
     private nextNoteTime: number = 0.0;
@@ -187,14 +212,21 @@ class Scheduler {
         // Connect Polyphonic Synth to the multi-channel mixer strip
         this.polySynth.connect(this.synthesizer.getChannelNode('synth'));
 
-        if (typeof Worker !== 'undefined') {
-            this.clockWorker = new ClockWorker();
-            this.clockWorker.onmessage = (e) => {
-                if (e.data === 'tick') {
-                    this.scheduler();
-                }
-            };
-        }
+        // The piano has its own strip; while its samples load it falls back to the synth voice.
+        this.pianoFallback = new PolyphonicSynth();
+        this.piano = new PianoSampler(this.audioContext, (midi, time, _velocity, duration) =>
+            this.pianoFallback.playNote(midiToNoteName(midi), duration, time));
+        const pianoChannel = this.synthesizer.getChannelNode('piano');
+        this.piano.connect(pianoChannel);
+        this.pianoFallback.connect(pianoChannel);
+
+
+        this.clockWorker = new ClockWorker();
+        this.clockWorker.onmessage = (e) => {
+            if (e.data === 'tick') {
+                this.scheduler();
+            }
+        };
     }
 
     // --- Mixer passthrough ---
@@ -213,6 +245,7 @@ class Scheduler {
     // --- Harmony ---
     public setAccompanimentStyle(style: AccompanimentStyle) {
         this.accompanimentStyle = style;
+        if (isPianoStyle(style)) void this.piano.load();
     }
 
     public setHarmonyProgression(chords: string[][]) {
@@ -226,6 +259,89 @@ class Scheduler {
 
     public setHarmonyVolume(vol: number) {
         this.polySynth.setVolume(vol);
+        this.piano.setHarmonyVolume(vol);
+    }
+
+    // --- Piano ---
+    /** Starts downloading the piano samples (idempotent). */
+    public preloadPiano(): Promise<boolean> {
+        return this.piano.load();
+    }
+
+    public getPianoStatus(): PianoStatus {
+        return this.piano.status;
+    }
+
+    public onPianoStatusChange(listener: (status: PianoStatus) => void): () => void {
+        return this.piano.onStatusChange(listener);
+    }
+
+    /** Output latency, so a key pressed "with the click the musician heard" is recorded on that click. */
+    private inputLatency(): number {
+        const c = this.audioContext as AudioContext & { outputLatency?: number; baseLatency?: number };
+        const latency = c.outputLatency || c.baseLatency || 0;
+        return Number.isFinite(latency) ? Math.min(0.15, Math.max(0, latency)) : 0;
+    }
+
+    /** A key of the on-screen / computer keyboard went down. Recorded when a take is running. */
+    public pianoNoteOn(midi: number, velocity: number) {
+        const now = this.audioContext.currentTime;
+        this.pianoNoteOff(midi); // retrigger: lift the same key first
+        this.liveVoices.set(midi, this.piano.noteOn(midi, now, velocity, 'live'));
+
+        const take = this.take;
+        if (take && this.isPlaying) {
+            const heardAt = now - this.inputLatency();
+            if (take.acceptsLateNotesAt(heardAt) && take.noteOn(midi, velocity, heardAt) && take.isFinished) {
+                // A note just before the downbeat that closed the take still belongs to it.
+                this.melody = take.toMelody();
+                this.onMelodyRecorded?.(this.melody, true);
+            }
+        }
+    }
+
+    public pianoNoteOff(midi: number) {
+        if (!this.liveVoices.has(midi)) return;
+        const now = this.audioContext.currentTime;
+        this.piano.noteOff(this.liveVoices.get(midi) ?? null, now);
+        this.liveVoices.delete(midi);
+        this.take?.noteOff(midi, now - this.inputLatency());
+    }
+
+    /** Lifts every key held on the live keyboard (focus lost, panel unmounted...). */
+    public releaseAllPianoKeys() {
+        Array.from(this.liveVoices.keys()).forEach(midi => this.pianoNoteOff(midi));
+    }
+
+    /** Melody looped in sync with the bar (null = none). */
+    public setMelody(melody: Melody | null) {
+        this.melody = melody;
+        if (melody && melody.notes.length > 0) void this.piano.load();
+    }
+
+    public setOnMelodyRecorded(callback: (melody: Melody, isLateUpdate: boolean) => void) {
+        this.onMelodyRecorded = callback;
+    }
+
+    /**
+     * Arms the recorder: after `countInBars` bar lines (and never during a form's count-in
+     * or silence), the next `bars` bars are recorded, then the take loops at once.
+     */
+    public armMelodyRecording(bars: number, countInBars: number = 0) {
+        this.take = null;
+        this.pendingTake = { bars: Math.max(1, Math.round(bars)), countIn: Math.max(0, Math.round(countInBars)) };
+        void this.piano.load();
+    }
+
+    /** Drops an armed or running take (a finished one is kept). */
+    public cancelMelodyRecording() {
+        this.pendingTake = null;
+        if (this.take && !this.take.isFinished) this.take = null;
+    }
+
+    public getMelodyState(): MelodyRecordState {
+        if (this.take && !this.take.isFinished) return 'recording';
+        return this.pendingTake ? 'armed' : 'idle';
     }
 
     // --- Transport ---
@@ -355,7 +471,10 @@ class Scheduler {
         this.currentStepIndex = 0;
         this.harmonyHalfBarIndex = 0;
         this.lastChord = [];
+        this.lastPianoVoicing = [];
         this.currentChordIndex = -1;
+        this.melodyBar = 0;
+        this.melodyBarPlayed = false;
         this.visualQueue = [];
         this.formEndTime = null;
         this.isMutedBar = false;
@@ -382,7 +501,12 @@ class Scheduler {
         if (this.isPlaying) {
             this.synthesizer.silence();
             this.polySynth.silence();
+            this.pianoFallback.silence();
+            // Keys still held by the musician keep sounding; scheduled piano notes are cut.
+            this.piano.silence(['harmony', 'melody']);
         }
+        this.cancelMelodyRecording();
+        this.take = null;
         this.isPlaying = false;
         this.clockWorker?.postMessage({ action: 'stop' });
         this.stopVisualLoop();
@@ -394,6 +518,7 @@ class Scheduler {
         }
         this.harmonyHalfBarIndex = 0;
         this.lastChord = [];
+        this.lastPianoVoicing = [];
         this.currentChordIndex = -1;
     }
 
@@ -406,8 +531,12 @@ class Scheduler {
         this.clockWorker = null;
         this.onPlaybackUpdate = null;
         this.onStopped = null;
+        this.onMelodyRecorded = null;
+        this.liveVoices.clear();
         this.synthesizer.dispose();
         this.polySynth.dispose();
+        this.piano.dispose();
+        this.pianoFallback.dispose();
     }
 
     public playOneShot(instrument: string, modifier?: string) {
@@ -425,6 +554,11 @@ class Scheduler {
         const behind = now - this.nextNoteTime;
         if ((!this.gridAnchored && behind > 0) || behind > this.maxCatchUpSeconds) {
             this.nextNoteTime = now;
+        }
+
+        // A finished take stops accepting late notes half a step after its last bar line.
+        if (this.take?.isFinished && !this.take.acceptsLateNotesAt(now - this.inputLatency())) {
+            this.take = null;
         }
 
         while (this.isPlaying && this.formEndTime === null && this.nextNoteTime < now + this.scheduleAheadTime) {
@@ -506,7 +640,19 @@ class Scheduler {
                 } else if (chord && chord.length > 0 && !(this.silenceModeActive && this.isMutedBar)) {
                     // A slightly late chord starts now: envelope ramps can't be scheduled in the past.
                     const chordTime = Math.max(time, this.audioContext.currentTime);
-                    this.polySynth.playChord(chord, segmentDuration, chordTime, this.accompanimentStyle, this.lastChord, groups / segments);
+                    if (isPianoStyle(this.accompanimentStyle)) {
+                        const { notes, voicing } = buildPianoSegment(this.accompanimentStyle, {
+                            chord,
+                            previous: this.lastPianoVoicing,
+                            duration: segmentDuration,
+                            beats: groups / segments,
+                            pulsesPerBeat: isCompoundMeter(ts) ? 3 : 2,
+                        });
+                        notes.forEach(n => this.piano.play(n.midi, chordTime + n.offset, n.velocity, n.duration, 'harmony'));
+                        this.lastPianoVoicing = voicing;
+                    } else {
+                        this.polySynth.playChord(chord, segmentDuration, chordTime, this.accompanimentStyle, this.lastChord, groups / segments);
+                    }
                     this.lastChord = chord;
                 }
                 this.harmonyHalfBarIndex += 2 / segments;
@@ -514,6 +660,8 @@ class Scheduler {
                 this.currentChordIndex = -1;
             }
         }
+
+        this.scheduleMelody(time, idx, sub, ts, harmonyAllowed, silent);
 
         if (silent) {
             return; // Missed step: harmony counters advanced above, nothing sounds.
@@ -552,6 +700,49 @@ class Scheduler {
         }
     }
 
+    /** Bar lines drive the recorder; every step plays the melody notes that fall inside it. */
+    private scheduleMelody(time: number, idx: number, sub: number, ts: [number, number], allowed: boolean, silent = false) {
+        const barDuration = getBarDurationSeconds(this.tempo, ts);
+        if (idx === 0) {
+            this.advanceRecorder(time, sub, barDuration / sub, allowed);
+            this.melodyBarPlayed = allowed;
+        }
+
+        // An armed take (count-in) also silences the old loop: it is about to be replaced.
+        const recording = (this.take !== null && !this.take.isFinished) || this.pendingTake !== null;
+        // Missed steps (stall) still move the recorder and the loop position, but nothing sounds.
+        if (silent || !this.melody || recording || !allowed || (this.silenceModeActive && this.isMutedBar)) return;
+        const loopBar = this.melodyBar % this.melody.bars;
+        melodyNotesForStep(this.melody, loopBar, idx, sub, barDuration).forEach(n =>
+            this.piano.play(n.midi, time + n.offset, n.velocity, n.duration, 'melody'));
+    }
+
+    private advanceRecorder(time: number, sub: number, stepDuration: number, allowed: boolean) {
+        const take = this.take;
+        if (take && !take.isFinished) {
+            if (take.subdivision !== sub) {
+                this.take = null; // the meter changed under the take: drop it
+                return;
+            }
+            if (take.markBar(time, stepDuration)) {
+                this.melody = take.finish(time);
+                this.melodyBar = 0;
+                this.onMelodyRecorded?.(this.melody, false);
+            }
+            return;
+        }
+        const pending = this.pendingTake;
+        if (!pending) return;
+        if (pending.countIn > 0) {
+            pending.countIn--;
+            return;
+        }
+        if (!allowed) return; // wait for the form's count-in / silence to end
+        this.take = new MelodyRecorder(pending.bars, sub);
+        this.take.markBar(time, stepDuration);
+        this.pendingTake = null;
+    }
+
     private buildFormState(): FormState | null {
         const section = this.currentSection();
         if (!section) return null;
@@ -580,7 +771,9 @@ class Scheduler {
             pattern: this.currentPattern,
             formState: this.buildFormState(),
             chordIndex: this.currentChordIndex,
-            queuedPatternId: this.getQueuedPatternId()
+            queuedPatternId: this.getQueuedPatternId(),
+            melodyState: this.getMelodyState(),
+            recordingBar: this.take && !this.take.isFinished ? this.take.barsStarted - 1 : 0,
         });
 
         this.nextNoteTime += timePerStep;
@@ -591,6 +784,7 @@ class Scheduler {
         // --- Bar line ---
         this.currentStepIndex = 0;
         this.totalBarsPracticed++;
+        if (this.melodyBarPlayed) this.melodyBar++;
 
         if (this.formasMode && this.formSections.length > 0) {
             this.currentFormBar++;
@@ -699,7 +893,9 @@ class Scheduler {
                 pattern,
                 formState: finishedState,
                 chordIndex: -1,
-                queuedPatternId: null
+                queuedPatternId: null,
+                melodyState: 'idle',
+                recordingBar: 0,
             });
             this.onStopped?.('form_finished');
             return;

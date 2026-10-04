@@ -30,6 +30,18 @@ class MockScheduler {
     setSilenceMode = vi.fn();
     configureFormas = vi.fn();
     playOneShot = vi.fn();
+    setMelody = vi.fn();
+    melodyCallback: ((m: unknown, late: boolean) => void) | null = null;
+    setOnMelodyRecorded = (cb: (m: unknown, late: boolean) => void) => { this.melodyCallback = cb; };
+    pianoStatusListener: ((s: string) => void) | null = null;
+    getPianoStatus = () => 'idle';
+    onPianoStatusChange = (cb: (s: string) => void) => { this.pianoStatusListener = cb; return () => { this.pianoStatusListener = null; }; };
+    preloadPiano = vi.fn(async () => true);
+    pianoNoteOn = vi.fn();
+    pianoNoteOff = vi.fn();
+    releaseAllPianoKeys = vi.fn();
+    armMelodyRecording = vi.fn();
+    cancelMelodyRecording = vi.fn();
     ready: Promise<void> = Promise.resolve();
     whenReady = () => this.ready;
     constructor() { instances.push(this); }
@@ -46,7 +58,7 @@ const pattern = (id: string, extra: Partial<RhythmPattern> = {}): RhythmPattern 
 });
 
 const event = (p: RhythmPattern, extra: Partial<PlaybackEvent> = {}): PlaybackEvent => ({
-    step: 0, bpm: 120, trainerBar: 0, totalBars: 0, pattern: p, formState: null, chordIndex: -1, queuedPatternId: null, ...extra
+    step: 0, bpm: 120, trainerBar: 0, totalBars: 0, pattern: p, formState: null, chordIndex: -1, queuedPatternId: null, melodyState: 'idle', recordingBar: 0, ...extra
 });
 
 describe('useMetronomeEngine', () => {
@@ -164,5 +176,93 @@ describe('useMetronomeEngine', () => {
 
         await act(async () => { await result.current.start(); }); // next attempt works
         expect(scheduler().start).toHaveBeenCalledTimes(1);
+    });
+
+    describe('piano', () => {
+        const melody = { bars: 1, subdivision: 4, notes: [{ step: 0, midi: 60, velocity: 1, length: 1 }] };
+
+        it('plays live notes after resuming the context, and releases them', () => {
+            const { result, scheduler } = setup();
+            act(() => result.current.pianoNoteOn(60, 0.8));
+            expect(resume).toHaveBeenCalled();
+            expect(scheduler().pianoNoteOn).toHaveBeenCalledWith(60, 0.8);
+            act(() => result.current.pianoNoteOff(60));
+            expect(scheduler().pianoNoteOff).toHaveBeenCalledWith(60);
+            act(() => result.current.releaseAllPianoKeys());
+            expect(scheduler().releaseAllPianoKeys).toHaveBeenCalled();
+            act(() => result.current.preloadPiano());
+            expect(scheduler().preloadPiano).toHaveBeenCalled();
+        });
+
+        it('a failed resume never breaks a key press', async () => {
+            resume.mockRejectedValueOnce(new Error('blocked'));
+            const { result, scheduler } = setup();
+            act(() => result.current.pianoNoteOn(62, 1));
+            await act(async () => { await Promise.resolve(); });
+            expect(scheduler().pianoNoteOn).toHaveBeenCalledWith(62, 1);
+        });
+
+        it('mirrors the sample status of the scheduler', () => {
+            const { result, scheduler } = setup();
+            expect(result.current.pianoStatus).toBe('idle');
+            act(() => scheduler().pianoStatusListener!('ready'));
+            expect(result.current.pianoStatus).toBe('ready');
+        });
+
+        it('exposes the progression as state (unchanged arrays keep their identity)', () => {
+            const { result } = setup();
+            act(() => result.current.setHarmonyProgression([['C4', 'E4', 'G4']]));
+            const first = result.current.harmonyProgression;
+            expect(first).toEqual([['C4', 'E4', 'G4']]);
+            act(() => result.current.setHarmonyProgression([['C4', 'E4', 'G4']]));
+            expect(result.current.harmonyProgression).toBe(first);
+        });
+
+        it('replays the melody on a new scheduler and forwards finished takes', () => {
+            const { result, scheduler } = setup();
+            act(() => result.current.setMelody(melody));
+            expect(scheduler().setMelody).toHaveBeenLastCalledWith(melody);
+
+            const listener = vi.fn();
+            let unsubscribe!: () => void;
+            act(() => { unsubscribe = result.current.subscribeMelodyRecorded(listener); });
+            act(() => scheduler().melodyCallback!(melody, false));
+            expect(listener).toHaveBeenCalledWith(melody, false);
+            unsubscribe();
+            act(() => scheduler().melodyCallback!(melody, true));
+            expect(listener).toHaveBeenCalledTimes(1);
+        });
+
+        it('recording while stopped starts the transport with one bar of count-in', async () => {
+            const { result, scheduler } = setup();
+            await act(async () => { await result.current.recordMelody(2); });
+            expect(scheduler().start).toHaveBeenCalled();
+            expect(scheduler().armMelodyRecording).toHaveBeenCalledWith(2, 1);
+            expect(result.current.store.getSnapshot().melodyState).toBe('armed');
+
+            act(() => result.current.cancelMelodyRecording());
+            expect(scheduler().cancelMelodyRecording).toHaveBeenCalled();
+            expect(result.current.store.getSnapshot().melodyState).toBe('idle');
+        });
+
+        it('recording while playing waits only for the next bar line', async () => {
+            const { result, scheduler } = setup();
+            await act(async () => { await result.current.start(); });
+            await act(async () => { await result.current.recordMelody(4); });
+            expect(scheduler().armMelodyRecording).toHaveBeenCalledWith(4, 0);
+            act(() => scheduler().onUpdate!(event(pattern('a'), { melodyState: 'recording', recordingBar: 1 })));
+            expect(result.current.store.getSnapshot()).toMatchObject({ melodyState: 'recording', recordingBar: 1 });
+            act(() => result.current.stop());
+            expect(result.current.store.getSnapshot().melodyState).toBe('idle');
+        });
+
+        it('does not arm when the start was refused', async () => {
+            const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+            resume.mockRejectedValueOnce(new Error('interrupted'));
+            const { result, scheduler } = setup();
+            await act(async () => { await result.current.recordMelody(1); });
+            expect(scheduler().armMelodyRecording).not.toHaveBeenCalled();
+            error.mockRestore();
+        });
     });
 });

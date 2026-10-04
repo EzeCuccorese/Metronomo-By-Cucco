@@ -1,0 +1,145 @@
+/* On-screen piano. The keyboard scrolls horizontally inside its own container only. */
+.piano-scroll {
+  --piano-white-w: 40px;
+  --piano-black-w: 26px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* The strip under the keys stays swipeable to scroll on touch screens. */
+  padding-bottom: 12px;
+  touch-action: pan-x;
+  scrollbar-color: #e5a95f33 transparent;
+  overscroll-behavior-x: contain;
+}
+
+@media (min-width: 1000px) {
+  .piano-scroll {
+    --piano-white-w: 52px;
+    --piano-black-w: 32px;
+  }
+  .piano-scroll .piano-keys {
+    height: 176px;
+  }
+}
+
+@media (max-width: 600px) {
+  .piano-scroll {
+    --piano-white-w: 34px;
+    --piano-black-w: 22px;
+  }
+}
+
+.piano-keys {
+  position: relative;
+  display: flex;
+  width: calc(var(--piano-white-count) * var(--piano-white-w));
+  height: 150px;
+  margin: 0 auto;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.piano-key {
+  position: relative;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 0 8px;
+  border: 1px solid #2a2622;
+  cursor: pointer;
+  touch-action: none;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  transition: background-color 80ms ease-out, transform 80ms ease-out, box-shadow 80ms ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.piano-key--white {
+  flex: 0 0 var(--piano-white-w);
+  height: 100%;
+  border-radius: 0 0 6px 6px;
+  background: linear-gradient(#f4efe6, #e8e1d4);
+  color: #3b342c;
+  box-shadow: inset 0 -6px 0 #cfc6b6;
+}
+
+.piano-key--black {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  width: var(--piano-black-w);
+  height: 62%;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(#2b2724, #121110);
+  color: #d8cfc2;
+  box-shadow: inset 0 -4px 0 #000, 0 2px 3px rgba(0, 0, 0, 0.5);
+}
+
+.piano-key__name {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.piano-key__hint {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Scale: in-scale keys get a warm tint, the rest are dimmed. */
+.piano-key--white.is-scale { background: linear-gradient(#fbf1dc, #f0dfbd); }
+.piano-key--white.is-outside { background: linear-gradient(#cfc9bf, #bfb8ac); }
+.piano-key--black.is-scale { background: linear-gradient(#4a3a28, #231b13); }
+
+/* Chord tones of the sounding chord: amber bar at the bottom, the root stronger. */
+.piano-key.is-chord::after {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: 4px;
+  height: 5px;
+  border-radius: 3px;
+  background: #e5a95f;
+  pointer-events: none;
+}
+.piano-key.is-root::after {
+  background: #ff6d00;
+  height: 7px;
+}
+.piano-key--white.is-chord { box-shadow: inset 0 -6px 0 #cfc6b6, inset 0 0 0 2px #e5a95f88; }
+
+/* Held keys. */
+.piano-key--white[aria-pressed="true"] {
+  background: linear-gradient(#f7c98a, #e5a95f);
+  transform: translateY(2px);
+  box-shadow: inset 0 -2px 0 #b9864a;
+}
+.piano-key--black[aria-pressed="true"] {
+  background: linear-gradient(#b9864a, #7a5428);
+  transform: translateY(1px);
+}
+
+.piano-key:focus-visible {
+  outline: 3px solid #4fc3f7;
+  outline-offset: -3px;
+  z-index: 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .piano-key {
+    transition: none;
+  }
+  .piano-key[aria-pressed="true"] {
+    transform: none;
+  }
+}

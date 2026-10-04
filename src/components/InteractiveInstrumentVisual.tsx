@@ -1,13 +1,44 @@
 import { Box, Typography } from '@mui/material';
-import { useEffect, useRef, useCallback } from 'react';
+import type { SxProps, Theme } from '@mui/material/styles';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
 import { usePlaybackStore } from '../state/PlaybackContext';
+import { isHighlighted, markHighlight } from './visuals/highlight';
+import type { HighlightMap } from './visuals/highlight';
+import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
+import {
+    CLICK_BOOST,
+    advanceAndPrune,
+    fitFontSize,
+    advanceParticle,
+    advanceRipple,
+    createParticle,
+    createRipple,
+    computeLayout,
+    contentBox,
+    fitImageToPad,
+    hitTestInstrument,
+    itemByKey,
+    padKey,
+    LABEL_FONT,
+    SCALE_KEYS,
+    initialScales,
+    initialVelocities,
+    reducedScale,
+    springStep,
+    stepBoost,
+    stepTrigger,
+    toCanvasCoords,
+} from './visuals/instrumentLayout';
+import type { ContentBox, InstrumentLayout, LayoutItem, Ripple, SparkParticle, ScaleKey } from './visuals/instrumentLayout';
 
 interface InteractiveInstrumentVisualProps {
     pattern: RhythmPattern;
     isPlaying: boolean;
     onPreviewInstrument: (instrument: string, modifier?: string) => void;
+    /** Extra styles for the outer card (e.g. to match the surrounding panels). */
+    sx?: SxProps<Theme>;
 }
 
 /** Keyboard / screen-reader alternative to the clickable canvas. */
@@ -27,35 +58,226 @@ const PREVIEW_BUTTONS: { instrument: string; modifier?: string; label: string }[
     { instrument: 'shaker', label: 'Shaker' },
 ];
 
-interface Ripple {
-    x: number;
-    y: number;
-    color: string;
-    radius: number;
-    maxRadius: number;
-    opacity: number;
-    speed: number;
+/** Content bounding box of an image (downsampled), so every photo can be fitted by what it shows. */
+function measureContent(img: HTMLImageElement): ContentBox {
+    const full = { x: 0, y: 0, w: img.naturalWidth, h: img.naturalHeight };
+    if (!img.naturalWidth || !img.naturalHeight) return full;
+    try {
+        const n = 64;
+        const c = document.createElement('canvas');
+        c.width = n;
+        c.height = n;
+        const cx = c.getContext('2d', { willReadFrequently: true });
+        if (!cx) return full;
+        cx.drawImage(img, 0, 0, n, n);
+        const box = contentBox(cx.getImageData(0, 0, n, n).data, n, n);
+        const kx = img.naturalWidth / n;
+        const ky = img.naturalHeight / n;
+        return { x: box.x * kx, y: box.y * ky, w: box.w * kx, h: box.h * ky };
+    } catch {
+        return full;
+    }
 }
 
-interface SparkParticle {
-    x: number;
-    y: number;
-    vx: number;
-    vy: number;
-    color: string;
-    size: number;
-    alpha: number;
-    decay: number;
+/** Which preloaded photo (INSTRUMENT_IMAGES key) represents each instrument; the rest are drawn procedurally. */
+const PHOTO_KEY: Partial<Record<ScaleKey, string>> = {
+    clave: 'clave',
+    caja: 'caja',
+    bombo_parche: 'bombo',
+    hihat: 'hihat',
+    snare: 'snare',
+    kick: 'kick',
+    shaker: 'shaker',
+};
+
+const PAD_BG = '#0e0b08';
+
+/** Candombe drums: [height, top width, bottom width] as multiples of the pad radius. */
+const CANDOMBE_DRUMS: Partial<Record<ScaleKey, [number, number, number]>> = {
+    candombe_chico: [1.05, 0.5, 0.42],
+    candombe_repique: [1.3, 0.58, 0.48],
+    candombe_piano: [1.55, 0.7, 0.56],
+};
+
+function drawDrum(ctx: CanvasRenderingContext2D, r: number, [h, wt, wb]: [number, number, number]) {
+    const hh = (h * r) / 2;
+    const top = (wt * r) / 2;
+    const bot = (wb * r) / 2;
+    const wood = ctx.createLinearGradient(-top, 0, top, 0);
+    wood.addColorStop(0, '#3e2412');
+    wood.addColorStop(0.45, '#9a6338');
+    wood.addColorStop(1, '#3a2010');
+    ctx.fillStyle = wood;
+    ctx.beginPath();
+    ctx.moveTo(-top, -hh);
+    ctx.lineTo(-bot, hh);
+    ctx.quadraticCurveTo(0, hh + r * 0.14, bot, hh);
+    ctx.lineTo(top, -hh);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(239, 229, 217, 0.55)';
+    ctx.lineWidth = Math.max(1, r * 0.03);
+    ctx.beginPath();
+    for (let i = 0; i < 4; i++) {
+        const t = i / 4;
+        ctx.moveTo(-top + 2 * top * t, -hh + r * 0.06);
+        ctx.lineTo(-bot + 2 * bot * (t + 0.25), hh - r * 0.04);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#efe5d9';
+    ctx.beginPath();
+    ctx.ellipse(0, -hh, top, r * 0.14, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#5d3a1e';
+    ctx.lineWidth = Math.max(1, r * 0.04);
+    ctx.stroke();
+}
+
+function drawCajon(ctx: CanvasRenderingContext2D, r: number) {
+    const w = r * 0.95;
+    const h = r * 1.3;
+    const wood = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
+    wood.addColorStop(0, '#a9774f');
+    wood.addColorStop(0.5, '#c9946a');
+    wood.addColorStop(1, '#85583a');
+    ctx.fillStyle = wood;
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -h / 2, w, h, r * 0.06);
+    ctx.fill();
+    ctx.strokeStyle = '#4a2c18';
+    ctx.lineWidth = Math.max(1, r * 0.04);
+    ctx.stroke();
+    // tapa (top strip) and sound hole
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.fillRect(-w / 2, -h / 2, w, r * 0.16);
+    ctx.fillStyle = '#1a0e07';
+    ctx.beginPath();
+    ctx.arc(0, h * 0.12, r * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+function drawPalmas(ctx: CanvasRenderingContext2D, r: number, scale: number) {
+    const angle = scale > 1.05 ? 0.08 : 0.3;
+    const hand = (sign: number, color: string) => {
+        ctx.save();
+        ctx.rotate(sign * angle);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.ellipse(sign * r * 0.3, 0, r * 0.3, r * 0.44, sign * 0.15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    };
+    hand(-1, '#ffcc80');
+    hand(1, '#ffe0b2');
+}
+
+/** Draws one instrument: pad backdrop, normalised photo (or procedural art) and play glow. */
+function drawItem(
+    ctx: CanvasRenderingContext2D,
+    it: LayoutItem,
+    scales: Record<string, number>,
+    images: Record<string, HTMLImageElement>,
+    boxes: Record<string, ContentBox>,
+    now: number,
+) {
+    const scale = it.key === 'bombo_parche' ? Math.max(scales.bombo_parche, scales.bombo_aro) : scales[it.key];
+    const glow = Math.min(1, Math.max(0, scale - 1) * 2.5);
+    const r = it.r;
+
+    ctx.save();
+    ctx.translate(it.cx, it.cy);
+    ctx.scale(scale, scale);
+
+    // Pad backdrop
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fillStyle = PAD_BG;
+    if (glow > 0) {
+        ctx.shadowColor = it.color;
+        ctx.shadowBlur = 16 * glow;
+    }
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Content, clipped to the pad
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0, 0, r - 0.5, 0, Math.PI * 2);
+    ctx.clip();
+    const inner = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+    inner.addColorStop(0, '#2a1f15');
+    inner.addColorStop(1, PAD_BG);
+    ctx.fillStyle = inner;
+    ctx.fillRect(-r, -r, 2 * r, 2 * r);
+
+    const photoKey = PHOTO_KEY[it.key];
+    const img = photoKey ? images[photoKey] : undefined;
+    const drum = CANDOMBE_DRUMS[it.key];
+    if (img && img.complete && img.naturalWidth) {
+        const box = boxes[photoKey as string] ?? { x: 0, y: 0, w: img.naturalWidth, h: img.naturalHeight };
+        const fit = fitImageToPad(img.naturalWidth, img.naturalHeight, box, r, 0.84);
+        let sx = 0;
+        let sy = 0;
+        if (it.key === 'shaker' && scale > 1.05) {
+            sx = Math.sin(now * 0.07) * r * 0.1 * (scale - 1);
+            sy = Math.cos(now * 0.05) * r * 0.06 * (scale - 1);
+        }
+        ctx.drawImage(img, fit.dx + sx, fit.dy + sy, fit.dw, fit.dh);
+        // Vignette hides the photo edges so differing backgrounds blend into the pad
+        const vig = ctx.createRadialGradient(0, 0, r * 0.62, 0, 0, r);
+        vig.addColorStop(0, 'rgba(14, 11, 8, 0)');
+        vig.addColorStop(1, PAD_BG);
+        ctx.fillStyle = vig;
+        ctx.fillRect(-r, -r, 2 * r, 2 * r);
+    } else if (drum) {
+        drawDrum(ctx, r, drum);
+    } else if (it.key === 'cajon') {
+        drawCajon(ctx, r);
+    } else if (it.key === 'palmas') {
+        drawPalmas(ctx, r, scale);
+    }
+    ctx.restore();
+
+    // Rim ring (brightens while playing)
+    ctx.beginPath();
+    ctx.arc(0, 0, r - 0.5, 0, Math.PI * 2);
+    ctx.lineWidth = 1.2 + glow * 1.2;
+    ctx.strokeStyle = glow > 0 ? it.color : 'rgba(229, 169, 95, 0.28)';
+    ctx.globalAlpha = glow > 0 ? 0.55 + 0.45 * glow : 1;
+    ctx.stroke();
+
+    // Bombo aro flash
+    if (it.key === 'bombo_parche' && scales.bombo_aro > 1.03) {
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.88, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffe082';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = Math.min(1, (scales.bombo_aro - 1) * 2.5);
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
+/** useRef whose initial value is computed once (not on every render). */
+function useLazyRef<T extends object>(init: () => T): React.MutableRefObject<T> {
+    const ref = useRef<T | null>(null);
+    if (ref.current === null) ref.current = init();
+    return ref as React.MutableRefObject<T>;
 }
 
 export default function InteractiveInstrumentVisual({
     pattern,
     isPlaying,
-    onPreviewInstrument
+    onPreviewInstrument,
+    sx
 }: InteractiveInstrumentVisualProps) {
     const store = usePlaybackStore();
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const canvasSizeRef = useRef<{ width: number; height: number }>({ width: 380, height: 175 });
+    const wrapRef = useRef<HTMLDivElement | null>(null);
+    const layoutRef = useRef<InstrumentLayout>(computeLayout(380));
+    const nameFontsRef = useRef<{ layout: InstrumentLayout | null; sizes: Map<string, number> }>({ layout: null, sizes: new Map() });
+    const [canvasHeight, setCanvasHeight] = useState(() => computeLayout(380).height);
+    const contentBoxesRef = useRef<Record<string, ContentBox>>({});
     const particlesRef = useRef<SparkParticle[]>([]);
     const lastStepRef = useRef<number>(-1);
     const imagesRef = useRef<Record<string, HTMLImageElement>>({});
@@ -64,97 +286,87 @@ export default function InteractiveInstrumentVisual({
     useEffect(() => {
         Object.entries(INSTRUMENT_IMAGES).forEach(([key, src]) => {
             const img = new Image();
+            img.onload = () => {
+                // Skip when the synchronous cached-image path below already measured it.
+                if (!contentBoxesRef.current[key]) contentBoxesRef.current[key] = measureContent(img);
+            };
             img.src = src;
+            // Cached images may already be decoded (onload can be skipped or delayed).
+            if (img.complete && img.naturalWidth) contentBoxesRef.current[key] = measureContent(img);
             imagesRef.current[key] = img;
         });
     }, []);
 
     // Spring scaling values for organic bounce physics
-    const scalesRef = useRef<Record<string, number>>({
-        bombo_parche: 1.0,
-        bombo_aro: 1.0,
-        snare: 1.0,
-        kick: 1.0,
-        hihat: 1.0,
-        clave: 1.0,
-        shaker: 1.0,
-        caja: 1.0,
-        cajon: 1.0,
-        palmas: 1.0,
-        candombe_chico: 1.0,
-        candombe_repique: 1.0,
-        candombe_piano: 1.0
-    });
-
-    const velocitiesRef = useRef<Record<string, number>>({
-        bombo_parche: 0,
-        bombo_aro: 0,
-        snare: 0,
-        kick: 0,
-        hihat: 0,
-        clave: 0,
-        shaker: 0,
-        caja: 0,
-        cajon: 0,
-        palmas: 0,
-        candombe_chico: 0,
-        candombe_repique: 0,
-        candombe_piano: 0
-    });
+    const scalesRef = useLazyRef(initialScales);
+    const velocitiesRef = useLazyRef(initialVelocities);
 
     const ripplesRef = useRef<Ripple[]>([]);
 
+    const reduceMotion = usePrefersReducedMotion();
+    const reduceMotionRef = useRef(reduceMotion);
+    useEffect(() => {
+        reduceMotionRef.current = reduceMotion;
+    }, [reduceMotion]);
+    // Reduced motion: instruments are highlighted discretely (static enlarged state) instead of springing.
+    const highlightUntilRef = useRef<HighlightMap>({});
+
+    const bump = useCallback((key: string, amount: number) => {
+        if (reduceMotionRef.current) {
+            markHighlight(highlightUntilRef.current, key, performance.now());
+        } else {
+            velocitiesRef.current[key] += amount;
+        }
+    }, [velocitiesRef]);
+
     const spawnParticles = useCallback((x: number, y: number, color: string, count: number = 8) => {
         for (let i = 0; i < count; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const speed = 0.8 + Math.random() * 2.8;
-            particlesRef.current.push({
-                x,
-                y,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed,
-                color,
-                size: 1.2 + Math.random() * 2.2,
-                alpha: 1.0,
-                decay: 0.025 + Math.random() * 0.035
-            });
+            particlesRef.current.push(createParticle(x, y, color));
         }
     }, []);
 
     const triggerRipple = useCallback((x: number, y: number, color: string, maxRad: number = 30) => {
-        ripplesRef.current.push({
-            x,
-            y,
-            color,
-            radius: 4,
-            maxRadius: maxRad,
-            opacity: 1.0,
-            speed: 1.6
-        });
+        if (reduceMotionRef.current) return;
+        ripplesRef.current.push(createRipple(x, y, color, maxRad));
         spawnParticles(x, y, color, 8);
     }, [spawnParticles]);
 
-    // Handle high-DPI (Retina) responsive canvas sizing
-    useEffect(() => {
+    // Layout is computed from the real container width (CSS px); backing store = CSS size x dpr.
+    const lastDprRef = useRef(0);
+    const applySize = useCallback(() => {
         const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        const handleResize = () => {
-            const rect = canvas.getBoundingClientRect();
-            const dpr = window.devicePixelRatio || 1;
-            canvas.width = rect.width * dpr;
-            canvas.height = rect.height * dpr;
-            canvasSizeRef.current = { width: rect.width, height: rect.height };
-        };
-
-        const resizeObserver = new ResizeObserver(() => {
-            handleResize();
-        });
-        resizeObserver.observe(canvas.parentElement || canvas);
-
-        handleResize();
-        return () => resizeObserver.disconnect();
+        const wrap = wrapRef.current;
+        if (!canvas || !wrap) return;
+        const width = wrap.clientWidth;
+        if (!width) return;
+        const dpr = window.devicePixelRatio || 1;
+        const prev = layoutRef.current;
+        if (prev.width === width && lastDprRef.current === dpr) return;
+        lastDprRef.current = dpr;
+        const layout = computeLayout(width, dpr);
+        layoutRef.current = layout;
+        canvas.width = Math.round(layout.width * dpr);
+        canvas.height = Math.round(layout.height * dpr);
+        setCanvasHeight(layout.height);
     }, []);
+
+    useEffect(() => {
+        const wrap = wrapRef.current;
+        if (!wrap) return;
+        const resizeObserver = new ResizeObserver(applySize);
+        resizeObserver.observe(wrap);
+        applySize();
+        // Web fonts change text metrics: drop cached name sizes once they finish loading.
+        const fonts = document.fonts;
+        const invalidateNames = () => {
+            nameFontsRef.current = { layout: null, sizes: new Map() };
+        };
+        fonts.addEventListener('loadingdone', invalidateNames);
+        return () => {
+            resizeObserver.disconnect();
+            fonts.removeEventListener('loadingdone', invalidateNames);
+        };
+    }, [applySize]);
 
     // Dynamic scale trigger on sequencer ticks (subscribed to the store: no React re-render per step)
     const patternRef = useRef(pattern);
@@ -169,57 +381,14 @@ export default function InteractiveInstrumentVisual({
         const activeSteps = patternRef.current.steps.filter(s => s.step === (currentStepIndex + 1));
 
         activeSteps.forEach(s => {
-            const inst = s.instrument;
-            const velocity = s.velocity || 1.0;
-            const boost = 0.35 * velocity;
-
-            if (inst === 'bombo_leguero') {
-                if (s.modifier === 'aro') {
-                    velocitiesRef.current.bombo_aro += boost;
-                    triggerRipple(75, 85, '#ffe082', 38);
-                } else {
-                    velocitiesRef.current.bombo_parche += boost;
-                    triggerRipple(75, 115, '#dfa15b', 45);
-                }
-            } else if (inst === 'rim') {
-                velocitiesRef.current.bombo_aro += boost;
-                triggerRipple(75, 85, '#ffe082', 38);
-            } else if (inst === 'caja') {
-                velocitiesRef.current.caja += boost;
-                triggerRipple(105, 40, '#ffe082', 35);
-            } else if (inst === 'cajon') {
-                velocitiesRef.current.cajon += boost;
-                triggerRipple(180, 115, '#dfa15b', 40);
-            } else if (inst === 'palmas') {
-                velocitiesRef.current.palmas += boost;
-                triggerRipple(235, 115, '#ffcc80', 30);
-            } else if (inst === 'candombe_chico') {
-                velocitiesRef.current.candombe_chico += boost;
-                triggerRipple(180, 45, '#80cbc4', 25);
-            } else if (inst === 'candombe_repique') {
-                velocitiesRef.current.candombe_repique += boost;
-                triggerRipple(195, 45, '#80cbc4', 25);
-            } else if (inst === 'candombe_piano') {
-                velocitiesRef.current.candombe_piano += boost;
-                triggerRipple(210, 45, '#80cbc4', 28);
-            } else if (inst === 'kick' || inst === 'surdo') {
-                velocitiesRef.current.kick += boost;
-                triggerRipple(300, 115, '#ff7043', 40);
-            } else if (inst === 'snare') {
-                velocitiesRef.current.snare += boost;
-                triggerRipple(345, 40, '#b0bec5', 35);
-            } else if (inst === 'hihat' || inst === 'hihat_foot' || inst === 'ride') {
-                velocitiesRef.current.hihat += boost;
-                triggerRipple(290, 40, '#ffd54f', 32);
-            } else if (inst === 'clave') {
-                velocitiesRef.current.clave += boost;
-                triggerRipple(45, 40, '#ffb300', 30);
-            } else if (inst === 'shaker') {
-                velocitiesRef.current.shaker += boost;
-                triggerRipple(345, 115, '#cfd8dc', 25);
-            }
+            const t = stepTrigger(s.instrument, s.modifier);
+            if (!t) return;
+            const it = itemByKey(layoutRef.current, padKey(t.key));
+            if (!it) return;
+            bump(t.key, stepBoost(s.velocity));
+            triggerRipple(it.cx, it.cy - (t.rim ? it.r * 0.9 : 0), t.color, it.r * t.radiusFactor);
         });
-    }, [triggerRipple]);
+    }, [triggerRipple, bump]);
 
     useEffect(() => {
         if (!isPlaying) {
@@ -240,43 +409,74 @@ export default function InteractiveInstrumentVisual({
         let animationFrameId: number;
 
         const render = () => {
-            if (!ctx || !canvas) return;
-
+            // ResizeObserver handles width changes; only a DPR change (zoom, other display) needs a re-measure.
+            if ((window.devicePixelRatio || 1) !== lastDprRef.current) applySize();
+            const layout = layoutRef.current;
             const dpr = window.devicePixelRatio || 1;
-            const w = canvas.width / dpr;
-            const h = canvas.height / dpr;
-
-            ctx.save();
-            ctx.scale(dpr, dpr);
-
-            // Scale target 380x175 coordinates dynamically to the actual container dimensions
-            const scaleX = w / 380;
-            const scaleY = h / 175;
-            ctx.scale(scaleX, scaleY);
-
-            ctx.clearRect(0, 0, 380, 175);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, layout.width, layout.height);
 
             // --- A. ELASTIC SPRING PHYSICS ---
-            const stiffness = 0.20;
-            const damping = 0.78;
+            const frameNow = performance.now();
+            for (const key of SCALE_KEYS) {
+                if (reduceMotionRef.current) {
+                    velocitiesRef.current[key] = 0;
+                    scalesRef.current[key] = reducedScale(isHighlighted(highlightUntilRef.current, key, frameNow));
+                    continue;
+                }
+                const next = springStep(scalesRef.current[key], velocitiesRef.current[key]);
+                velocitiesRef.current[key] = next.velocity;
+                scalesRef.current[key] = next.scale;
+            }
 
-            Object.keys(scalesRef.current).forEach(key => {
-                const force = (1.0 - scalesRef.current[key]) * stiffness;
-                velocitiesRef.current[key] += force;
-                velocitiesRef.current[key] *= damping;
-                scalesRef.current[key] += velocitiesRef.current[key];
+            // --- B. SECTIONS (card + non-overlapping label) ---
+            layout.sections.forEach(sec => {
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(sec.rect.x + 0.5, sec.rect.y + 0.5, sec.rect.w - 1, sec.rect.h - 1, 14);
+                ctx.fillStyle = 'rgba(255, 232, 196, 0.03)';
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(229, 169, 95, 0.14)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.fillStyle = '#e5a95f';
+                ctx.globalAlpha = 0.85;
+                ctx.font = `700 ${LABEL_FONT}px Outfit, sans-serif`;
+                ctx.letterSpacing = '1.2px';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(sec.label, sec.rect.x + sec.rect.w / 2, sec.labelRect.y + sec.labelRect.h / 2, sec.rect.w - 12);
+                ctx.restore();
             });
 
-            // --- B. RENDERING RIPPLES ---
-            ripplesRef.current.forEach((rp, idx) => {
-                rp.radius += rp.speed;
-                rp.opacity = 1.0 - (rp.radius / rp.maxRadius);
+            // --- C. INSTRUMENT PADS ---
+            layout.items.forEach(it => drawItem(ctx, it, scalesRef.current, imagesRef.current, contentBoxesRef.current, frameNow));
 
-                if (rp.opacity <= 0) {
-                    ripplesRef.current.splice(idx, 1);
-                    return;
+            // --- D. INSTRUMENT NAMES ---
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = 'rgba(240, 222, 196, 0.82)';
+            // Name font sizes depend only on the layout (and loaded fonts): measure once, not every frame.
+            if (nameFontsRef.current.layout !== layout) nameFontsRef.current = { layout, sizes: new Map() };
+            const nameFonts = nameFontsRef.current.sizes;
+            const baseFs = layout.mode === 'stack' ? 12 : 11;
+            layout.items.forEach(it => {
+                let fs = nameFonts.get(it.key);
+                if (fs === undefined) {
+                    fs = fitFontSize(size => {
+                        ctx.font = `small-caps 600 ${size}px Outfit, sans-serif`;
+                        return ctx.measureText(it.name).width;
+                    }, baseFs, it.nameMaxW);
+                    nameFonts.set(it.key, fs);
                 }
+                ctx.font = `small-caps 600 ${fs}px Outfit, sans-serif`;
+                ctx.fillText(it.name, it.nameX, it.nameY);
+            });
+            ctx.restore();
 
+            // --- E. RIPPLES ---
+            advanceAndPrune(ripplesRef.current, advanceRipple).forEach(rp => {
                 ctx.save();
                 ctx.beginPath();
                 ctx.arc(rp.x, rp.y, rp.radius, 0, Math.PI * 2);
@@ -287,18 +487,8 @@ export default function InteractiveInstrumentVisual({
                 ctx.restore();
             });
 
-            // --- B2. RENDERING SPARKS (PARTICLES) ---
-            particlesRef.current.forEach((p, idx) => {
-                p.x += p.vx;
-                p.y += p.vy;
-                p.vy += 0.045; // Gravity
-                p.alpha -= p.decay;
-
-                if (p.alpha <= 0) {
-                    particlesRef.current.splice(idx, 1);
-                    return;
-                }
-
+            // --- F. SPARKS (PARTICLES) ---
+            advanceAndPrune(particlesRef.current, advanceParticle).forEach(p => {
                 ctx.save();
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
@@ -310,674 +500,94 @@ export default function InteractiveInstrumentVisual({
                 ctx.restore();
             });
 
-            // --- C. PANEL SEPARATORS & TEXT LABELS ---
-            ctx.save();
-            ctx.strokeStyle = 'rgba(229, 169, 95, 0.08)';
-            ctx.lineWidth = 1.2;
-            
-            // Vertical separators
-            ctx.beginPath();
-            ctx.moveTo(135, 10);
-            ctx.lineTo(135, 165);
-            ctx.moveTo(260, 10);
-            ctx.lineTo(260, 165);
-            ctx.stroke();
-
-            // Section labels
-            ctx.fillStyle = '#e5a95f';
-            ctx.globalAlpha = 0.55;
-            ctx.font = 'bold 8px Outfit, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('FOLKLORE NORTEÑO', 67, 15);
-            ctx.fillText('RITMOS RIOPLATENSES Y LITORAL', 197, 15);
-            ctx.fillText('SECCIÓN RÍTMICA MODERNA', 320, 15);
-            ctx.restore();
-
-            // --- D. FOLKLORE NORTEÑO PANEL ---
-            // 1. CLAVES (x: 45, y: 40)
-            const imgClave = imagesRef.current.clave;
-            if (imgClave && imgClave.complete) {
-                ctx.save();
-                const clScale = scalesRef.current.clave;
-                ctx.translate(45, 40);
-                ctx.scale(clScale * 0.75, clScale * 0.75);
-                ctx.globalCompositeOperation = 'screen';
-                ctx.drawImage(imgClave, -20, -20, 40, 40);
-                ctx.restore();
-            } else {
-                ctx.save();
-                const clScale = scalesRef.current.clave;
-                ctx.translate(45, 40);
-                ctx.scale(clScale, clScale);
-                ctx.rotate(-Math.PI / 8);
-                
-                // Draw crossed mahogany sticks
-                ctx.fillStyle = '#5d4037';
-                ctx.beginPath();
-                ctx.roundRect(-15, -2.5, 30, 5, 2);
-                ctx.fill();
-                
-                ctx.rotate(Math.PI / 4);
-                ctx.fillStyle = '#8d6e63';
-                ctx.beginPath();
-                ctx.roundRect(-15, -2.5, 30, 5, 2);
-                ctx.fill();
-                ctx.restore();
-            }
-
-            // 2. CAJA COPLERA (x: 105, y: 40)
-            const imgCaja = imagesRef.current.caja;
-            if (imgCaja && imgCaja.complete) {
-                ctx.save();
-                const cjScale = scalesRef.current.caja;
-                ctx.translate(105, 40);
-                ctx.scale(cjScale * 0.75, cjScale * 0.75);
-                ctx.globalCompositeOperation = 'screen';
-                ctx.drawImage(imgCaja, -20, -20, 40, 40);
-                ctx.restore();
-            } else {
-                ctx.save();
-                const cjScale = scalesRef.current.caja;
-                ctx.translate(105, 40);
-                ctx.scale(cjScale, cjScale);
-                
-                // Wooden frame rim
-                ctx.beginPath();
-                ctx.arc(0, 0, 16, 0, Math.PI * 2);
-                ctx.fillStyle = '#6d4c41';
-                ctx.fill();
-                ctx.strokeStyle = '#3e2723';
-                ctx.lineWidth = 1.8;
-                ctx.stroke();
-                
-                // Sheepskin head
-                ctx.beginPath();
-                ctx.arc(0, 0, 14, 0, Math.PI * 2);
-                ctx.fillStyle = '#f5f1e6';
-                ctx.fill();
-                
-                // Buzzing string (chirlera)
-                ctx.strokeStyle = '#8d6e63';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(-14, -3);
-                ctx.lineTo(14, 3);
-                ctx.stroke();
-                ctx.restore();
-            }
-
-            // 3. BOMBO LEGÜERO (x: 75, y: 115)
-            const bomboX = 75;
-            const bomboY = 115;
-            const bWidth = 44;
-            const bHeight = 52;
-            const imgBombo = imagesRef.current.bombo;
-            if (imgBombo && imgBombo.complete) {
-                ctx.save();
-                const bpScale = scalesRef.current.bombo_parche;
-                const baScale = scalesRef.current.bombo_aro;
-                const currentScale = Math.max(bpScale, baScale);
-                ctx.translate(bomboX, bomboY);
-                ctx.scale(currentScale * 0.85, currentScale * 0.85);
-                ctx.globalCompositeOperation = 'screen';
-                ctx.drawImage(imgBombo, -25, -28, 50, 56);
-                ctx.restore();
-            } else {
-                ctx.save();
-                ctx.translate(bomboX, bomboY);
-                
-                const bpScale = scalesRef.current.bombo_parche;
-                const baScale = scalesRef.current.bombo_aro;
-                ctx.scale(bpScale, bpScale);
-
-                // Wood hollow barrel
-                const woodGrad = ctx.createLinearGradient(-bWidth/2, -bHeight/2, bWidth/2, -bHeight/2);
-                woodGrad.addColorStop(0, '#3e2723');
-                woodGrad.addColorStop(0.5, '#795548');
-                woodGrad.addColorStop(1, '#2d1510');
-                ctx.fillStyle = woodGrad;
-                ctx.beginPath();
-                ctx.moveTo(-bWidth/2, -bHeight/2);
-                ctx.lineTo(-bWidth/2, bHeight/2 - 4);
-                ctx.quadraticCurveTo(0, bHeight/2 + 4, bWidth/2, bHeight/2 - 4);
-                ctx.lineTo(bWidth/2, -bHeight/2);
-                ctx.closePath();
-                ctx.fill();
-
-                // Ropes
-                ctx.strokeStyle = '#efe5d9';
-                ctx.lineWidth = 1.2;
-                ctx.beginPath();
-                ctx.moveTo(-bWidth/2 + 4, -bHeight/2 + 2);
-                ctx.lineTo(-bWidth/3, bHeight/2 - 2);
-                ctx.lineTo(-bWidth/8, -bHeight/2 + 2);
-                ctx.lineTo(0, bHeight/2 - 2);
-                ctx.lineTo(bWidth/8, -bHeight/2 + 2);
-                ctx.lineTo(bWidth/3, bHeight/2 - 2);
-                ctx.lineTo(bWidth/2 - 4, -bHeight/2 + 2);
-                ctx.stroke();
-                ctx.restore();
-
-                // Bombo Rim & Leather Ellipse Top
-                ctx.save();
-                ctx.translate(bomboX, bomboY - bHeight/2);
-                ctx.scale(baScale, baScale);
-                
-                // Rim ring
-                ctx.beginPath();
-                ctx.ellipse(0, 0, bWidth/2, 9, 0, 0, Math.PI * 2);
-                ctx.fillStyle = '#4e342e';
-                ctx.fill();
-                ctx.strokeStyle = '#27120f';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-
-                // Patch skin
-                ctx.beginPath();
-                ctx.ellipse(0, 0, bWidth/2 - 3, 7, 0, 0, Math.PI * 2);
-                ctx.fillStyle = '#f8f4e8';
-                ctx.fill();
-                ctx.restore();
-            }
-
-            // --- E. RIOPLATENSE & LITORAL PANEL ---
-            // 1. CANDOMBE ENSEMBLE (x: 195, y: 45)
-            ctx.save();
-            ctx.translate(195, 45);
-            
-            // Chico Drum (x: -16)
-            const imgChico = imagesRef.current.candombe_chico;
-            if (imgChico && imgChico.complete) {
-                ctx.save();
-                ctx.translate(-16, 0);
-                const ccScale = scalesRef.current.candombe_chico;
-                ctx.scale(ccScale * 0.45, ccScale * 0.45);
-                ctx.globalCompositeOperation = 'screen';
-                ctx.drawImage(imgChico, -15, -15, 30, 30);
-                ctx.restore();
-            } else {
-                ctx.save();
-                ctx.translate(-16, 0);
-                const ccScale = scalesRef.current.candombe_chico;
-                ctx.scale(ccScale, ccScale);
-                ctx.fillStyle = '#795548';
-                ctx.beginPath();
-                ctx.moveTo(-4, -10);
-                ctx.lineTo(-3, 10);
-                ctx.quadraticCurveTo(0, 11, 3, 10);
-                ctx.lineTo(4, -10);
-                ctx.closePath();
-                ctx.fill();
-                ctx.fillStyle = '#efe5d9';
-                ctx.beginPath();
-                ctx.ellipse(0, -10, 4, 1.8, 0, 0, Math.PI*2);
-                ctx.fill();
-                ctx.restore();
-            }
-
-            // Repique Drum (x: 0)
-            const imgRepique = imagesRef.current.candombe_repique;
-            if (imgRepique && imgRepique.complete) {
-                ctx.save();
-                const crScale = scalesRef.current.candombe_repique;
-                ctx.scale(crScale * 0.5, crScale * 0.5);
-                ctx.globalCompositeOperation = 'screen';
-                ctx.drawImage(imgRepique, -15, -15, 30, 30);
-                ctx.restore();
-            } else {
-                ctx.save();
-                const crScale = scalesRef.current.candombe_repique;
-                ctx.scale(crScale, crScale);
-                ctx.fillStyle = '#6d4c41';
-                ctx.beginPath();
-                ctx.moveTo(-5, -11);
-                ctx.lineTo(-4, 11);
-                ctx.quadraticCurveTo(0, 12, 4, 11);
-                ctx.lineTo(5, -11);
-                ctx.closePath();
-                ctx.fill();
-                ctx.fillStyle = '#efe5d9';
-                ctx.beginPath();
-                ctx.ellipse(0, -11, 5, 2, 0, 0, Math.PI*2);
-                ctx.fill();
-                ctx.restore();
-            }
-
-            // Piano Drum (x: 16)
-            const imgPiano = imagesRef.current.candombe_piano;
-            if (imgPiano && imgPiano.complete) {
-                ctx.save();
-                ctx.translate(16, 0);
-                const cpScale = scalesRef.current.candombe_piano;
-                ctx.scale(cpScale * 0.55, cpScale * 0.55);
-                ctx.globalCompositeOperation = 'screen';
-                ctx.drawImage(imgPiano, -15, -15, 30, 30);
-                ctx.restore();
-            } else {
-                ctx.save();
-                ctx.translate(16, 0);
-                const cpScale = scalesRef.current.candombe_piano;
-                ctx.scale(cpScale, cpScale);
-                ctx.fillStyle = '#4e342e';
-                ctx.beginPath();
-                ctx.moveTo(-7, -12);
-                ctx.lineTo(-5, 12);
-                ctx.quadraticCurveTo(0, 13, 5, 12);
-                ctx.lineTo(7, -12);
-                ctx.closePath();
-                ctx.fill();
-                ctx.fillStyle = '#efe5d9';
-                ctx.beginPath();
-                ctx.ellipse(0, -12, 7, 2.2, 0, 0, Math.PI*2);
-                ctx.fill();
-                ctx.restore();
-            }
-            ctx.restore();
-
-            // 2. CAJÓN PERUANO (x: 180, y: 115)
-            const imgCajon = imagesRef.current.cajon;
-            if (imgCajon && imgCajon.complete) {
-                ctx.save();
-                const cjnScale = scalesRef.current.cajon;
-                ctx.translate(180, 115);
-                ctx.scale(cjnScale * 0.7, cjnScale * 0.7);
-                ctx.globalCompositeOperation = 'screen';
-                ctx.drawImage(imgCajon, -16, -20, 32, 40);
-                ctx.restore();
-            } else {
-                ctx.save();
-                const cjnScale = scalesRef.current.cajon;
-                ctx.translate(180, 115);
-                ctx.scale(cjnScale, cjnScale);
-                
-                // Wooden box body
-                ctx.fillStyle = '#8d6e63';
-                ctx.beginPath();
-                ctx.roundRect(-11, -19, 22, 38, 2);
-                ctx.fill();
-                ctx.strokeStyle = '#5d4037';
-                ctx.lineWidth = 1.5;
-                ctx.stroke();
-                
-                // Small screws indicators
-                ctx.fillStyle = 'rgba(0,0,0,0.35)';
-                ctx.fillRect(-9, -17, 1.2, 1.2);
-                ctx.fillRect(8, -17, 1.2, 1.2);
-                ctx.fillRect(-9, 15, 1.2, 1.2);
-                ctx.fillRect(8, 15, 1.2, 1.2);
-                ctx.restore();
-            }
-
-            // 3. PALMAS (x: 235, y: 115)
-            ctx.save();
-            const plScale = scalesRef.current.palmas;
-            ctx.translate(235, 115);
-            ctx.scale(plScale, plScale);
-            const isClapping = plScale > 1.05;
-            const palmAngle = isClapping ? 0.08 : 0.25;
-
-            // Left Hand
-            ctx.save();
-            ctx.rotate(-palmAngle);
-            ctx.fillStyle = '#ffcc80';
-            ctx.beginPath();
-            ctx.ellipse(-5, 0, 6, 8, -0.15, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-
-            // Right Hand
-            ctx.save();
-            ctx.rotate(palmAngle);
-            ctx.fillStyle = '#ffe0b2';
-            ctx.beginPath();
-            ctx.ellipse(5, 0, 6, 8, 0.15, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-            ctx.restore();
-
-            // --- F. MODERN RHYTHM PANEL ---
-            // 1. HI-HAT (x: 290, y: 40)
-            const imgHihat = imagesRef.current.hihat;
-            if (imgHihat && imgHihat.complete) {
-                ctx.save();
-                const hhScale = scalesRef.current.hihat;
-                ctx.translate(290, 40);
-                ctx.scale(hhScale * 0.75, hhScale * 0.75);
-                ctx.globalCompositeOperation = 'screen';
-                ctx.drawImage(imgHihat, -20, -20, 40, 40);
-                ctx.restore();
-            } else {
-                ctx.save();
-                const hhScale = scalesRef.current.hihat;
-                ctx.translate(290, 40);
-                ctx.scale(hhScale, hhScale);
-                
-                // Gold bronze cymbal
-                const hhGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 14);
-                hhGrad.addColorStop(0, '#ffd54f');
-                hhGrad.addColorStop(0.7, '#e5a95f');
-                hhGrad.addColorStop(1, '#8c602d');
-                ctx.fillStyle = hhGrad;
-                ctx.beginPath();
-                ctx.arc(0, 0, 14, 0, Math.PI*2);
-                ctx.fill();
-                
-                // Center bell
-                ctx.fillStyle = '#ffca28';
-                ctx.beginPath();
-                ctx.arc(0, 0, 3, 0, Math.PI*2);
-                ctx.fill();
-                ctx.stroke();
-                ctx.restore();
-            }
-
-            // 2. SNARE (x: 345, y: 40)
-            const imgSnare = imagesRef.current.snare;
-            if (imgSnare && imgSnare.complete) {
-                ctx.save();
-                const snScale = scalesRef.current.snare;
-                ctx.translate(345, 40);
-                ctx.scale(snScale * 0.75, snScale * 0.75);
-                ctx.globalCompositeOperation = 'screen';
-                ctx.drawImage(imgSnare, -20, -20, 40, 40);
-                ctx.restore();
-            } else {
-                ctx.save();
-                const snScale = scalesRef.current.snare;
-                ctx.translate(345, 40);
-                ctx.scale(snScale, snScale);
-                
-                // Silver chrome body
-                const snGrad = ctx.createLinearGradient(-15, 0, 15, 0);
-                snGrad.addColorStop(0, '#90a4ae');
-                snGrad.addColorStop(0.5, '#eceff1');
-                snGrad.addColorStop(1, '#455a64');
-                ctx.fillStyle = snGrad;
-                ctx.beginPath();
-                ctx.arc(0, 0, 15, 0, Math.PI*2);
-                ctx.fill();
-                ctx.strokeStyle = '#37474f';
-                ctx.lineWidth = 1.5;
-                ctx.stroke();
-                
-                // White head
-                ctx.fillStyle = '#fcfdfe';
-                ctx.beginPath();
-                ctx.arc(0, 0, 13, 0, Math.PI*2);
-                ctx.fill();
-                ctx.restore();
-            }
-
-            // 3. BASS KICK (x: 300, y: 115)
-            const imgKick = imagesRef.current.kick;
-            if (imgKick && imgKick.complete) {
-                ctx.save();
-                const kScale = scalesRef.current.kick;
-                ctx.translate(300, 115);
-                ctx.scale(kScale * 0.85, kScale * 0.85);
-                ctx.globalCompositeOperation = 'screen';
-                ctx.drawImage(imgKick, -25, -25, 50, 50);
-                ctx.restore();
-            } else {
-                ctx.save();
-                const kScale = scalesRef.current.kick;
-                ctx.translate(300, 115);
-                ctx.scale(kScale, kScale);
-                
-                // Copper outer ring
-                ctx.fillStyle = '#d84315';
-                ctx.beginPath();
-                ctx.arc(0, 0, 24, 0, Math.PI*2);
-                ctx.fill();
-                ctx.strokeStyle = '#ffe082';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-                
-                // Dark head
-                ctx.fillStyle = '#212121';
-                ctx.beginPath();
-                ctx.arc(0, 0, 20, 0, Math.PI*2);
-                ctx.fill();
-                
-                // Hole
-                ctx.fillStyle = '#050505';
-                ctx.beginPath();
-                ctx.arc(7, 5, 5, 0, Math.PI*2);
-                ctx.fill();
-                ctx.restore();
-            }
-
-            // 4. SHAKER (x: 345, y: 115)
-            const imgShaker = imagesRef.current.shaker;
-            if (imgShaker && imgShaker.complete) {
-                ctx.save();
-                const shScale = scalesRef.current.shaker;
-                let shMoveX = 0;
-                let shMoveY = 0;
-                if (shScale > 1.05) {
-                    shMoveX = Math.sin(performance.now() * 0.07) * 5 * (shScale - 1.0);
-                    shMoveY = Math.cos(performance.now() * 0.05) * 3 * (shScale - 1.0);
-                }
-                ctx.translate(345 + shMoveX, 115 + shMoveY);
-                ctx.scale(shScale * 0.7, shScale * 0.7);
-                ctx.rotate(Math.PI / 10);
-                ctx.globalCompositeOperation = 'screen';
-                ctx.drawImage(imgShaker, -20, -20, 40, 40);
-                ctx.restore();
-            } else {
-                ctx.save();
-                const shScale = scalesRef.current.shaker;
-                let shMoveX = 0;
-                let shMoveY = 0;
-                if (shScale > 1.05) {
-                    shMoveX = Math.sin(performance.now() * 0.07) * 5 * (shScale - 1.0);
-                    shMoveY = Math.cos(performance.now() * 0.05) * 3 * (shScale - 1.0);
-                }
-                ctx.translate(345 + shMoveX, 115 + shMoveY);
-                ctx.scale(shScale, shScale);
-                ctx.rotate(Math.PI / 10);
-                
-                // Brushed steel cylinder
-                const shGrad = ctx.createLinearGradient(-7, 0, 7, 0);
-                shGrad.addColorStop(0, '#78909c');
-                shGrad.addColorStop(0.5, '#ffffff');
-                shGrad.addColorStop(1, '#37474f');
-                ctx.fillStyle = shGrad;
-                ctx.beginPath();
-                ctx.roundRect(-7, -15, 14, 30, 2);
-                ctx.fill();
-                ctx.strokeStyle = '#455a64';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-                ctx.restore();
-            }
-
-            ctx.restore();
-
             animationFrameId = requestAnimationFrame(render);
         };
 
         animationFrameId = requestAnimationFrame(render);
         return () => cancelAnimationFrame(animationFrameId);
-    }, []);
+    }, [scalesRef, velocitiesRef, applySize]);
+
+    const pointerToLayout = (e: { clientX: number; clientY: number }) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return null;
+        const layout = layoutRef.current;
+        const p = toCanvasCoords(e.clientX, e.clientY, canvas.getBoundingClientRect(), layout);
+        return { layout, ...p };
+    };
 
     // Manual canvas click previews
     const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+        const pt = pointerToLayout(e);
+        if (!pt) return;
+        const found = hitTestInstrument(pt.layout, pt.x, pt.y);
+        if (!found) return;
+        bump(found.key, CLICK_BOOST);
+        triggerRipple(pt.x, pt.y, found.color, found.rippleRadius);
+        onPreviewInstrument(found.instrument);
+    };
 
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = 380 / rect.width;
-        const scaleY = 175 / rect.height;
-        const clickX = (e.clientX - rect.left) * scaleX;
-        const clickY = (e.clientY - rect.top) * scaleY;
-
-        // --- COLLISION MATRIX ---
-        // 1. Claves (x: 45, y: 40)
-        if (Math.hypot(clickX - 45, clickY - 40) <= 18) {
-            velocitiesRef.current.clave += 0.4;
-            triggerRipple(clickX, clickY, '#ffb300', 30);
-            onPreviewInstrument('clave');
-            return;
-        }
-
-        // 2. Caja Coplera (x: 105, y: 40)
-        if (Math.hypot(clickX - 105, clickY - 40) <= 18) {
-            velocitiesRef.current.caja += 0.4;
-            triggerRipple(clickX, clickY, '#ffe082', 30);
-            onPreviewInstrument('caja');
-            return;
-        }
-
-        // 3. Bombo Legüero (x: 75, y: 115)
-        const bomboX = 75;
-        const bomboYTop = 115 - 52/2; // 89
-        const rx = 22;
-        const ry = 9;
-        
-        // Ellipse head click
-        const bomboHeadClick = Math.pow(clickX - bomboX, 2) / Math.pow(rx, 2) + Math.pow(clickY - bomboYTop, 2) / Math.pow(ry, 2);
-        if (bomboHeadClick <= 1.0) {
-            const bomboParcheClick = Math.pow(clickX - bomboX, 2) / Math.pow(rx - 3, 2) + Math.pow(clickY - bomboYTop, 2) / Math.pow(ry - 2, 2);
-            if (bomboParcheClick <= 1.0) {
-                velocitiesRef.current.bombo_parche += 0.4;
-                triggerRipple(clickX, clickY, '#dfa15b', 42);
-                onPreviewInstrument('bombo_leguero');
-            } else {
-                velocitiesRef.current.bombo_aro += 0.4;
-                triggerRipple(clickX, clickY, '#ffe082', 36);
-                onPreviewInstrument('rim');
-            }
-            return;
-        }
-        
-        // Body click
-        if (Math.abs(clickX - bomboX) < rx && clickY > bomboYTop && clickY < bomboYTop + 52) {
-            velocitiesRef.current.bombo_parche += 0.4;
-            triggerRipple(clickX, clickY, '#dfa15b', 42);
-            onPreviewInstrument('bombo_leguero');
-            return;
-        }
-
-        // 4. Candombe Chico (x: 179, y: 45)
-        if (Math.hypot(clickX - 179, clickY - 45) <= 10) {
-            velocitiesRef.current.candombe_chico += 0.4;
-            triggerRipple(clickX, clickY, '#80cbc4', 24);
-            onPreviewInstrument('candombe_chico');
-            return;
-        }
-
-        // 5. Candombe Repique (x: 195, y: 45)
-        if (Math.hypot(clickX - 195, clickY - 45) <= 10) {
-            velocitiesRef.current.candombe_repique += 0.4;
-            triggerRipple(clickX, clickY, '#80cbc4', 24);
-            onPreviewInstrument('candombe_repique');
-            return;
-        }
-
-        // 6. Candombe Piano (x: 211, y: 45)
-        if (Math.hypot(clickX - 211, clickY - 45) <= 12) {
-            velocitiesRef.current.candombe_piano += 0.4;
-            triggerRipple(clickX, clickY, '#80cbc4', 26);
-            onPreviewInstrument('candombe_piano');
-            return;
-        }
-
-        // 7. Cajón Peruano (x: 180, y: 115)
-        if (Math.abs(clickX - 180) < 11 && Math.abs(clickY - 115) < 19) {
-            velocitiesRef.current.cajon += 0.4;
-            triggerRipple(clickX, clickY, '#dfa15b', 35);
-            onPreviewInstrument('cajon');
-            return;
-        }
-
-        // 8. Palmas (x: 235, y: 115)
-        if (Math.hypot(clickX - 235, clickY - 115) <= 15) {
-            velocitiesRef.current.palmas += 0.4;
-            triggerRipple(clickX, clickY, '#ffcc80', 25);
-            onPreviewInstrument('palmas');
-            return;
-        }
-
-        // 9. Hihat (x: 290, y: 40)
-        if (Math.hypot(clickX - 290, clickY - 40) <= 14) {
-            velocitiesRef.current.hihat += 0.4;
-            triggerRipple(clickX, clickY, '#ffd54f', 30);
-            onPreviewInstrument('hihat');
-            return;
-        }
-
-        // 10. Snare (x: 345, y: 40)
-        if (Math.hypot(clickX - 345, clickY - 40) <= 15) {
-            velocitiesRef.current.snare += 0.4;
-            triggerRipple(clickX, clickY, '#b0bec5', 30);
-            onPreviewInstrument('snare');
-            return;
-        }
-
-        // 11. Kick Drum (x: 300, y: 115)
-        if (Math.hypot(clickX - 300, clickY - 115) <= 24) {
-            velocitiesRef.current.kick += 0.4;
-            triggerRipple(clickX, clickY, '#ff7043', 35);
-            onPreviewInstrument('kick');
-            return;
-        }
-
-        // 12. Shaker (x: 345, y: 115)
-        if (Math.hypot(clickX - 345, clickY - 115) <= 16) {
-            velocitiesRef.current.shaker += 0.4;
-            triggerRipple(clickX, clickY, '#cfd8dc', 25);
-            onPreviewInstrument('shaker');
-            return;
-        }
+    const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+        const pt = pointerToLayout(e);
+        if (!pt || !canvasRef.current) return;
+        const nextCursor = hitTestInstrument(pt.layout, pt.x, pt.y) ? 'pointer' : 'default';
+        if (canvasRef.current.style.cursor !== nextCursor) canvasRef.current.style.cursor = nextCursor;
     };
 
     return (
-        <Box sx={{
+        <Box sx={[{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             width: '100%',
             p: 1.5,
+            pb: 2,
             bgcolor: 'rgba(0,0,0,0.3)',
             borderRadius: 4,
             border: '1px solid rgba(229, 169, 95, 0.08)',
             boxShadow: 'inset 0 0 25px rgba(0,0,0,0.6)'
-        }}>
+        }, ...(Array.isArray(sx) ? sx : [sx])]}>
             <Typography
                 variant="overline"
                 sx={{
                     color: "text.secondary",
-                    fontSize: '0.62rem',
+                    fontSize: { xs: '0.56rem', sm: '0.62rem' },
+                    lineHeight: 1.5,
+                    textAlign: 'center',
                     mb: 1,
-                    letterSpacing: '0.15em',
+                    letterSpacing: { xs: '0.1em', sm: '0.15em' },
                     fontWeight: 'bold'
                 }}>
-                INSTRUMENTOS RÍTMICOS TÁCTILES (HAZ CLIC PARA PROBAR)
+                INSTRUMENTOS RÍTMICOS TÁCTILES (TOCA PARA PROBAR)
             </Typography>
 
-            <Box sx={{
-                width: '100%',
-                height: 175,
-                position: 'relative',
-                overflow: 'hidden'
-            }}>
+            <Box ref={wrapRef} sx={{ width: '100%', height: canvasHeight, position: 'relative' }}>
                 <canvas
                     ref={canvasRef}
                     onClick={handleCanvasClick}
-                    role="img"
-                    aria-label="Instrumentos rítmicos: hacé clic en uno para escucharlo"
+                    onPointerMove={handlePointerMove}
+                    onPointerLeave={() => {
+                        if (canvasRef.current) canvasRef.current.style.cursor = 'default';
+                    }}
+                    aria-hidden="true"
                     style={{
                         width: '100%',
-                        height: '100%',
-                        display: 'block'
+                        height: canvasHeight,
+                        display: 'block',
+                        touchAction: 'manipulation'
                     }}
                 />
             </Box>
             <Box component="ul" className="visually-hidden-focusable" aria-label="Probar instrumentos" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, listStyle: 'none', p: 0, m: 0, mt: 1 }}>
                 {PREVIEW_BUTTONS.map(b => (
                     <li key={`${b.instrument}-${b.label}`}>
-                        <button type="button" onClick={() => onPreviewInstrument(b.instrument, b.modifier)}>{b.label}</button>
+                        <button
+                            type="button"
+                            className="instrument-preview-button"
+                            aria-label={`Tocar ${b.label.toLowerCase()}`}
+                            onClick={() => onPreviewInstrument(b.instrument, b.modifier)}
+                        >
+                            {b.label}
+                        </button>
                     </li>
                 ))}
             </Box>

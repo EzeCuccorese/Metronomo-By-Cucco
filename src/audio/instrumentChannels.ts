@@ -4,7 +4,7 @@ import type { InstrumentType } from '../rhythms/RhythmPatterns';
  * Mixer channels exposed by the DrumSynthesizer.
  * (ES) Canales del mixer expuestos por el DrumSynthesizer.
  */
-export const CHANNEL_IDS = ['bombo', 'clave', 'shaker', 'kick', 'snare', 'hihat', 'click', 'synth'] as const;
+export const CHANNEL_IDS = ['bombo', 'clave', 'shaker', 'kick', 'snare', 'hihat', 'click', 'synth', 'piano'] as const;
 
 export type ChannelId = typeof CHANNEL_IDS[number];
 
