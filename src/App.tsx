@@ -39,6 +39,8 @@ import { usePersistentState } from './hooks/usePersistentState';
 import { useTapTempo } from './hooks/useTapTempo';
 import { useShortcutDispatcher, useShortcutHandlers } from './shortcuts/dispatcher';
 import ShortcutsDialog from './components/ShortcutsDialog';
+import CommandPalette from './components/CommandPalette';
+import type { PaletteCommand } from './components/CommandPalette';
 import { useWakeLock } from './hooks/useWakeLock';
 import { BluetoothNotice } from './components/BluetoothNotice';
 import { PlaybackContext } from './state/PlaybackContext';
@@ -141,6 +143,16 @@ function App() {
   const guardedTap = useCallback(() => { if (!tempoLocked) handleTap(); }, [tempoLocked, handleTap]);
 
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const rhythmCommands = useMemo<PaletteCommand[]>(() => PRESET_PATTERNS.map(p => ({
+    id: `rhythm.${p.id}`,
+    label: `Ritmo: ${p.name}`,
+    group: 'Ritmos',
+    keywords: ['ritmo', 'rhythm'],
+    run: () => loadPreset(p.id),
+  })), [loadPreset]);
+  const setBpmFromPalette = useCallback((value: number) => { if (!tempoLocked) setBpmRaw(clampBpm(value)); }, [tempoLocked, setBpmRaw]);
+
   const stepPreset = useCallback((delta: 1 | -1) => {
     const ids = PRESET_PATTERNS.map(p => p.id);
     const at = ids.indexOf(currentPattern.id);
@@ -157,6 +169,7 @@ function App() {
     'transport.prev-rhythm': () => stepPreset(-1),
     'transport.next-rhythm': () => stepPreset(1),
     'help.shortcuts': () => setShortcutsOpen(true),
+    'palette.open': () => setPaletteOpen(true),
   });
 
   const canRestore = currentPattern.id !== CUSTOM_PATTERN_ID && !!overrides[currentPattern.id];
@@ -276,6 +289,7 @@ function App() {
         </Box>
 
         <PwaUpdater isPlaying={isPlaying} />
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={rhythmCommands} onSetBpm={setBpmFromPalette} tempoLocked={tempoLocked} />
         <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
         <GenreSelectorModal
           open={libraryOpen}

@@ -16,7 +16,7 @@ export type ShortcutGroup = 'Transporte' | 'Piano' | 'Ayuda';
 export type ShortcutId =
     | 'piano.notes' | 'piano.octave-down' | 'piano.octave-up' | 'piano.velocity-down' | 'piano.velocity-up' | 'piano.sustain' | 'piano.exit'
     | 'transport.play' | 'transport.tap' | 'transport.bpm-up' | 'transport.bpm-down' | 'transport.prev-rhythm' | 'transport.next-rhythm'
-    | 'help.shortcuts';
+    | 'help.shortcuts' | 'palette.open';
 
 export interface ShortcutDef {
     id: ShortcutId;
@@ -29,6 +29,8 @@ export interface ShortcutDef {
     chars?: readonly string[];
     /** What to print in tooltips and the cheat sheet. */
     display: string;
+    /** Needs Ctrl or Cmd held (and nothing else); every other shortcut ignores Ctrl/Cmd combos. */
+    mod?: boolean;
     /** Print each space-separated token of `display` as its own keycap (the note row). */
     separateKeys?: boolean;
     /** Cancel the browser default (page scroll, button activation…). */
@@ -56,6 +58,7 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     { id: 'transport.bpm-down', label: 'Bajar tempo (Shift: ±5)', group: 'Transporte', scope: 'global', codes: ['ArrowDown'], display: '↓', preventDefault: true, allowRepeat: true },
     { id: 'transport.prev-rhythm', label: 'Ritmo anterior', group: 'Transporte', scope: 'global', codes: ['Comma'], display: ',', preventDefault: false },
     { id: 'transport.next-rhythm', label: 'Ritmo siguiente', group: 'Transporte', scope: 'global', codes: ['Period'], display: '.', preventDefault: false },
+    { id: 'palette.open', label: 'Paleta de comandos', group: 'Ayuda', scope: 'global', codes: ['KeyK'], display: '⌘K / Ctrl+K', mod: true, preventDefault: true },
     { id: 'help.shortcuts', label: 'Mostrar esta ayuda', group: 'Ayuda', scope: 'global', chars: ['?'], display: '?', preventDefault: true },
 ];
 
@@ -63,9 +66,9 @@ const BY_ID = new Map<ShortcutId, ShortcutDef>(SHORTCUTS.map(s => [s.id, s]));
 
 export const shortcutById = (id: ShortcutId): ShortcutDef => BY_ID.get(id)!;
 
-/** Does this keyboard event trigger the shortcut? (Alt/Ctrl/Meta combos never do.) */
+/** Does this keyboard event trigger the shortcut? (Alt combos never do; Ctrl/Cmd only for `mod` shortcuts.) */
 export function matchesEvent(def: ShortcutDef, e: Pick<KeyboardEvent, 'code' | 'key' | 'altKey' | 'ctrlKey' | 'metaKey'>): boolean {
-    if (e.altKey || e.ctrlKey || e.metaKey) return false;
+    if (e.altKey || (e.ctrlKey || e.metaKey) !== !!def.mod) return false;
     return !!def.codes?.includes(e.code) || !!def.chars?.includes(e.key);
 }
 

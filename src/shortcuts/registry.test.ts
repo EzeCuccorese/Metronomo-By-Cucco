@@ -28,6 +28,11 @@ describe('shortcut registry', () => {
         const base = { code: '', key: '', altKey: false, ctrlKey: false, metaKey: false };
         expect(matchesEvent(shortcutById('transport.play'), { ...base, code: 'Space' })).toBe(true);
         expect(matchesEvent(shortcutById('transport.play'), { ...base, code: 'Space', ctrlKey: true })).toBe(false);
+        const palette = shortcutById('palette.open');
+        expect(matchesEvent(palette, { ...base, code: 'KeyK', metaKey: true })).toBe(true);
+        expect(matchesEvent(palette, { ...base, code: 'KeyK', ctrlKey: true })).toBe(true);
+        expect(matchesEvent(palette, { ...base, code: 'KeyK' })).toBe(false);
+        expect(matchesEvent(palette, { ...base, code: 'KeyK', ctrlKey: true, altKey: true })).toBe(false);
         expect(matchesEvent(shortcutById('help.shortcuts'), { ...base, code: 'Minus', key: '?' })).toBe(true);
     });
 
