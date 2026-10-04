@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react';
-import type { KeyboardEvent, PointerEvent } from 'react';
+import type { KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 
 const FIRST_DELAY_MS = 380;
 const START_INTERVAL_MS = 130;
 const MIN_INTERVAL_MS = 45;
 /** After this many repeats the step grows (BPM jumps by 5 instead of 1). */
 const FAST_AFTER = 10;
+/** A click this soon after a pointer/key press is the same gesture, not a second one. */
+const CLICK_AFTER_PRESS_MS = 800;
 
 /**
  * Press-and-hold repeat with acceleration for the − / + tempo buttons.
@@ -23,11 +25,20 @@ export function useHoldRepeat(onStep: (multiplier: number) => void, disabled = f
         if (timer.current !== null) clearTimeout(timer.current);
         timer.current = null;
     }, []);
-    useEffect(() => stop, [stop]);
+    useEffect(() => {
+        // Locking the tempo (speed trainer) while a button is held must end the repeat.
+        if (disabled) stop();
+        return stop;
+    }, [disabled, stop]);
+
+    // Pointer and key presses step on their own; a synthetic click (screen readers) steps here instead.
+    const lastHandled = useRef(0);
+    const markHandled = () => { lastHandled.current = Date.now(); };
 
     const start = useCallback((e: PointerEvent<HTMLElement>) => {
         if (disabled || e.button !== 0) return;
         stop();
+        markHandled();
         let repeats = 0;
         let interval = START_INTERVAL_MS;
         stepRef.current(1);
@@ -41,7 +52,18 @@ export function useHoldRepeat(onStep: (multiplier: number) => void, disabled = f
     }, [disabled, stop]);
 
     const onKeyDown = useCallback((e: KeyboardEvent<HTMLElement>) => {
-        if ((e.key === 'Enter' || e.key === ' ') && !e.repeat && !disabled) stepRef.current(1);
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        // Space would scroll the page.
+        e.preventDefault();
+        if (e.repeat || disabled) return;
+        markHandled();
+        stepRef.current(1);
+    }, [disabled]);
+
+    const onClick = useCallback((e: MouseEvent<HTMLElement>) => {
+        e.preventDefault();
+        if (disabled || Date.now() - lastHandled.current < CLICK_AFTER_PRESS_MS) return;
+        stepRef.current(1);
     }, [disabled]);
 
     return {
@@ -51,7 +73,6 @@ export function useHoldRepeat(onStep: (multiplier: number) => void, disabled = f
         onPointerCancel: stop,
         onBlur: stop,
         onKeyDown,
-        // The pointer already stepped on press; a mouse/touch click must not step again.
-        onClick: (e: React.MouseEvent) => e.preventDefault(),
+        onClick,
     };
 }

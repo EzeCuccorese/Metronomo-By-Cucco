@@ -79,20 +79,18 @@ describe('BeatLeds', () => {
 });
 
 describe('useElementOutOfView', () => {
-    afterEach(() => { cleanup(); vi.unstubAllGlobals(); document.body.innerHTML = ''; });
+    afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-    function Probe() {
-        return <span data-testid="out">{String(useElementOutOfView('#target'))}</span>;
+    function Probe({ element }: { element: Element | null }) {
+        return <span data-testid="out">{String(useElementOutOfView(element))}</span>;
     }
 
     it('follows the intersection of the element', () => {
         const target = document.createElement('div');
-        target.id = 'target';
-        document.body.appendChild(target);
         let callback!: (entries: { isIntersecting: boolean }[]) => void;
         const disconnect = vi.fn();
         vi.stubGlobal('IntersectionObserver', class { constructor(cb: typeof callback) { callback = cb; } observe() {} disconnect = disconnect; });
-        const { unmount } = render(<Probe />);
+        const { unmount } = render(<Probe element={target} />);
         expect(screen.getByTestId('out')).toHaveTextContent('false');
         act(() => callback([{ isIntersecting: false }]));
         expect(screen.getByTestId('out')).toHaveTextContent('true');
@@ -103,14 +101,11 @@ describe('useElementOutOfView', () => {
     });
 
     it('stays false without an element or without IntersectionObserver', () => {
-        render(<Probe />);
+        render(<Probe element={null} />);
         expect(screen.getByTestId('out')).toHaveTextContent('false');
         cleanup();
-        const target = document.createElement('div');
-        target.id = 'target';
-        document.body.appendChild(target);
         vi.stubGlobal('IntersectionObserver', undefined);
-        render(<Probe />);
+        render(<Probe element={document.createElement('div')} />);
         expect(screen.getByTestId('out')).toHaveTextContent('false');
     });
 });

@@ -43,6 +43,8 @@ export interface HeaderToolbarProps {
   pattern?: RhythmPattern;
   /** Relative tempo change (the − / + buttons). Defaults to onBpmChange(bpm + delta). */
   onNudgeBpm?: (delta: number) => void;
+  /** Ref to the header element (the page watches it to know when to show the slim bar). */
+  headerRef?: React.Ref<HTMLElement>;
 }
 
 /** Text field that only commits a BPM on blur/Enter, so typing "1" on the way to "120" is harmless. */
@@ -103,7 +105,8 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
   tempoLocked = false,
   viewControl,
   pattern,
-  onNudgeBpm
+  onNudgeBpm,
+  headerRef
 }) => {
   const nudge = onNudgeBpm ?? ((delta: number) => onBpmChange(bpm + delta));
   const queuedPatternId = usePlayback(s => s.queuedPatternId);
@@ -112,6 +115,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
   return (
     <Paper
       component="header"
+      ref={headerRef}
       className="brass-trim app-header"
       elevation={6}
       sx={{
