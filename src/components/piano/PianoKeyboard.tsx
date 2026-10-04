@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import { computerKeyLabel, isBlackKey, pitchClass, spanishNoteLabel, spanishNoteName } from '../../audio/piano/notes';
+import { COMPUTER_KEY_SEMITONES, computerKeyLabel, isBlackKey, pitchClass, spanishNoteLabel, spanishNoteName } from '../../audio/piano/notes';
 import { velocityFromPointer } from './pianoUi';
 import './piano.css';
 
@@ -21,6 +21,8 @@ export interface PianoKeyboardProps {
     onNoteOff: (midi: number) => void;
 }
 
+const MAPPED_SPAN = Math.max(...Object.values(COMPUTER_KEY_SEMITONES));
+
 const midiFromElement = (el: Element | null): number | null => {
     const key = el?.closest<HTMLElement>('[data-midi]');
     if (!key) return null;
@@ -40,6 +42,8 @@ export default function PianoKeyboard({
 }: PianoKeyboardProps) {
     const keys = useMemo(() => Array.from({ length: octaves * 12 + 1 }, (_, i) => startMidi + i), [startMidi, octaves]);
     const whiteKeys = keys.filter(m => !isBlackKey(m));
+    // White keys the computer keyboard reaches (the band over them; keys start at `startMidi`).
+    const mappedWhites = whiteKeys.filter(m => m <= startMidi + MAPPED_SPAN).length;
     const pointers = useRef(new Map<number, number>()); // pointerId -> MIDI note it holds
     const [focusMidi, setFocusMidi] = useState(startMidi);
     const keyRefs = useRef(new Map<number, HTMLButtonElement>());
@@ -138,9 +142,11 @@ export default function PianoKeyboard({
         const inScale = scalePcs?.has(pc) ?? false;
         const whiteIndex = whiteKeys.findIndex(w => w > midi); // first white key to the right
         const hint = showKeyHints ? computerKeyLabel(midi - startMidi) : null;
+        const mapped = showKeyHints && midi >= startMidi && midi <= startMidi + MAPPED_SPAN;
         const classes = [
             'piano-key',
             black ? 'piano-key--black' : 'piano-key--white',
+            mapped ? 'is-mapped' : '',
             inChord ? 'is-chord' : '',
             isRoot ? 'is-root' : '',
             scalePcs ? (inScale ? 'is-scale' : 'is-outside') : '',
@@ -187,6 +193,11 @@ export default function PianoKeyboard({
                 onPointerCancel={handlePointerEnd}
                 onLostPointerCapture={handlePointerEnd}
             >
+                {showKeyHints && mappedWhites > 0 && (
+                    <div className="piano-band" aria-hidden="true" data-testid="piano-band" style={{ width: `calc(${mappedWhites} * var(--piano-white-w))` }}>
+                        <span>Rango del teclado PC</span>
+                    </div>
+                )}
                 {whiteKeys.map(renderKey)}
                 {keys.filter(isBlackKey).map(renderKey)}
             </div>
