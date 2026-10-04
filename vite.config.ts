@@ -72,6 +72,11 @@ export default defineConfig({
       }
     })
   ],
+  resolve: {
+    // The @tonaljs/* packages declare `main: dist/index.js` but only ship dist/index.{mjs,cjs}
+    // (no `exports` map): resolving the ESM `module` entry first avoids the dangling `main`.
+    mainFields: ['module', 'browser', 'main']
+  },
   preview: {
     headers: productionSecurityHeaders()
   },
@@ -94,6 +99,8 @@ export default defineConfig({
     globals: true,
     // Full-app integration tests render the whole MUI tree; coverage instrumentation makes them slow.
     testTimeout: 20000,
+    // Node can't resolve the @tonaljs/* dangling `main`; inlining lets Vite resolve them.
+    server: { deps: { inline: [/@tonaljs/] } },
     projects: [
       {
         // Hooks, UI and pure logic against jsdom with mocked Web Audio.

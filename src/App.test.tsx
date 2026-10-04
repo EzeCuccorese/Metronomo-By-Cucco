@@ -48,6 +48,7 @@ class FakeScheduler {
     preloadPiano() { this.record('preloadPiano', []); return Promise.resolve(true); }
     pianoNoteOn(...a: unknown[]) { this.record('pianoNoteOn', a); }
     pianoNoteOff(...a: unknown[]) { this.record('pianoNoteOff', a); }
+    setPianoSustain(...a: unknown[]) { this.record('setPianoSustain', a); }
     releaseAllPianoKeys() {}
     armMelodyRecording(...a: unknown[]) { this.record('armMelodyRecording', a); }
     cancelMelodyRecording() {}
@@ -139,6 +140,48 @@ describe('App (integration with a scripted engine)', () => {
         fireEvent.keyDown(document.body, { code: 'ArrowUp' });
         fireEvent.keyDown(document.body, { code: 'ArrowUp', shiftKey: true });
         expect(bpmInput().value).toBe('126');
+    });
+
+    it('opens the shortcut cheat sheet with ? and steps rhythms with . and ,', async () => {
+        render(<App />);
+        fireEvent.keyDown(document.body, { code: 'Period' });
+        await act(async () => {});
+        const next = scheduler().pattern?.id;
+        fireEvent.keyDown(document.body, { code: 'Comma' });
+        await act(async () => {});
+        expect(scheduler().pattern?.id).not.toBe(next);
+        fireEvent.keyDown(document.body, { code: 'Slash', key: '?', shiftKey: true });
+        expect(await screen.findByRole('dialog', { name: 'Atajos de teclado' })).toBeInTheDocument();
+    });
+
+    it('opens the command palette with Ctrl+K and sets a typed tempo', async () => {
+        render(<App />);
+        fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
+        const input = await screen.findByPlaceholderText(/Buscá un comando/);
+        fireEvent.change(input, { target: { value: '88' } });
+        fireEvent.click(screen.getByText('Poner tempo 88 BPM'));
+        expect(bpmInput().value).toBe('88');
+    });
+
+    it('offers the view presets and panel switches in the command palette', async () => {
+        render(<App />);
+        fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
+        const input = await screen.findByPlaceholderText(/Buscá un comando/);
+        fireEvent.change(input, { target: { value: 'solo metr' } });
+        fireEvent.click(await screen.findByText('Vista: Solo metrónomo'));
+        expect(document.querySelectorAll('[data-panel]')).toHaveLength(2);
+        fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
+        fireEvent.change(await screen.findByPlaceholderText(/Buscá un comando/), { target: { value: 'panel: piano' } });
+        fireEvent.click(await screen.findByText('Mostrar panel: Piano'));
+        expect(document.querySelector('[data-panel="piano"]')).not.toBeNull();
+    });
+
+    it('Ctrl+K toggles the command palette closed again', async () => {
+        render(<App />);
+        fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
+        const input = await screen.findByPlaceholderText(/Buscá un comando/);
+        fireEvent.keyDown(input, { code: 'KeyK', ctrlKey: true });
+        await waitForElementToBeRemoved(() => screen.queryByPlaceholderText(/Buscá un comando/));
     });
 
     it('sends pattern edits to the engine and persists them', () => {
@@ -414,5 +457,24 @@ describe('App (integration with a scripted engine)', () => {
         fireEvent.click(within(stage).getByTestId('stage-close'));
         await waitForElementToBeRemoved(() => screen.queryByRole('dialog', { name: 'Modo escenario' }));
         expect(scheduler().playing).toBe(true); // closing the stage does not stop the metronome
+    });
+
+    it('toggles the stage mode with F, and lists it in the cheat sheet and the palette', async () => {
+        render(<App />);
+        fireEvent.keyDown(document.body, { code: 'KeyF', key: 'f' });
+        expect(await screen.findByRole('dialog', { name: 'Modo escenario' })).toBeInTheDocument();
+        fireEvent.keyDown(document.body, { code: 'KeyF', key: 'f' });
+        await waitForElementToBeRemoved(() => screen.queryByRole('dialog', { name: 'Modo escenario' }));
+
+        fireEvent.keyDown(document.body, { code: 'Slash', key: '?', shiftKey: true });
+        const sheet = await screen.findByRole('dialog', { name: 'Atajos de teclado' });
+        expect(within(sheet).getByText('Modo escenario (atril)')).toBeInTheDocument();
+        fireEvent.keyDown(sheet, { key: 'Escape' });
+        await waitForElementToBeRemoved(() => screen.queryByRole('dialog', { name: 'Atajos de teclado' }));
+
+        fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
+        fireEvent.change(await screen.findByPlaceholderText(/Buscá un comando/), { target: { value: 'escenario' } });
+        fireEvent.click(await screen.findByText('Modo escenario (atril)'));
+        expect(await screen.findByRole('dialog', { name: 'Modo escenario' })).toBeInTheDocument();
     });
 });

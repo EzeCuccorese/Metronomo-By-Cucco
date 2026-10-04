@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
+import { COMPUTER_KEY_VELOCITY } from '../../hooks/usePianoComputerKeyboard';
 import PianoPanel from '../PianoPanel';
 import { useMelodySync } from '../../hooks/useEngineSync';
 import { PlaybackContext } from '../../state/PlaybackContext';
@@ -7,6 +8,8 @@ import { createPlaybackStore } from '../../state/playbackStore';
 import type { PlaybackStore } from '../../state/playbackStore';
 import { STORAGE_PREFIX } from '../../state/storage';
 import type { Melody } from '../../audio/piano/melody';
+import { FakeMidiAccess, stubRequestMidiAccess, unstubRequestMidiAccess } from '../../test/fakeMidi';
+import { useShortcutDispatcher } from '../../shortcuts/dispatcher';
 import { melodyStatusText, velocityFromPointer } from '../piano/pianoUi';
 
 type Listener = (m: Melody, late: boolean) => void;
@@ -18,6 +21,7 @@ const makeEngine = (overrides: Partial<Record<string, unknown>> = {}) => {
         pianoStatus: 'idle' as const,
         pianoNoteOn: vi.fn(),
         pianoNoteOff: vi.fn(),
+        setPianoSustain: vi.fn(),
         releaseAllPianoKeys: vi.fn(),
         preloadPiano: vi.fn(),
         setMelody: vi.fn(),
@@ -31,6 +35,12 @@ const makeEngine = (overrides: Partial<Record<string, unknown>> = {}) => {
 
 const TAKE: Melody = { bars: 1, subdivision: 4, notes: [{ step: 0, midi: 60, velocity: 0.9, length: 1 }] };
 
+/** The app mounts the single keyboard dispatcher at its root; the panel alone needs it too. */
+function WithDispatcher({ children }: { children: React.ReactNode }) {
+    useShortcutDispatcher();
+    return children;
+}
+
 /** App wires the melody loop to the engine (so it survives a hidden card); the card only edits it. */
 const WithMelodySync = ({ engine, isPlaying }: { engine: ReturnType<typeof makeEngine>; isPlaying: boolean }) => {
     useMelodySync(engine);
@@ -40,7 +50,7 @@ const WithMelodySync = ({ engine, isPlaying }: { engine: ReturnType<typeof makeE
 function renderPanel(engine = makeEngine(), isPlaying = false, store: PlaybackStore = createPlaybackStore()) {
     const utils = render(
         <PlaybackContext.Provider value={store}>
-            <WithMelodySync engine={engine} isPlaying={isPlaying} />
+            <WithDispatcher><WithMelodySync engine={engine} isPlaying={isPlaying} /></WithDispatcher>
         </PlaybackContext.Provider>
     );
     return { ...utils, engine, store };
@@ -158,7 +168,7 @@ describe('PianoPanel', () => {
         const { engine } = renderPanel();
         keyEl(48).focus();
         fireEvent.keyDown(keyEl(48), { code: 'KeyD' });
-        expect(engine.pianoNoteOn).toHaveBeenCalledWith(52, 0.8);
+        expect(engine.pianoNoteOn).toHaveBeenCalledWith(52, COMPUTER_KEY_VELOCITY);
         fireEvent.keyUp(keyEl(48), { code: 'KeyD' });
         expect(engine.pianoNoteOff).toHaveBeenCalledWith(52);
         // Two sources holding the same key: it sounds until both let go.
@@ -171,11 +181,102 @@ describe('PianoPanel', () => {
 
         const toggle = screen.getByRole('button', { name: 'Teclado PC' });
         expect(toggle).toHaveAttribute('aria-pressed', 'false');
-        expect(keyEl(48)).not.toHaveTextContent('A');
+        // The letters are always there (hidden by CSS on touch devices), and the toggle turns the global mode on.
+        expect(keyEl(48)).toHaveTextContent('A');
         fireEvent.click(toggle);
         expect(toggle).toHaveAttribute('aria-pressed', 'true');
-        expect(keyEl(48)).toHaveTextContent('A');
         expect(stored('piano.settings').computerKeys).toBe(true);
+    });
+
+    it('can hide the letters, and shows the mapped-range band only with them', () => {
+        renderPanel();
+        expect(screen.getByTestId('piano-band')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('switch', { name: 'Mostrar letras' }));
+        expect(keyEl(48)).not.toHaveTextContent('A');
+        expect(screen.queryByTestId('piano-band')).not.toBeInTheDocument();
+        expect(stored('piano.settings').showLetters).toBe(false);
+    });
+
+    it('shows the "Teclado PC activo" indicator and Esc turns the mode off', () => {
+        renderPanel();
+        const status = screen.getByTestId('piano-pc-status');
+        expect(status).toHaveAttribute('aria-live', 'polite');
+        fireEvent.click(screen.getByRole('button', { name: 'Teclado PC' }));
+        expect(status).toHaveTextContent('Teclado PC activo');
+        expect(status).toHaveTextContent('Esc para salir');
+        fireEvent.keyDown(document.body, { code: 'Escape' });
+        expect(screen.getByRole('button', { name: 'Teclado PC' })).toHaveAttribute('aria-pressed', 'false');
+        expect(status).not.toHaveTextContent('Teclado PC activo');
+    });
+
+    it('lights up the panel while the focus is inside it', () => {
+        renderPanel();
+        const panel = screen.getByTestId('piano-panel');
+        expect(panel).toHaveAttribute('data-pc-keys', 'off');
+        act(() => keyEl(48).focus());
+        expect(panel).toHaveAttribute('data-pc-keys', 'focus');
+        expect(screen.getByTestId('piano-pc-status')).toHaveTextContent('Tocando con el teclado de la PC');
+        act(() => keyEl(48).blur());
+        expect(panel).toHaveAttribute('data-pc-keys', 'off');
+    });
+
+    it('C / V change the keyboard velocity and the notes use it', () => {
+        const { engine } = renderPanel();
+        const meter = screen.getByTestId('piano-velocity');
+        expect(meter).toHaveAttribute('data-level', '3');
+        keyEl(48).focus();
+        fireEvent.keyDown(keyEl(48), { code: 'KeyC' });
+        fireEvent.keyDown(keyEl(48), { code: 'KeyC' });
+        expect(meter).toHaveAttribute('data-level', '1');
+        fireEvent.keyDown(keyEl(48), { code: 'KeyA' });
+        expect(engine.pianoNoteOn).toHaveBeenCalledWith(48, 0.55);
+        for (let i = 0; i < 6; i++) fireEvent.keyDown(keyEl(48), { code: 'KeyV' });
+        expect(meter).toHaveAttribute('data-level', '4');
+        expect(stored('piano.settings').velocityLevel).toBe(4);
+    });
+
+    it('sustain: holding Shift or the Pedal button shares one pedal', () => {
+        const { engine } = renderPanel();
+        keyEl(48).focus();
+        fireEvent.keyDown(keyEl(48), { code: 'ShiftLeft' });
+        expect(engine.setPianoSustain).toHaveBeenLastCalledWith(true);
+        fireEvent.keyUp(keyEl(48), { code: 'ShiftLeft' });
+        expect(engine.setPianoSustain).toHaveBeenLastCalledWith(false);
+
+        const pedal = screen.getByRole('button', { name: 'Pedal de sustain' });
+        fireEvent.click(pedal);
+        expect(pedal).toHaveAttribute('aria-pressed', 'true');
+        expect(engine.setPianoSustain).toHaveBeenLastCalledWith(true);
+        // Shift on top of the button does not lift the pedal.
+        fireEvent.keyDown(keyEl(48), { code: 'ShiftRight' });
+        fireEvent.keyUp(keyEl(48), { code: 'ShiftRight' });
+        expect(engine.setPianoSustain).toHaveBeenLastCalledWith(true);
+        fireEvent.click(pedal);
+        expect(engine.setPianoSustain).toHaveBeenLastCalledWith(false);
+    });
+
+    it('Esc releases held keys and the Shift pedal on its way out', () => {
+        const { engine } = renderPanel();
+        fireEvent.click(screen.getByRole('button', { name: 'Teclado PC' }));
+        fireEvent.keyDown(document.body, { code: 'KeyA' });
+        fireEvent.keyDown(document.body, { code: 'ShiftLeft' });
+        fireEvent.keyDown(document.body, { code: 'Escape' });
+        expect(engine.pianoNoteOff).toHaveBeenCalledWith(48);
+        expect(engine.setPianoSustain).toHaveBeenLastCalledWith(false);
+        expect(screen.getByRole('button', { name: 'Teclado PC' })).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('lifts the Shift pedal when the window loses focus', () => {
+        const { engine } = renderPanel();
+        keyEl(48).focus();
+        fireEvent.keyDown(keyEl(48), { code: 'ShiftLeft' });
+        act(() => { window.dispatchEvent(new Event('blur')); });
+        expect(engine.setPianoSustain).toHaveBeenLastCalledWith(false);
+    });
+
+    it('shows the octave next to the range', () => {
+        renderPanel();
+        expect(screen.getByTestId('piano-octave')).toHaveTextContent('Octava 3');
     });
 
     it('shifts octaves with the buttons and with Z / X, within C2..C6', () => {
@@ -323,5 +424,167 @@ describe('piano UI helpers', () => {
         expect(melodyStatusText(base)).toBe('Sin melodía grabada');
         expect(melodyStatusText({ ...base, recordState: 'recording', recordingBar: 7 })).toBe('Grabando compás 4 de 4');
         expect(melodyStatusText({ ...base, melody: { bars: 3, subdivision: 4, notes: [TAKE.notes[0], TAKE.notes[0]] } })).toBe('2 notas · 3 compases · suena en loop al reproducir');
+    });
+
+    describe('computer keyboard layouts', () => {
+        beforeEach(() => localStorage.clear());
+        afterEach(() => { delete (navigator as unknown as { keyboard?: unknown }).keyboard; });
+
+        const choose = (name: string) => {
+            fireEvent.mouseDown(screen.getByRole('combobox', { name: /Distribución/ }));
+            fireEvent.click(screen.getByRole('option', { name }));
+        };
+
+        it('switches to the two-row tracker layout: new keys play, old ones do not, labels follow', () => {
+            const { engine } = renderPanel();
+            expect(keyEl(48)).toHaveTextContent('A');
+            choose('Tracker (2 filas)');
+            expect(stored('piano.settings').layout).toBe('tracker');
+            expect(keyEl(48)).toHaveTextContent('Z');
+            expect(keyEl(49)).toHaveTextContent('S');
+            expect(keyEl(60)).toHaveTextContent('Q'); // upper row: the octave above
+            expect(keyEl(72)).toHaveTextContent('I');
+
+            keyEl(48).focus();
+            fireEvent.keyDown(keyEl(48), { code: 'KeyZ' });
+            fireEvent.keyDown(keyEl(48), { code: 'KeyQ' });
+            fireEvent.keyDown(keyEl(48), { code: 'KeyA' }); // not a note in the tracker layout
+            expect(engine.pianoNoteOn.mock.calls.map(c => c[0])).toEqual([48, 60]);
+        });
+
+        it('octave and velocity move to - / = and PageDown / PageUp, and the tooltips say so', () => {
+            renderPanel();
+            choose('Tracker (2 filas)');
+            keyEl(48).focus();
+            fireEvent.keyDown(keyEl(48), { code: 'Equal' });
+            expect(screen.getByTestId('piano-range')).toHaveTextContent('Do4–Do6');
+            keyEl(60).focus();
+            fireEvent.keyDown(keyEl(60), { code: 'Minus' });
+            expect(screen.getByTestId('piano-range')).toHaveTextContent('Do3–Do5');
+            fireEvent.keyDown(keyEl(48), { code: 'PageDown' });
+            expect(screen.getByTestId('piano-velocity')).toHaveAttribute('data-level', '2');
+            fireEvent.keyDown(keyEl(48), { code: 'KeyZ' }); // a note now, not "octave down"
+            expect(screen.getByTestId('piano-range')).toHaveTextContent('Do3–Do5');
+        });
+
+        it('explains the T conflict with the note T plays in the active layout', () => {
+            renderPanel();
+            choose('Tracker (2 filas)');
+            fireEvent.click(screen.getByRole('button', { name: 'Teclado PC' }));
+            expect(screen.getByTestId('piano-pc-status')).toHaveTextContent('T = Sol');
+        });
+
+        it('shows the letters printed on the keys when the browser exposes the layout (AZERTY)', async () => {
+            const map = { get: (code: string) => ({ KeyA: 'q', KeyQ: 'a', KeyW: 'z', KeyZ: 'w' } as Record<string, string>)[code] };
+            Object.defineProperty(navigator, 'keyboard', { configurable: true, value: Object.assign(new EventTarget(), { getLayoutMap: async () => map }) });
+            renderPanel();
+            await act(async () => {});
+            expect(keyEl(48)).toHaveTextContent('Q');
+            expect(keyEl(49)).toHaveTextContent('Z');
+            delete (navigator as unknown as { keyboard?: unknown }).keyboard;
+        });
+
+        it('rejects a corrupted stored layout', () => {
+            localStorage.setItem(STORAGE_PREFIX + 'piano.settings', JSON.stringify({ octave: 3, computerKeys: false, scale: 'none', bars: 2, loop: true, layout: 'dvorak' }));
+            renderPanel();
+            expect(keyEl(48)).toHaveTextContent('A');
+        });
+    });
+
+    describe('MIDI input', () => {
+        beforeEach(() => localStorage.clear());
+        afterEach(() => { unstubRequestMidiAccess(); vi.unstubAllGlobals(); });
+
+        it('connects from the button and routes notes, velocity and the pedal into the normal piano path', async () => {
+            const access = new FakeMidiAccess();
+            const keyboard = access.plug('k1', 'Arturia KeyLab');
+            const request = stubRequestMidiAccess(access);
+            const { engine } = renderPanel();
+            expect(screen.queryByTestId('midi-notice')).not.toBeInTheDocument();
+            fireEvent.click(screen.getByTestId('midi-connect'));
+            expect(await screen.findByTestId('midi-status')).toHaveTextContent('MIDI activo · Arturia KeyLab');
+            expect(request).toHaveBeenCalledWith({ sysex: false });
+
+            act(() => keyboard.send(0x90, 60, 127));
+            expect(engine.pianoNoteOn).toHaveBeenCalledWith(60, 1);
+            expect(keyEl(60)).toHaveAttribute('aria-pressed', 'true');
+            act(() => keyboard.send(0x80, 60, 0));
+            expect(engine.pianoNoteOff).toHaveBeenCalledWith(60);
+
+            act(() => keyboard.send(0xb0, 64, 127));
+            expect(engine.setPianoSustain).toHaveBeenLastCalledWith(true);
+            expect(screen.getByRole('button', { name: 'Pedal de sustain' })).toHaveAttribute('aria-pressed', 'true');
+            act(() => keyboard.send(0xb0, 64, 0));
+            expect(engine.setPianoSustain).toHaveBeenLastCalledWith(false);
+        });
+
+        it('requests access only once when connect is triggered twice', async () => {
+            const access = new FakeMidiAccess();
+            const request = stubRequestMidiAccess(access);
+            renderPanel();
+            const button = screen.getByTestId('midi-connect');
+            fireEvent.click(button);
+            fireEvent.click(button);
+            await screen.findByTestId('midi-status');
+            expect(request).toHaveBeenCalledTimes(1);
+            expect(screen.getByRole('combobox', { name: /Teclado MIDI/ })).toHaveAttribute('aria-disabled', 'true');
+        });
+
+        it('releases the held notes when the keyboard is unplugged', async () => {
+            const access = new FakeMidiAccess();
+            const keyboard = access.plug('k1', 'Keys');
+            stubRequestMidiAccess(access);
+            const { engine } = renderPanel();
+            fireEvent.click(screen.getByTestId('midi-connect'));
+            await screen.findByTestId('midi-status');
+            act(() => keyboard.send(0x90, 64, 90));
+            act(() => access.unplug('k1'));
+            expect(engine.pianoNoteOff).toHaveBeenCalledWith(64);
+            expect(screen.getByTestId('midi-status')).toHaveTextContent('No hay teclados MIDI conectados');
+        });
+
+        it('lets the player choose which device to listen to', async () => {
+            const access = new FakeMidiAccess();
+            const a = access.plug('a', 'Keys A');
+            const b = access.plug('b', 'Keys B');
+            stubRequestMidiAccess(access);
+            const { engine } = renderPanel();
+            fireEvent.click(screen.getByTestId('midi-connect'));
+            await screen.findByTestId('midi-status');
+            fireEvent.mouseDown(screen.getByRole('combobox', { name: /Teclado MIDI/ }));
+            fireEvent.click(await screen.findByRole('option', { name: 'Keys B' }));
+            act(() => a.send(0x90, 60, 100));
+            expect(engine.pianoNoteOn).not.toHaveBeenCalled();
+            act(() => b.send(0x90, 62, 100));
+            expect(engine.pianoNoteOn).toHaveBeenCalledWith(62, 100 / 127);
+        });
+
+        it('says so when the permission is denied', async () => {
+            stubRequestMidiAccess(new Error('denied'));
+            renderPanel();
+            fireEvent.click(screen.getByTestId('midi-connect'));
+            expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo acceder a MIDI');
+        });
+
+        it('shows the dismissible iPhone/iPad notice when Web MIDI does not exist', () => {
+            vi.stubGlobal('navigator', Object.create(navigator, {
+                userAgent: { value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 Version/26.0 Mobile/15E148 Safari/604.1' },
+            }));
+            renderPanel();
+            expect(screen.getByTestId('midi-notice')).toHaveTextContent('MIDI no está disponible en iPhone/iPad');
+            expect(screen.queryByTestId('midi-connect')).not.toBeInTheDocument();
+            fireEvent.click(screen.getByRole('button', { name: /close|cerrar/i }));
+            expect(screen.queryByTestId('midi-notice')).not.toBeInTheDocument();
+            expect(stored('piano.midiNoticeDismissed')).toBe(true);
+        });
+
+        it('shows the Chrome suggestion on desktop Safari', () => {
+            vi.stubGlobal('navigator', Object.create(navigator, {
+                userAgent: { value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15' },
+                maxTouchPoints: { value: 0 },
+            }));
+            renderPanel();
+            expect(screen.getByTestId('midi-notice')).toHaveTextContent('Para conectar un teclado MIDI, abrí la app en Chrome.');
+        });
     });
 });
