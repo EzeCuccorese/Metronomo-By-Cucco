@@ -28,3 +28,6 @@ coverage/
 playwright-report/
 test-results/
 dev-dist/
+
+# Claude Code agent worktrees
+.claude/worktrees/

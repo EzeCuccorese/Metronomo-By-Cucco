@@ -1,6 +1,7 @@
 import AudioContextManager from './AudioContextManager';
 import { CHANNEL_IDS, INSTRUMENT_CHANNEL } from './instrumentChannels';
 import type { ChannelId } from './instrumentChannels';
+import { meterFromPeak, peakLevel } from './channelLevel';
 import { VoiceTracker } from './VoiceTracker';
 import { loadSamples } from './sampleLibrary';
 import {
@@ -31,7 +32,9 @@ class DrumSynthesizer {
     public loadPromise: Promise<void> | null = null;
 
     // Multi-channel mixer strips
-    private channels = {} as Record<ChannelId, { gain: GainNode; panner: StereoPannerNode; originalVolume: number; isMuted: boolean }>;
+    private channels = {} as Record<ChannelId, { gain: GainNode; panner: StereoPannerNode; analyser: AnalyserNode; originalVolume: number; isMuted: boolean }>;
+
+    private levelBuffer = new Float32Array(0);
 
     // Node Pools
     private gainPool: GainNode[] = [];
@@ -100,9 +103,15 @@ class DrumSynthesizer {
             gainNode.connect(pannerNode);
             pannerNode.connect(name === 'click' ? this.clickTransport : this.drumTransport);
 
+            // Level tap (post gain/pan, no output): the mixer meters read it.
+            const analyser = this.context.createAnalyser();
+            analyser.fftSize = 256;
+            pannerNode.connect(analyser);
+
             this.channels[name] = {
                 gain: gainNode,
                 panner: pannerNode,
+                analyser,
                 originalVolume: 1.0,
                 isMuted: false
             };
@@ -121,6 +130,15 @@ class DrumSynthesizer {
             return chan.gain;
         }
         return this.masterGain;
+    }
+
+    /** Current peak level (0..1) of a mixer strip's actual output; 0 for unknown channels. */
+    public getChannelLevel(name: string): number {
+        const chan = this.channels[name as ChannelId];
+        if (!chan) return 0;
+        if (this.levelBuffer.length !== chan.analyser.fftSize) this.levelBuffer = new Float32Array(chan.analyser.fftSize);
+        chan.analyser.getFloatTimeDomainData(this.levelBuffer);
+        return meterFromPeak(peakLevel(this.levelBuffer));
     }
 
     public setChannelVolume(name: string, volume: number) {
@@ -173,6 +191,7 @@ class DrumSynthesizer {
         Object.values(this.channels).forEach(ch => {
             ch.gain.disconnect();
             ch.panner.disconnect();
+            ch.analyser.disconnect();
         });
         this.drumTransport.disconnect();
         this.clickTransport.disconnect();

@@ -101,7 +101,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
   return (
     <Paper
       component="header"
-      className="brass-trim"
+      className="brass-trim app-header"
       elevation={6}
       sx={{
         p: { xs: 1.5, md: 2 },
@@ -122,7 +122,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
       }}
     >
       {/* Title & Queue indicator */}
-      <Box sx={{ gridArea: 'brand', display: 'flex', flexDirection: 'column', gap: 0.2, minWidth: 0 }}>
+      <Box className="app-brand" sx={{ gridArea: 'brand', display: 'flex', flexDirection: 'column', gap: 0.2, minWidth: 0 }}>
         <Stack
           direction="row"
           spacing={1.5}
@@ -178,6 +178,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
 
         <Typography
           variant="caption"
+          className="app-tagline"
           sx={{
             color: "text.secondary",
             fontSize: '0.68rem',
@@ -190,6 +191,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
 
       {/* Preset Selector Dropdown & Visual Library Button */}
       <Stack
+        className="library-row"
         direction={{ xs: "column", sm: "row" }}
         spacing={1}
         useFlexGap
@@ -249,8 +251,14 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
         </FormControl>
       </Stack>
 
+      {/*
+        Tempo + play. Transparent wrapper (display: contents) on wide screens so both keep their own
+        grid cell; on a portrait phone adaptive.css turns it into a thumb-reach bar fixed to the bottom.
+      */}
+      <Box className="transport-bar">
       {/* BPM Controls & Tap Tempo */}
       <Stack
+        className="tempo-panel"
         direction="row"
         spacing={{ xs: 1.5, sm: 2 }}
         sx={{
@@ -326,6 +334,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
         aria-pressed={isPlaying}
         aria-label={isPlaying ? 'Detener (Espacio)' : 'Iniciar (Espacio)'}
         data-testid="play-toggle"
+        className="play-button"
         startIcon={isPlaying ? <StopIcon sx={{ fontSize: 28 }} /> : <PlayArrowIcon sx={{ fontSize: 28 }} />}
         sx={{
           gridArea: 'play',
@@ -355,6 +364,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
       >
         {isPlaying ? 'DETENER' : 'INICIAR'}
       </Button>
+      </Box>
     </Paper>
   );
 };

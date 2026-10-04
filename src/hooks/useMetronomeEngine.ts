@@ -65,6 +65,11 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
     const bpmRef = useRef(bpm);
     const lastEngineBpmRef = useRef(bpm);
     const pendingPatternRef = useRef<RhythmPattern | null>(null);
+    const stopRequestedRef = useRef(false);
+    /** Bumped when the AudioContext is recreated: the scheduler (and its whole graph) is rebuilt. */
+    const [contextGeneration, setContextGeneration] = useState(0);
+    /** The transport was running (or starting) when the context was replaced: restart on the new one. */
+    const restartAfterRebuildRef = useRef(false);
 
     useEffect(() => {
         callbacksRef.current = { onBpmChange, onPatternChange };
@@ -76,6 +81,12 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
         isPlayingRef.current = value;
         setIsPlaying(value);
     }, []);
+
+    // --- AudioContext replacement (iOS: stuck resume or muted context) ---
+    useEffect(() => AudioContextManager.getInstance().onContextReplaced(() => {
+        restartAfterRebuildRef.current = isPlayingRef.current || startingRef.current;
+        setContextGeneration(generation => generation + 1);
+    }), []);
 
     // --- Scheduler lifecycle ---
     useEffect(() => {
@@ -129,6 +140,20 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
         });
 
         schedulerRef.current = scheduler;
+
+        if (restartAfterRebuildRef.current) {
+            // Rebuilt after a context replacement while playing: keep the music going on the new graph.
+            restartAfterRebuildRef.current = false;
+            if (!stopRequestedRef.current) {
+                scheduler.start();
+                isPlayingRef.current = true;
+                const pending = pendingPatternRef.current;
+                if (pending) scheduler.setPattern(pending); // re-queue the switch for the next bar line
+                store.update({ step: 0, queuedPatternId: scheduler.getQueuedPatternId(), melodyState: 'idle' });
+                setPlaying(true);
+            }
+        }
+
         return () => {
             unsubscribePiano();
             setPianoStatus('idle'); // the next scheduler starts with its own sampler
@@ -136,7 +161,8 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
             if (schedulerRef.current === scheduler) schedulerRef.current = null;
             isPlayingRef.current = false;
         };
-    }, [store, setPlaying]);
+        // contextGeneration: a replaced AudioContext needs a whole new graph.
+    }, [store, setPlaying, contextGeneration]);
 
     // --- Pattern & tempo sync ---
     useEffect(() => {
@@ -148,19 +174,9 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
         schedulerRef.current?.setTempo(bpm);
     }, [bpm]);
 
-    // Mobile browsers suspend audio in the background; resume when the page is visible again.
-    useEffect(() => {
-        const onVisible = () => {
-            if (document.visibilityState === 'visible' && isPlayingRef.current) {
-                void AudioContextManager.getInstance().resume();
-            }
-        };
-        document.addEventListener('visibilitychange', onVisible);
-        return () => document.removeEventListener('visibilitychange', onVisible);
-    }, []);
+    // Resuming after the page is hidden or interrupted is handled by AudioContextManager.
 
     // --- Transport ---
-    const stopRequestedRef = useRef(false);
 
     const start = useCallback(async () => {
         if (isPlayingRef.current || startingRef.current) return;
@@ -179,7 +195,8 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
                 clearTimeout(timer);
             }
             // The user may have pressed stop (or the component unmounted) while we were waiting.
-            if (stopRequestedRef.current || !schedulerRef.current || schedulerRef.current !== scheduler) return;
+            // A context replacement during the wait rebuilds and restarts the scheduler on its own.
+            if (stopRequestedRef.current || isPlayingRef.current || restartAfterRebuildRef.current || !schedulerRef.current || schedulerRef.current !== scheduler) return;
             scheduler.resetPracticeStats();
             scheduler.start();
             store.update({ step: 0, totalBars: 0, trainerBar: 0, formState: null });
@@ -248,6 +265,9 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
         updateChannel(name, { muted });
         schedulerRef.current?.setChannelMute(name, muted);
     }, [updateChannel]);
+
+    const getChannelLevel = useCallback((name: string): number =>
+        schedulerRef.current?.getChannelLevel(name) ?? 0, []);
 
     const setHarmonyProgression = useCallback((chords: string[][]) => {
         settingsRef.current.harmony = chords;
@@ -342,6 +362,7 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
         setChannelVolume,
         setChannelPan,
         setChannelMute,
+        getChannelLevel,
         setHarmonyProgression,
         setHarmonyVolume,
         setAccompanimentStyle,

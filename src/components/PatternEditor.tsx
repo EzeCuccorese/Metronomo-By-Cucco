@@ -331,6 +331,11 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
                         gridTemplateColumns: `120px repeat(${sub}, minmax(22px, 1fr))`,
                         gap: '1px',
                         minWidth: 120 + sub * 24,
+                        // Touch: 44 px cells; the grid scrolls inside its own container.
+                        '@media (pointer: coarse)': {
+                            gridTemplateColumns: `120px repeat(${sub}, minmax(44px, 1fr))`,
+                            minWidth: 120 + sub * 45,
+                        },
                         '& .is-current': { boxShadow: 'inset 0 0 0 1px #f48fb1' }
                     }}
                 >
@@ -432,6 +437,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
                                                 all: 'unset',
                                                 boxSizing: 'border-box',
                                                 height: 40,
+                                                '@media (pointer: coarse)': { height: 44 },
                                                 bgcolor: isGroupStart ? 'rgba(255,255,255,0.03)' : isPulseStart ? 'rgba(255,255,255,0.015)' : 'transparent',
                                                 borderRight: isGroupStart ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,255,255,0.03)',
                                                 borderBottom: '1px solid rgba(255,255,255,0.03)',
