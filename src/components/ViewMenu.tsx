@@ -5,6 +5,7 @@ import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
+import SlideshowIcon from '@mui/icons-material/Slideshow';
 import { useLayoutApi } from '../state/LayoutContext';
 import { PANEL_IDS, PANEL_LABELS, PANEL_PRESET_ORDER, PRESET_LABELS } from '../state/layout';
 
@@ -15,7 +16,7 @@ const Heading: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 /** Presets and the per-panel switches. Shared by the desktop menu and the phone bottom sheet. */
-const ViewList: React.FC<{ extra?: React.ReactNode; onPick?: () => void }> = ({ extra, onPick }) => {
+const ViewList: React.FC<{ extra?: React.ReactNode; onPick?: () => void; onStageMode?: () => void }> = ({ extra, onPick, onStageMode }) => {
   const layout = useLayoutApi();
   return (
     <MenuList dense autoFocusItem aria-label="Vista" sx={{ py: 0 }}>
@@ -49,6 +50,14 @@ const ViewList: React.FC<{ extra?: React.ReactNode; onPick?: () => void }> = ({ 
           </MenuItem>
         );
       })}
+      {onStageMode && <Divider />}
+      {onStageMode && (
+        <MenuItem onClick={() => { onPick?.(); onStageMode(); }} sx={{ minHeight: { xs: 44, sm: 36 } }} data-testid="stage-menu-item">
+          <ListItemIcon><SlideshowIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>Modo escenario</ListItemText>
+          <Typography variant="caption" sx={{ color: 'text.secondary', ml: 2 }} aria-hidden>F</Typography>
+        </MenuItem>
+      )}
       {extra}
     </MenuList>
   );
@@ -58,7 +67,7 @@ const ViewList: React.FC<{ extra?: React.ReactNode; onPick?: () => void }> = ({ 
  * "Vista" button: presets by activity and a switch per panel. A menu on wide screens,
  * a bottom sheet on phones (within thumb's reach).
  */
-export const ViewMenu: React.FC<{ extra?: React.ReactNode; compact?: boolean }> = ({ extra, compact }) => {
+export const ViewMenu: React.FC<{ extra?: React.ReactNode; compact?: boolean; onStageMode?: () => void }> = ({ extra, compact, onStageMode }) => {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const phone = useMediaQuery(PHONE_QUERY);
   const close = () => setAnchor(null);
@@ -77,12 +86,12 @@ export const ViewMenu: React.FC<{ extra?: React.ReactNode; compact?: boolean }> 
       </Button>
       {phone ? (
         <Drawer anchor="bottom" open={anchor !== null} onClose={close} slotProps={{ paper: { sx: { borderTopLeftRadius: 16, borderTopRightRadius: 16, pb: 'env(safe-area-inset-bottom)', maxHeight: '85dvh' } } }}>
-          <Box role="dialog" aria-label="Vista"><ViewList extra={extra} onPick={close} /></Box>
+          <Box role="dialog" aria-label="Vista"><ViewList extra={extra} onPick={close} onStageMode={onStageMode} /></Box>
         </Drawer>
       ) : (
         // A Popover around our own MenuList (a Menu would nest a second menu list inside).
         <Popover anchorEl={anchor} open={anchor !== null} onClose={close} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}>
-          <ViewList extra={extra} />
+          <ViewList extra={extra} onPick={close} onStageMode={onStageMode} />
         </Popover>
       )}
     </>

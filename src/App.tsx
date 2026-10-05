@@ -48,6 +48,8 @@ import { LayoutContext } from './state/LayoutContext';
 import { PANEL_IDS, PANEL_LABELS, PANEL_PRESET_ORDER, PRESET_LABELS } from './state/layout';
 import type { PanelId } from './state/layout';
 import { ViewMenu } from './components/ViewMenu';
+import { enterFullscreen } from './hooks/useFullscreen';
+import { StageMode } from './components/StageMode';
 import { CompactTransport } from './components/CompactTransport';
 import { useElementOutOfView } from './hooks/useElementOutOfView';
 import { BluetoothNotice } from './components/BluetoothNotice';
@@ -78,6 +80,9 @@ function App() {
   const [silence, setSilence] = usePersistentState('silence', DEFAULT_SILENCE, isSilence);
   const [formas, setFormas] = usePersistentState('formas', DEFAULT_FORMAS, isFormas);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [stageOpen, setStageOpen] = useState(false);
+  // Fullscreen must be asked for inside the click / key press that opens the stage (see enterFullscreen).
+  const openStage = useCallback(() => { void enterFullscreen(); setStageOpen(true); }, []);
 
   const setBpm = useCallback((value: number) => setBpmRaw(clampBpm(value)), [setBpmRaw]);
 
@@ -187,6 +192,7 @@ function App() {
     'transport.bpm-down': e => { if (!tempoLocked) setBpmRaw(prev => clampBpm(prev - (e.shiftKey ? 5 : 1))); },
     'transport.prev-rhythm': () => stepPreset(-1),
     'transport.next-rhythm': () => stepPreset(1),
+    'view.stage': e => { if (!e.repeat) { if (stageOpen) setStageOpen(false); else openStage(); } },
     'help.shortcuts': () => setShortcutsOpen(true),
     'palette.open': () => setPaletteOpen(prev => !prev),
   });
@@ -236,7 +242,7 @@ function App() {
               availablePresets={PRESET_PATTERNS}
               onSelectPreset={loadPreset}
               tempoLocked={tempoLocked}
-              viewControl={<ViewMenu />}
+              viewControl={<ViewMenu onStageMode={openStage} />}
               pattern={currentPattern}
               onNudgeBpm={nudgeBpm}
               headerRef={setHeaderEl}
@@ -251,7 +257,7 @@ function App() {
                 onTogglePlay={toggle}
                 onNudgeBpm={nudgeBpm}
                 onTapTempo={guardedTap}
-                viewControl={<ViewMenu compact />}
+                viewControl={<ViewMenu compact onStageMode={openStage} />}
               />
             )}
 
@@ -365,6 +371,16 @@ function App() {
           </Box>
         </Box>
 
+        <StageMode
+          open={stageOpen}
+          onClose={() => setStageOpen(false)}
+          pattern={currentPattern}
+          bpm={bpm}
+          isPlaying={isPlaying}
+          tempoLocked={tempoLocked}
+          onTogglePlay={toggle}
+          onNudgeBpm={nudgeBpm}
+        />
         <PwaUpdater isPlaying={isPlaying} />
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={paletteCommands} onSetBpm={setBpmFromPalette} tempoLocked={tempoLocked} />
         <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />

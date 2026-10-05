@@ -445,4 +445,48 @@ describe('App (integration with a scripted engine)', () => {
             expect(screen.getByTestId('bpm-up')).toBeDisabled();
         });
     });
+
+    it('opens the stage mode from the Vista menu and closes it again', async () => {
+        render(<App />);
+        fireEvent.click(screen.getByTestId('view-menu-button'));
+        fireEvent.click(screen.getByTestId('stage-menu-item'));
+        const stage = await screen.findByRole('dialog', { name: 'Modo escenario' });
+        expect(within(stage).getByTestId('stage-bpm')).toHaveTextContent('120');
+        await act(async () => { fireEvent.click(within(stage).getByTestId('stage-play-toggle')); });
+        expect(scheduler().playing).toBe(true);
+        fireEvent.click(within(stage).getByTestId('stage-close'));
+        await waitForElementToBeRemoved(() => screen.queryByRole('dialog', { name: 'Modo escenario' }));
+        expect(scheduler().playing).toBe(true); // closing the stage does not stop the metronome
+    });
+
+    it('toggles the stage mode with F, and lists it in the cheat sheet and the palette', async () => {
+        render(<App />);
+        fireEvent.keyDown(document.body, { code: 'KeyF', key: 'f' });
+        expect(await screen.findByRole('dialog', { name: 'Modo escenario' })).toBeInTheDocument();
+        fireEvent.keyDown(document.body, { code: 'KeyF', key: 'f' });
+        await waitForElementToBeRemoved(() => screen.queryByRole('dialog', { name: 'Modo escenario' }));
+
+        fireEvent.keyDown(document.body, { code: 'Slash', key: '?', shiftKey: true });
+        const sheet = await screen.findByRole('dialog', { name: 'Atajos de teclado' });
+        expect(within(sheet).getByText('Modo escenario (atril)')).toBeInTheDocument();
+        fireEvent.keyDown(sheet, { key: 'Escape' });
+        await waitForElementToBeRemoved(() => screen.queryByRole('dialog', { name: 'Atajos de teclado' }));
+
+        fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
+        fireEvent.change(await screen.findByPlaceholderText(/Buscá un comando/), { target: { value: 'escenario' } });
+        fireEvent.click(await screen.findByText('Modo escenario (atril)'));
+        expect(await screen.findByRole('dialog', { name: 'Modo escenario' })).toBeInTheDocument();
+    });
+
+    it('asks for fullscreen inside the click that opens the stage (before any animation) where it is supported', async () => {
+        Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
+        const request = vi.fn(async () => {});
+        HTMLElement.prototype.requestFullscreen = request;
+        render(<App />);
+        fireEvent.click(screen.getByTestId('view-menu-button'));
+        fireEvent.click(screen.getByTestId('stage-menu-item'));
+        expect(request).toHaveBeenCalledTimes(1);
+        await screen.findByRole('dialog', { name: 'Modo escenario' });
+        Reflect.deleteProperty(document, 'fullscreenEnabled');
+    });
 });

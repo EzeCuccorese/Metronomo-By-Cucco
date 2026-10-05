@@ -13,12 +13,12 @@ import { getPianoLayout } from './pianoLayout';
  * (ES) Registro único de atajos de teclado.
  */
 export type ShortcutScope = 'global' | 'piano';
-export type ShortcutGroup = 'Transporte' | 'Piano' | 'Ayuda';
+export type ShortcutGroup = 'Transporte' | 'Vista' | 'Piano' | 'Ayuda';
 
 export type ShortcutId =
     | 'piano.notes' | 'piano.octave-down' | 'piano.octave-up' | 'piano.velocity-down' | 'piano.velocity-up' | 'piano.sustain' | 'piano.exit'
     | 'transport.play' | 'transport.tap' | 'transport.bpm-up' | 'transport.bpm-down' | 'transport.prev-rhythm' | 'transport.next-rhythm'
-    | 'help.shortcuts' | 'palette.open';
+    | 'view.stage' | 'help.shortcuts' | 'palette.open';
 
 export interface ShortcutDef {
     id: ShortcutId;
@@ -61,6 +61,7 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     { id: 'transport.bpm-down', label: 'Bajar tempo (Shift: ±5)', group: 'Transporte', scope: 'global', codes: ['ArrowDown'], display: '↓', preventDefault: true, allowRepeat: true },
     { id: 'transport.prev-rhythm', label: 'Ritmo anterior', group: 'Transporte', scope: 'global', codes: ['Comma'], display: ',', preventDefault: false },
     { id: 'transport.next-rhythm', label: 'Ritmo siguiente', group: 'Transporte', scope: 'global', codes: ['Period'], display: '.', preventDefault: false },
+    { id: 'view.stage', label: 'Modo escenario (atril)', group: 'Vista', scope: 'global', codes: ['KeyF'], display: 'F', preventDefault: false },
     { id: 'palette.open', label: 'Paleta de comandos', group: 'Ayuda', scope: 'global', codes: ['KeyK'], display: '⌘K / Ctrl+K', mod: true, preventDefault: true },
     { id: 'help.shortcuts', label: 'Mostrar esta ayuda', group: 'Ayuda', scope: 'global', chars: ['?'], display: '?', preventDefault: true },
 ];
@@ -97,7 +98,7 @@ export function shadowNote(def: ShortcutDef, pianoLayout: PianoLayout = getPiano
     return code ? spanishNoteName(60 + notes[code]) : null;
 }
 
-const GROUP_ORDER: ShortcutGroup[] = ['Transporte', 'Piano', 'Ayuda'];
+const GROUP_ORDER: ShortcutGroup[] = ['Transporte', 'Vista', 'Piano', 'Ayuda'];
 
 export function groupedShortcuts(): { group: ShortcutGroup; items: ShortcutDef[] }[] {
     return GROUP_ORDER.map(group => ({ group, items: SHORTCUTS.filter(s => s.group === group) }));
