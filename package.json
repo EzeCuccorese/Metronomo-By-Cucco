@@ -5,14 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node node_modules/typescript7/bin/tsc -b && vite build",
-    "lint": "eslint .",
-    "typecheck": "node node_modules/typescript7/bin/tsc -b",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "typecheck": "tsc -b",
     "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:browser": "vitest run --project browser",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "preview": "vite preview",
-    "check": "npm run lint && npm run typecheck && npm run test:coverage && npm run test:e2e"
+    "check": "pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm test:e2e"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -21,12 +23,16 @@
     "@fontsource/share-tech-mono": "^5.3.0",
     "@mui/icons-material": "^9.4.0",
     "@mui/material": "^9.4.0",
+    "@tonaljs/chord": "^6.2.0",
+    "@tonaljs/note": "^4.12.2",
+    "@tonaljs/scale": "^4.13.5",
+    "cmdk": "^1.1.1",
+
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
-    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
@@ -34,20 +40,33 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/browser-playwright": "5.0.3",
     "@vitest/coverage-v8": "^5.0.3",
-    "eslint": "^10.12.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.7",
-    "globals": "^17.13.0",
     "jsdom": "^30.1.1",
-    "typescript": "~6.0.3",
-    "typescript-eslint": "^8.71.0",
-    "typescript7": "npm:typescript@~7.0.2",
+    "oxlint": "^1.86.0",
+    "oxlint-tsgolint": "^7.0.2003",
+    "playwright": "~1.63.0",
+    "typescript": "~7.0.2",
     "vite": "^8.3.2",
     "vite-plugin-pwa": "^2.0.0",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "workbox-window": "^7.4.1",
+    "wrangler": "4.147.0"
   },
   "engines": {
     "node": ">=26"
+  },
+  "packageManager": "pnpm@11.28.4",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=26",
+      "onFail": "warn"
+    },
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.28.4",
+      "onFail": "error"
+    }
   }
 }

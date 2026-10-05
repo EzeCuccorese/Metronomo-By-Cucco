@@ -242,6 +242,11 @@ class Scheduler {
         this.synthesizer.setChannelMute(name, isMuted);
     }
 
+    /** Real output level (0..1) of a mixer channel, for the meters. */
+    public getChannelLevel(name: string): number {
+        return this.synthesizer.getChannelLevel(name);
+    }
+
     // --- Harmony ---
     public setAccompanimentStyle(style: AccompanimentStyle) {
         this.accompanimentStyle = style;
@@ -306,6 +311,11 @@ class Scheduler {
         this.piano.noteOff(this.liveVoices.get(midi) ?? null, now);
         this.liveVoices.delete(midi);
         this.take?.noteOff(midi, now - this.inputLatency());
+    }
+
+    /** Sustain pedal of the live keyboard (computer pedal button / Shift, MIDI CC64). */
+    public setPianoSustain(down: boolean) {
+        this.piano.setSustain(down);
     }
 
     /** Lifts every key held on the live keyboard (focus lost, panel unmounted...). */

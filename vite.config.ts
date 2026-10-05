@@ -1,7 +1,9 @@
-import { readFileSync } from 'node:fs'
-import { defineConfig } from 'vitest/config'
+import { readdirSync, readFileSync } from 'node:fs'
+import { defineConfig, type Plugin } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import { playwright } from '@vitest/browser-playwright'
 import { VitePWA } from 'vite-plugin-pwa'
+import { buildHeadersFile } from './deploy/cloudflareHeaders'
 
 /**
  * Reuses the production nginx security headers for `vite preview`, so the E2E suite
@@ -16,12 +18,26 @@ function productionSecurityHeaders(): Record<string, string> {
   return headers
 }
 
+/** Emits dist/_headers for Cloudflare Workers Static Assets (same headers and cache policy as nginx). */
+function cloudflareHeaders(): Plugin {
+  return {
+    name: 'cloudflare-headers',
+    apply: 'build',
+    generateBundle() {
+      const conf = readFileSync(new URL('./deploy/security-headers.conf', import.meta.url), 'utf8')
+      const publicFiles = readdirSync(new URL('./public', import.meta.url), { recursive: true, encoding: 'utf8' }).map(file => file.replaceAll('\\', '/'))
+      this.emitFile({ type: 'asset', fileName: '_headers', source: buildHeadersFile(conf, publicFiles) })
+    }
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
+    cloudflareHeaders(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       workbox: {
         // Both sample formats are precached (a few hundred KB each) so every instrument sounds
@@ -30,6 +46,7 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024
       },
       manifest: {
+        id: '/',
         name: 'Metrónomo by Cucco',
         short_name: 'Metrónomo',
         description: 'Metrónomo profesional y entrenador rítmico con ritmos folclóricos.',
@@ -37,6 +54,7 @@ export default defineConfig({
         theme_color: '#13110f',
         background_color: '#070605',
         display: 'standalone',
+        display_override: ['standalone'],
         orientation: 'any',
         start_url: '/',
         scope: '/',
@@ -44,11 +62,21 @@ export default defineConfig({
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'maskable-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
           { src: 'maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+        ],
+        screenshots: [
+          { src: 'screenshots/narrow-390x844.png', sizes: '390x844', type: 'image/png', form_factor: 'narrow', label: 'Metrónomo en el teléfono: tempo, play y pulso' },
+          { src: 'screenshots/wide-1440x900.png', sizes: '1440x900', type: 'image/png', form_factor: 'wide', label: 'Estudio rítmico completo en escritorio' }
         ]
       }
     })
   ],
+  resolve: {
+    // The @tonaljs/* packages declare `main: dist/index.js` but only ship dist/index.{mjs,cjs}
+    // (no `exports` map): resolving the ESM `module` entry first avoids the dangling `main`.
+    mainFields: ['module', 'browser', 'main']
+  },
   preview: {
     headers: productionSecurityHeaders()
   },
@@ -69,11 +97,38 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./src/test/setup.ts'],
     // Full-app integration tests render the whole MUI tree; coverage instrumentation makes them slow.
     testTimeout: 20000,
-    include: ['src/**/*.test.{ts,tsx}'],
+    // Node can't resolve the @tonaljs/* dangling `main`; inlining lets Vite resolve them.
+    server: { deps: { inline: [/@tonaljs/] } },
+    projects: [
+      {
+        // Hooks, UI and pure logic against jsdom with mocked Web Audio.
+        extends: true,
+        test: {
+          name: 'unit',
+          environment: 'jsdom',
+          setupFiles: ['./src/test/setup.ts'],
+          include: ['src/**/*.test.{ts,tsx}', 'deploy/**/*.test.ts'],
+          exclude: ['src/**/*.browser.test.{ts,tsx}']
+        }
+      },
+      {
+        // Real Web Audio in Chromium: renders audio with OfflineAudioContext and measures it.
+        extends: true,
+        test: {
+          name: 'browser',
+          include: ['src/**/*.browser.test.{ts,tsx}'],
+          browser: {
+            enabled: true,
+            headless: true,
+            // Offline rendering makes no sound; --mute-audio keeps the headless browser silent on a dev machine anyway.
+            provider: playwright({ launchOptions: { args: ['--mute-audio'] } }),
+            instances: [{ browser: 'chromium' }]
+          }
+        }
+      }
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

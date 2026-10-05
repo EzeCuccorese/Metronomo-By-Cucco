@@ -16,6 +16,7 @@ const drum = {
     setChannelVolume: vi.fn(),
     setChannelPan: vi.fn(),
     setChannelMute: vi.fn(),
+    getChannelLevel: vi.fn(() => 0),
 };
 vi.mock('./DrumSynthesizer', () => ({
     default: class { constructor() { return drum; } }

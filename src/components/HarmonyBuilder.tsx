@@ -1,21 +1,16 @@
-import { useEffect, useCallback } from 'react';
-import type { SxProps, Theme } from '@mui/material/styles';
-import { Box, Typography, Select, MenuItem, Stack, Slider, FormControl, InputLabel, Button, Divider, Chip } from '@mui/material';
-import MusicNoteIcon from '@mui/icons-material/MusicNote';
+import { useCallback, useMemo } from 'react';
+import { Box, Typography, Select, MenuItem, Stack, Slider, FormControl, FormControlLabel, InputLabel, Button, Divider, Chip, Switch } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ReplayIcon from '@mui/icons-material/Replay';
 import type { AccompanimentStyle } from '../audio/PolyphonicSynth';
 import { usePersistentState } from '../hooks/usePersistentState';
 import { usePlayback } from '../state/PlaybackContext';
-import { isNumber, isPlainObject, isString } from '../state/storage';
+import { isBoolean, isNumber, isPlainObject, isString } from '../state/storage';
+import { buildDiatonicChord, chordSymbol, isModeId, KEYS, MODES } from '../theory/harmony';
+import type { ModeId } from '../theory/harmony';
 
 interface HarmonyBuilderProps {
-    onUpdateProgression: (progression: string[][]) => void;
-    onVolumeChange: (vol: number) => void;
-    onStyleChange: (style: AccompanimentStyle) => void;
     isPlaying?: boolean;
-    /** Extra styles for the outer card (e.g. to match the surrounding panels). */
-    sx?: SxProps<Theme>;
 }
 
 const STYLES: { id: AccompanimentStyle; label: string }[] = [
@@ -28,17 +23,7 @@ const STYLES: { id: AccompanimentStyle; label: string }[] = [
     { id: 'piano_arpeggio', label: 'Piano (arpegio)' },
 ];
 
-const KEYS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 const OCTAVES = [3, 4, 5];
-
-type ModeType = 'major' | 'minor' | 'dorian' | 'mixolydian';
-
-const MODES: { id: ModeType; label: string }[] = [
-    { id: 'major', label: 'Mayor (Natural)' },
-    { id: 'minor', label: 'Menor (Natural)' },
-    { id: 'dorian', label: 'Dórico (Jazzy)' },
-    { id: 'mixolydian', label: 'Mixolidio (Bluesy)' }
-];
 
 // 1 unit = Half Bar (1/2 compás)
 interface ChordStep {
@@ -48,116 +33,52 @@ interface ChordStep {
     notes: string[];
 }
 
-const getScaleIntervals = (m: ModeType) => {
-    // Semitones from root
-    switch (m) {
-        case 'major': return [0, 2, 4, 5, 7, 9, 11]; // I, ii, iii, IV, V, vi, viidim
-        case 'minor': return [0, 2, 3, 5, 7, 8, 10]; // i, iidim, III, iv, v, VI, VII
-        case 'dorian': return [0, 2, 3, 5, 7, 9, 10]; // i, ii, III, IV, v, vidim, VII
-        case 'mixolydian': return [0, 2, 4, 5, 7, 9, 10]; // I, ii, iii, IV, V, vi, VII
-    }
-};
-
-const getChordType = (degreeIndex: number, m: ModeType) => {
-    // Simplified Triad mapping
-    const map: Record<ModeType, string[]> = {
-        'major': ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'],
-        'minor': ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII'],
-        'dorian': ['i', 'ii', 'III', 'IV', 'v', 'vi°', 'VII'],
-        'mixolydian': ['I', 'ii', 'iii°', 'IV', 'v', 'vi', 'VII']
-    };
-
-    return map[m][degreeIndex];
-};
-
 const isChordStep = (v: unknown): v is ChordStep =>
     isPlainObject(v) && isString(v.id) && isString(v.degree) && isNumber(v.durationUnits) && v.durationUnits >= 1 &&
-    Array.isArray(v.notes) && v.notes.every(n => isString(n) && /^[A-G][#b]?[0-8]$/.test(n));
+    Array.isArray(v.notes) && v.notes.every(n => isString(n) && /^[A-G](#|##|b|bb)?[0-8]$/.test(n));
 
 const isSequence = (v: unknown): v is ChordStep[] => Array.isArray(v) && v.every(isChordStep);
-const isKey = (v: unknown): v is string => isString(v) && KEYS.includes(v);
-const isMode = (v: unknown): v is ModeType => MODES.some(m => m.id === v);
+const isKey = (v: unknown): v is string => isString(v) && (KEYS as readonly string[]).includes(v);
+const isMode = isModeId;
 const isOctave = (v: unknown): v is number => isNumber(v) && OCTAVES.includes(v);
 const isVolume = (v: unknown): v is number => isNumber(v) && v >= 0 && v <= 1;
 const isStyle = (v: unknown): v is AccompanimentStyle => STYLES.some(s => s.id === v);
 
-export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, onStyleChange, isPlaying = false, sx }: HarmonyBuilderProps) {
+export default function HarmonyBuilder({ isPlaying = false }: HarmonyBuilderProps) {
     const [rootKey, setRootKey] = usePersistentState('harmony.key', 'C', isKey);
-    const [mode, setMode] = usePersistentState<ModeType>('harmony.mode', 'major', isMode);
+    const [mode, setMode] = usePersistentState<ModeId>('harmony.mode', 'major', isMode);
     const [octave, setOctave] = usePersistentState('harmony.octave', 4, isOctave);
     const [volume, setVolume] = usePersistentState('harmony.volume', 0.3, isVolume);
     const [style, setStyle] = usePersistentState<AccompanimentStyle>('harmony.style', 'pad', isStyle);
+    const [sevenths, setSevenths] = usePersistentState('harmony.sevenths', false, isBoolean);
     const chordIndex = usePlayback(s => s.chordIndex);
     const activeHalfBarIndex = isPlaying ? chordIndex : -1;
 
     // Sequence
     const [sequence, setSequence] = usePersistentState<ChordStep[]>('harmony.sequence', [], isSequence);
 
-    // Restored settings must reach the audio engine too.
-    useEffect(() => { onStyleChange(style); }, [style, onStyleChange]);
-    useEffect(() => { onVolumeChange(volume); }, [volume, onVolumeChange]);
+    // The progression, style and volume reach the audio engine through `useHarmonySync` (in App),
+    // so the sound does not depend on this card being on screen.
 
-    const availableDegrees = [0, 1, 2, 3, 4, 5, 6].map(i => ({
-        index: i,
-        label: getChordType(i, mode)
-    }));
+    const availableDegrees = useMemo(
+        () => [0, 1, 2, 3, 4, 5, 6].map(index => ({ index, chord: buildDiatonicChord(rootKey, mode, index, octave, sevenths) })),
+        [rootKey, mode, octave, sevenths],
+    );
 
     const addChord = useCallback((degreeIndex: number) => {
-        // Calculate actual notes
-        // 1. Get Root Note Index
-        const NOTE_ORDER = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
-        const rootIdx = NOTE_ORDER.indexOf(rootKey);
-
-        const scaleIntervals = getScaleIntervals(mode);
-
-        // Chord Intervals (Triad)
-        // Root
-        const i1 = scaleIntervals[degreeIndex];
-        // Third (Scale degree + 2)
-        const i2 = scaleIntervals[(degreeIndex + 2) % 7] + (degreeIndex + 2 >= 7 ? 12 : 0);
-        // Fifth (Scale degree + 4)
-        const i3 = scaleIntervals[(degreeIndex + 4) % 7] + (degreeIndex + 4 >= 7 ? 12 : 0);
-
-        const getNoteName = (semitoneOffset: number) => {
-            const idx = (rootIdx + semitoneOffset) % 12;
-            const octaveOffset = Math.floor((rootIdx + semitoneOffset) / 12);
-            return `${NOTE_ORDER[idx]}${octave + octaveOffset}`;
-        };
-
-        const notes = [
-            getNoteName(i1),
-            getNoteName(i2),
-            getNoteName(i3)
-        ];
-
+        const { degree, notes } = availableDegrees[degreeIndex].chord;
         const newChord: ChordStep = {
             id: Math.random().toString(36).slice(2, 11),
-            degree: getChordType(degreeIndex, mode),
+            degree,
             durationUnits: 2, // Default to 1 Bar (2 half-bars)
-            notes: notes
+            notes,
         };
-
         setSequence(prev => [...prev, newChord]);
-    }, [rootKey, mode, octave, setSequence]);
+    }, [availableDegrees, setSequence]);
 
     const removeChord = useCallback((id: string) => {
         setSequence(prev => prev.filter(c => c.id !== id));
     }, [setSequence]);
-
-    // Sync with Parent
-    useEffect(() => {
-        const progression: string[][] = [];
-
-        sequence.forEach(step => {
-            // Push N copies of the chord, where N is durationUnits
-            // Each copy represents 1/2 bar of music
-            for (let i = 0; i < step.durationUnits; i++) {
-                progression.push(step.notes);
-            }
-        });
-
-        onUpdateProgression(progression);
-    }, [sequence, onUpdateProgression]);
 
     const handleVolume = (_: Event, val: number | number[]) => {
         setVolume(val as number);
@@ -181,30 +102,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
     }
 
     return (
-        <Box sx={[{
-            p: 2,
-            borderRadius: 3,
-            bgcolor: '#1a1a1a',
-            border: '1px solid #333',
-            height: '100%',
-            overflow: 'auto'
-        }, ...(Array.isArray(sx) ? sx : [sx])]}>
-            <Stack
-                direction="row"
-                spacing={1}
-                sx={{
-                    alignItems: "center",
-                    mb: 2
-                }}>
-                <MusicNoteIcon sx={{ fontSize: 20, color: '#c0c0c0' }} />
-                <Typography variant="subtitle1" sx={{
-                    color: 'white',
-                    fontWeight: "bold"
-                }}>
-                    Constructor Armónico
-                </Typography>
-            </Stack>
-
+        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
             {/* Global Settings */}
             <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 0.7fr) minmax(0, 1.3fr)', gap: 1, mb: 1 }}>
                 <FormControl size="small">
@@ -216,7 +114,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
 
                 <FormControl size="small">
                     <InputLabel id="harmony-mode-label">Modo</InputLabel>
-                    <Select value={mode} labelId="harmony-mode-label" label="Modo" onChange={(e) => setMode(e.target.value as ModeType)}>
+                    <Select value={mode} labelId="harmony-mode-label" label="Modo" onChange={(e) => setMode(e.target.value)}>
                         {MODES.map(m => <MenuItem key={m.id} value={m.id}>{m.label}</MenuItem>)}
                     </Select>
                 </FormControl>
@@ -225,7 +123,7 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
             <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 76px', gap: 1, mb: 2 }}>
                 <FormControl size="small">
                     <InputLabel id="harmony-style-label">Estilo</InputLabel>
-                    <Select value={style} labelId="harmony-style-label" label="Estilo" onChange={(e) => handleStyleChange(e.target.value as AccompanimentStyle)}>
+                    <Select value={style} labelId="harmony-style-label" label="Estilo" onChange={(e) => handleStyleChange(e.target.value)}>
                         {STYLES.map(st => <MenuItem key={st.id} value={st.id}>{st.label}</MenuItem>)}
                     </Select>
                 </FormControl>
@@ -237,6 +135,12 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
                     </Select>
                 </FormControl>
             </Box>
+
+            <FormControlLabel
+                sx={{ mb: 1, ml: 0 }}
+                control={<Switch size="small" checked={sevenths} onChange={(e) => setSevenths(e.target.checked)} />}
+                label={<Typography variant="body2">Séptimas</Typography>}
+            />
 
             <Divider sx={{ mb: 2, borderColor: '#333' }} />
 
@@ -260,12 +164,17 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
                 {availableDegrees.map(d => (
                     <Chip
                         key={d.index}
-                        label={d.label}
+                        label={(
+                            <Box component="span" sx={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.15 }}>
+                                <span>{d.chord.degree}</span>
+                                <Box component="span" sx={{ fontSize: '0.65rem', opacity: 0.7, fontWeight: 'normal' }}>{d.chord.symbol}</Box>
+                            </Box>
+                        )}
+                        sx={{ minWidth: 40, height: 'auto', py: 0.5, fontWeight: 'bold' }}
                         onClick={() => addChord(d.index)}
                         clickable
                         color="primary"
                         variant="outlined"
-                        sx={{ minWidth: 40, fontWeight: 'bold' }}
                     />
                 ))}
             </Stack>
@@ -304,6 +213,9 @@ export default function HarmonyBuilder({ onUpdateProgression, onVolumeChange, on
                             <Typography variant="body1" sx={{
                                 fontWeight: "bold"
                             }}>{step.degree}</Typography>
+                            <Typography variant="body2" data-testid="harmony-symbol" sx={{ color: '#e5a95f' }}>
+                                {chordSymbol(step.notes)}
+                            </Typography>
                             <Typography variant="caption" sx={{
                                 color: "text.secondary"
                             }}>

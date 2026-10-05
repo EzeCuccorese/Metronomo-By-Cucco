@@ -22,6 +22,9 @@ import { CUSTOM_PATTERN_ID } from '../rhythms/patternLibrary';
 import { MAX_BPM, MIN_BPM, clampBpm, isCompoundMeter } from '../rhythms/meter';
 import type { TimeSignature } from '../rhythms/meter';
 import { usePlayback } from '../state/PlaybackContext';
+import { BeatLeds, BpmStepButton } from './TransportControls';
+import { shortcutById, withShortcut } from '../shortcuts/registry';
+import { usePianoGlobalMode } from '../shortcuts/dispatcher';
 
 export interface HeaderToolbarProps {
   isPlaying: boolean;
@@ -36,6 +39,14 @@ export interface HeaderToolbarProps {
   onSelectPreset: (patternId: string) => void;
   /** The speed trainer owns the tempo while it runs. */
   tempoLocked?: boolean;
+  /** Extra control after the rhythm picker (the "Vista" menu). */
+  viewControl?: React.ReactNode;
+  /** Pattern being played: lets the phone bar show the beat LEDs. */
+  pattern?: RhythmPattern;
+  /** Relative tempo change (the − / + buttons). Defaults to onBpmChange(bpm + delta). */
+  onNudgeBpm?: (delta: number) => void;
+  /** Ref to the header element (the page watches it to know when to show the slim bar). */
+  headerRef?: React.Ref<HTMLElement>;
 }
 
 /** Text field that only commits a BPM on blur/Enter, so typing "1" on the way to "120" is harmless. */
@@ -93,15 +104,23 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
   selectedPatternId,
   availablePresets,
   onSelectPreset,
-  tempoLocked = false
+  tempoLocked = false,
+  viewControl,
+  pattern,
+  onNudgeBpm,
+  headerRef
 }) => {
+  const nudge = onNudgeBpm ?? ((delta: number) => onBpmChange(bpm + delta));
   const queuedPatternId = usePlayback(s => s.queuedPatternId);
   const compound = isCompoundMeter(timeSignature);
+  const pianoKeysOwnT = usePianoGlobalMode();
+  const tapLabel = pianoKeysOwnT ? `Tap tempo (${shortcutById('transport.tap').display} no disponible con Teclado PC)` : withShortcut('Tap tempo', 'transport.tap');
 
   return (
     <Paper
       component="header"
-      className="brass-trim"
+      ref={headerRef}
+      className="brass-trim app-header"
       elevation={6}
       sx={{
         p: { xs: 1.5, md: 2 },
@@ -122,7 +141,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
       }}
     >
       {/* Title & Queue indicator */}
-      <Box sx={{ gridArea: 'brand', display: 'flex', flexDirection: 'column', gap: 0.2, minWidth: 0 }}>
+      <Box className="app-brand" sx={{ gridArea: 'brand', display: 'flex', flexDirection: 'column', gap: 0.2, minWidth: 0 }}>
         <Stack
           direction="row"
           spacing={1.5}
@@ -178,6 +197,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
 
         <Typography
           variant="caption"
+          className="app-tagline"
           sx={{
             color: "text.secondary",
             fontSize: '0.68rem',
@@ -190,6 +210,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
 
       {/* Preset Selector Dropdown & Visual Library Button */}
       <Stack
+        className="library-row"
         direction={{ xs: "column", sm: "row" }}
         spacing={1}
         useFlexGap
@@ -247,10 +268,19 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
             ))}
           </Select>
         </FormControl>
+        {viewControl}
       </Stack>
 
+      {/*
+        Tempo + play. Transparent wrapper (display: contents) on wide screens so both keep their own
+        grid cell; on a portrait phone adaptive.css turns it into a thumb-reach bar fixed to the bottom.
+      */}
+      <Box className="transport-bar">
+      {/* Phone pocket mode only (adaptive.css): the pulse stays visible next to the thumb. */}
+      {pattern && <BeatLeds pattern={pattern} isPlaying={isPlaying} className="transport-leds" />}
       {/* BPM Controls & Tap Tempo */}
       <Stack
+        className="tempo-panel"
         direction="row"
         spacing={{ xs: 1.5, sm: 2 }}
         sx={{
@@ -264,6 +294,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           minWidth: 0,
         }}>
         {/* Fixed width: "♩ BPM" grows to "♩ BPM · ♩.=67" in compound meters and must not push the slider. */}
+        <BpmStepButton direction={-1} onStep={nudge} disabled={tempoLocked} className="tempo-step" size={56} testId="bpm-down" />
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: { xs: 84, sm: 104 }, flexShrink: 0 }}>
           <BpmInput bpm={bpm} disabled={tempoLocked} onCommit={onBpmChange} />
           <Tooltip title={compound ? `En ${timeSignature[0]}/${timeSignature[1]} el pulso con puntillo (♩.) va a ${Math.round(bpm * 2 / 3)}` : 'Pulsos de negra por minuto'}>
@@ -273,12 +304,14 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           </Tooltip>
         </Box>
 
+        <BpmStepButton direction={1} onStep={nudge} disabled={tempoLocked} className="tempo-step" size={56} testId="bpm-up" />
+
         <Slider
           value={bpm}
           min={MIN_BPM}
           max={MAX_BPM}
           disabled={tempoLocked}
-          onChange={(_, val) => onBpmChange(val as number)}
+          onChange={(_, val) => onBpmChange(val)}
           aria-label="Tempo"
           sx={{
             minWidth: 80,
@@ -293,30 +326,34 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           }}
         />
 
-        <Button
-          variant="contained"
-          size="small"
-          onClick={onTapTempo}
-          disabled={tempoLocked}
-          startIcon={<SpeedIcon />}
-          aria-label="Tap tempo (tecla T)"
-          sx={{
-            bgcolor: 'rgba(229, 169, 95, 0.15)',
-            color: '#e5a95f',
-            border: '1px solid rgba(229, 169, 95, 0.3)',
-            fontWeight: 800,
-            fontSize: '0.75rem',
-            px: 1.5,
-            minWidth: { xs: 64, sm: 75 },
-            boxShadow: 'none',
-            '&:hover': {
-              bgcolor: 'rgba(229, 169, 95, 0.3)',
-              boxShadow: '0 0 10px rgba(229, 169, 95, 0.3)'
-            }
-          }}
-        >
-          TAP
-        </Button>
+        <Tooltip title={tapLabel}>
+          <span style={{ display: 'inline-flex' }}>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={onTapTempo}
+              disabled={tempoLocked}
+              startIcon={<SpeedIcon />}
+              aria-label={tapLabel}
+              sx={{
+                bgcolor: 'rgba(229, 169, 95, 0.15)',
+                color: '#e5a95f',
+                border: '1px solid rgba(229, 169, 95, 0.3)',
+                fontWeight: 800,
+                fontSize: '0.75rem',
+                px: 1.5,
+                minWidth: { xs: 64, sm: 75 },
+                boxShadow: 'none',
+                '&:hover': {
+                  bgcolor: 'rgba(229, 169, 95, 0.3)',
+                  boxShadow: '0 0 10px rgba(229, 169, 95, 0.3)'
+                }
+              }}
+            >
+              TAP
+            </Button>
+          </span>
+        </Tooltip>
       </Stack>
 
       {/* Main Play / Stop Button */}
@@ -324,8 +361,9 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
         variant="contained"
         onClick={onTogglePlay}
         aria-pressed={isPlaying}
-        aria-label={isPlaying ? 'Detener (Espacio)' : 'Iniciar (Espacio)'}
+        aria-label={withShortcut(isPlaying ? 'Detener' : 'Iniciar', 'transport.play')}
         data-testid="play-toggle"
+        className="play-button"
         startIcon={isPlaying ? <StopIcon sx={{ fontSize: 28 }} /> : <PlayArrowIcon sx={{ fontSize: 28 }} />}
         sx={{
           gridArea: 'play',
@@ -355,6 +393,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
       >
         {isPlaying ? 'DETENER' : 'INICIAR'}
       </Button>
+      </Box>
     </Paper>
   );
 };

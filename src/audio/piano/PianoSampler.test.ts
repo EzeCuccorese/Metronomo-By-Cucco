@@ -237,6 +237,35 @@ describe('PianoSampler', () => {
         expect(env.gain.setTargetAtTime).toHaveBeenCalledTimes(1);
     });
 
+    it('sustain pedal: keys lifted while it is down keep ringing until it comes up', async () => {
+        await ready();
+        const held = sampler.noteOn(60, 0, 1);
+        const lifted = sampler.noteOn(64, 0, 1);
+        const [heldEnv, liftedEnv] = ctx.gains.slice(-2);
+        sampler.setSustain(true);
+        expect(sampler.sustaining).toBe(true);
+        sampler.noteOff(lifted, 1);
+        expect(liftedEnv.gain.setTargetAtTime).not.toHaveBeenCalled();
+        sampler.setSustain(false, 2);
+        expect(liftedEnv.gain.setTargetAtTime).toHaveBeenCalledWith(0, 2, expect.any(Number));
+        // A key still held is untouched by the pedal coming up; its own release works as usual.
+        expect(heldEnv.gain.setTargetAtTime).not.toHaveBeenCalled();
+        sampler.noteOff(held, 3);
+        expect(heldEnv.gain.setTargetAtTime).toHaveBeenCalledWith(0, 3, expect.any(Number));
+    });
+
+    it('sustain pedal only affects the live keyboard and silence() still cuts everything', async () => {
+        await ready();
+        sampler.setSustain(true);
+        sampler.play(64, 0, 0.7, 0.5, 'melody');
+        expect(ctx.gains.at(-1)!.gain.setTargetAtTime).toHaveBeenCalled(); // melody ignores the pedal
+        sampler.noteOff(sampler.noteOn(60, 0, 1), 1);
+        const env = ctx.gains.at(-1)!;
+        sampler.silence(['live']);
+        expect(env.gain.setTargetAtTime).toHaveBeenCalled();
+        expect(sampler.activeVoiceCount).toBe(1);
+    });
+
     it('tolerates a source that already stopped', async () => {
         await ready();
         const id = sampler.noteOn(60, 0, 1);

@@ -33,6 +33,7 @@ class FakeScheduler {
     setChannelVolume(...a: unknown[]) { this.record('setChannelVolume', a); }
     setChannelPan(...a: unknown[]) { this.record('setChannelPan', a); }
     setChannelMute(...a: unknown[]) { this.record('setChannelMute', a); }
+    getChannelLevel() { return 0; }
     setHarmonyProgression(...a: unknown[]) { this.record('setHarmonyProgression', a); }
     setHarmonyVolume(...a: unknown[]) { this.record('setHarmonyVolume', a); }
     setAccompanimentStyle(...a: unknown[]) { this.record('setAccompanimentStyle', a); }
@@ -47,6 +48,7 @@ class FakeScheduler {
     preloadPiano() { this.record('preloadPiano', []); return Promise.resolve(true); }
     pianoNoteOn(...a: unknown[]) { this.record('pianoNoteOn', a); }
     pianoNoteOff(...a: unknown[]) { this.record('pianoNoteOff', a); }
+    setPianoSustain(...a: unknown[]) { this.record('setPianoSustain', a); }
     releaseAllPianoKeys() {}
     armMelodyRecording(...a: unknown[]) { this.record('armMelodyRecording', a); }
     cancelMelodyRecording() {}
@@ -61,10 +63,11 @@ vi.mock('./audio/Scheduler', async (importOriginal) => {
     const actual = await importOriginal<typeof import('./audio/Scheduler')>();
     return { ...actual, default: FakeScheduler };
 });
-vi.mock('./audio/AudioContextManager', () => ({ default: { getInstance: () => ({ resume: async () => {} }) } }));
+vi.mock('./audio/AudioContextManager', () => ({ default: { getInstance: () => ({ resume: async () => {}, onContextReplaced: () => () => {}, getOutputLatency: () => 0 }) } }));
 
 import App from './App';
 import { STORAGE_PREFIX } from './state/storage';
+import { LAYOUT_TODO } from './state/layout';
 
 const scheduler = () => FakeScheduler.last!;
 const bpmInput = () => screen.getByTestId('bpm-input') as HTMLInputElement;
@@ -77,6 +80,8 @@ const choose = async (comboboxName: string | RegExp, option: string | RegExp) =>
 describe('App (integration with a scripted engine)', () => {
     beforeEach(() => {
         localStorage.clear();
+        // Most of these tests exercise every panel: start from the layout existing users get.
+        localStorage.setItem(`${STORAGE_PREFIX}ui.layout.v1`, JSON.stringify(LAYOUT_TODO));
         HTMLCanvasElement.prototype.getContext = vi.fn(() => null) as never;
         globalThis.ResizeObserver = class { observe() {} disconnect() {} unobserve() {} } as never;
     });
@@ -135,6 +140,48 @@ describe('App (integration with a scripted engine)', () => {
         fireEvent.keyDown(document.body, { code: 'ArrowUp' });
         fireEvent.keyDown(document.body, { code: 'ArrowUp', shiftKey: true });
         expect(bpmInput().value).toBe('126');
+    });
+
+    it('opens the shortcut cheat sheet with ? and steps rhythms with . and ,', async () => {
+        render(<App />);
+        fireEvent.keyDown(document.body, { code: 'Period' });
+        await act(async () => {});
+        const next = scheduler().pattern?.id;
+        fireEvent.keyDown(document.body, { code: 'Comma' });
+        await act(async () => {});
+        expect(scheduler().pattern?.id).not.toBe(next);
+        fireEvent.keyDown(document.body, { code: 'Slash', key: '?', shiftKey: true });
+        expect(await screen.findByRole('dialog', { name: 'Atajos de teclado' })).toBeInTheDocument();
+    });
+
+    it('opens the command palette with Ctrl+K and sets a typed tempo', async () => {
+        render(<App />);
+        fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
+        const input = await screen.findByPlaceholderText(/Buscá un comando/);
+        fireEvent.change(input, { target: { value: '88' } });
+        fireEvent.click(screen.getByText('Poner tempo 88 BPM'));
+        expect(bpmInput().value).toBe('88');
+    });
+
+    it('offers the view presets and panel switches in the command palette', async () => {
+        render(<App />);
+        fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
+        const input = await screen.findByPlaceholderText(/Buscá un comando/);
+        fireEvent.change(input, { target: { value: 'solo metr' } });
+        fireEvent.click(await screen.findByText('Vista: Solo metrónomo'));
+        expect(document.querySelectorAll('[data-panel]')).toHaveLength(2);
+        fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
+        fireEvent.change(await screen.findByPlaceholderText(/Buscá un comando/), { target: { value: 'panel: piano' } });
+        fireEvent.click(await screen.findByText('Mostrar panel: Piano'));
+        expect(document.querySelector('[data-panel="piano"]')).not.toBeNull();
+    });
+
+    it('Ctrl+K toggles the command palette closed again', async () => {
+        render(<App />);
+        fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
+        const input = await screen.findByPlaceholderText(/Buscá un comando/);
+        fireEvent.keyDown(input, { code: 'KeyK', ctrlKey: true });
+        await waitForElementToBeRemoved(() => screen.queryByPlaceholderText(/Buscá un comando/));
     });
 
     it('sends pattern edits to the engine and persists them', () => {
@@ -241,5 +288,205 @@ describe('App (integration with a scripted engine)', () => {
         const s = scheduler();
         unmount();
         expect(s.calls.dispose).toHaveLength(1);
+    });
+
+    describe('hiding or folding panels never changes the sound', () => {
+        const put = (key: string, value: unknown) => localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(value));
+        const chord = { id: 'a', degree: 'I', durationUnits: 2, notes: ['C4', 'E4', 'G4'] };
+        const take = { bars: 1, subdivision: 4, notes: [{ step: 0, midi: 60, velocity: 0.9, length: 1 }] };
+
+        it('applies the stored mix, progression and melody with those panels hidden from the start', () => {
+            put('ui.layout.v1', { panels: { mixer: 'hidden', harmony: 'hidden', piano: 'hidden' } });
+            put('harmony.sequence', [chord]);
+            put('harmony.style', 'zamba_base');
+            put('piano.melody.v1', take);
+            put('mixer', {
+                clickRulePatternId: 'metronome',
+                channels: [{ id: 'bombo', name: 'BOMBO', volume: 0.4, pan: 0, isMuted: true }],
+            });
+            render(<App />);
+            expect(screen.queryByRole('region', { name: 'Mezclador' })).toBeNull();
+            expect(screen.queryByRole('region', { name: 'Armonía' })).toBeNull();
+            const calls = scheduler().calls;
+            expect(calls.setChannelMute).toContainEqual(['bombo', true]);
+            expect(calls.setChannelVolume).toContainEqual(['bombo', 0.4]);
+            expect(calls.setHarmonyProgression.at(-1)![0]).toHaveLength(2);
+            expect(calls.setAccompanimentStyle.at(-1)).toEqual(['zamba_base']);
+            expect(calls.setMelody.at(-1)).toEqual([take]);
+        });
+
+        it('keeps the progression and the mutes when the panels are hidden and folded at run time', () => {
+            render(<App />);
+            fireEvent.click(screen.getByText('IV'));
+            fireEvent.click(screen.getByTestId('mute-kick'));
+            const progression = scheduler().calls.setHarmonyProgression.at(-1)![0];
+            expect(progression).toHaveLength(2);
+
+            // Fold the mixer, hide the harmony card.
+            fireEvent.click(screen.getByTestId('panel-toggle-mixer'));
+            fireEvent.click(screen.getByRole('button', { name: 'Opciones de Armonía' }));
+            fireEvent.click(screen.getByRole('menuitem', { name: 'Ocultar panel' }));
+            expect(screen.queryByTestId('harmony-step')).toBeNull();
+            expect(scheduler().calls.setHarmonyProgression.at(-1)![0]).toEqual(progression);
+            expect(scheduler().calls.setChannelMute.at(-1)).toEqual(['kick', true]);
+
+            // Hide the mixer too, then change rhythm: the click rule still applies to the engine.
+            fireEvent.click(screen.getByRole('button', { name: 'Opciones de Mezclador' }));
+            fireEvent.click(screen.getByRole('menuitem', { name: 'Ocultar panel' }));
+            expect(screen.queryByTestId('mute-click')).toBeNull();
+            return choose('Ritmo Predefinido', 'Chacarera Trunca').then(() => {
+                expect(scheduler().calls.setChannelMute).toContainEqual(['click', true]);
+                expect(scheduler().calls.setChannelMute.filter(c => c[0] === 'kick').at(-1)).toEqual(['kick', true]);
+            });
+        });
+
+        const openView = () => fireEvent.click(screen.getByTestId('view-menu-button'));
+
+        it('restores a hidden panel from the Vista menu, with its state intact', () => {
+            put('harmony.sequence', [chord]);
+            put('ui.layout.v1', { panels: { harmony: 'hidden' } });
+            render(<App />);
+            expect(screen.queryByTestId('harmony-step')).toBeNull();
+            openView();
+            fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Armonía' }));
+            expect(screen.getAllByTestId('harmony-step')).toHaveLength(1);
+        });
+
+        it('hides every panel leaving no cards at all', () => {
+            put('ui.layout.v1', { panels: { pulse: 'hidden', instruments: 'hidden', sequencer: 'hidden', mixer: 'hidden', practice: 'hidden', harmony: 'hidden', study: 'hidden', piano: 'hidden' } });
+            render(<App />);
+            expect(document.querySelectorAll('[data-panel]')).toHaveLength(0);
+        });
+    });
+
+    describe('view presets', () => {
+        const openView = () => fireEvent.click(screen.getByTestId('view-menu-button'));
+        const panels = () => [...document.querySelectorAll('[data-panel]')].map(r => r.getAttribute('aria-label'));
+
+        it('gives a new user "Ritmos"', () => {
+            localStorage.clear();
+            render(<App />);
+            expect(panels()).toEqual(['Pulso', 'Instrumentos', 'Secuenciador', 'Mezclador', 'Modos de práctica']);
+            expect(screen.getByRole('button', { name: /^Mezclador/ })).toHaveAttribute('aria-expanded', 'false');
+            expect(JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}ui.layout.v1`)!).preset).toBe('ritmos');
+        });
+
+        it('gives people who already have saved settings "Todo"', () => {
+            localStorage.clear();
+            localStorage.setItem(`${STORAGE_PREFIX}bpm`, '90');
+            render(<App />);
+            expect(panels()).toHaveLength(8);
+            openView();
+            expect(screen.getByRole('menuitemradio', { name: 'Todo' })).toHaveAttribute('aria-checked', 'true');
+        });
+
+        it('switches presets and falls back to Personalizado when a panel is toggled by hand', () => {
+            render(<App />);
+            openView();
+            fireEvent.click(screen.getByRole('menuitemradio', { name: 'Solo metrónomo' }));
+            expect(panels()).toEqual(['Pulso', 'Modos de práctica']);
+            openView();
+            fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Piano' }));
+            expect(panels()).toEqual(['Pulso', 'Modos de práctica', 'Piano']);
+            openView();
+            expect(screen.getByRole('menuitemradio', { name: 'Personalizado' })).toHaveAttribute('aria-checked', 'true');
+            // Trying another preset does not lose the custom arrangement.
+            fireEvent.click(screen.getByRole('menuitemradio', { name: 'Estudio' }));
+            openView();
+            fireEvent.click(screen.getByRole('menuitemradio', { name: 'Personalizado' }));
+            expect(panels()).toEqual(['Pulso', 'Modos de práctica', 'Piano']);
+        });
+
+        it('keeps the sound of a hidden mixer and harmony when a preset hides them', () => {
+            render(<App />);
+            fireEvent.click(screen.getByText('IV'));
+            const progression = scheduler().calls.setHarmonyProgression.at(-1)![0];
+            openView();
+            fireEvent.click(screen.getByRole('menuitemradio', { name: 'Solo metrónomo' }));
+            expect(screen.queryByTestId('harmony-step')).toBeNull();
+            expect(scheduler().calls.setHarmonyProgression.at(-1)![0]).toEqual(progression);
+        });
+    });
+
+    describe('sticky transport and pocket mode', () => {
+        const stubObserver = () => {
+            let callback!: (entries: { isIntersecting: boolean }[]) => void;
+            vi.stubGlobal('IntersectionObserver', class { constructor(cb: typeof callback) { callback = cb; } observe() {} disconnect() {} });
+            return (visible: boolean) => act(() => callback([{ isIntersecting: visible }]));
+        };
+        afterEach(() => vi.unstubAllGlobals());
+
+        it('shows the compact bar only while the header is scrolled away, and it drives the same transport', async () => {
+            const setHeaderVisible = stubObserver();
+            render(<App />);
+            expect(screen.queryByTestId('compact-transport')).toBeNull();
+            setHeaderVisible(false);
+            const bar = screen.getByTestId('compact-transport');
+            await act(async () => { fireEvent.click(within(bar).getByTestId('compact-play-toggle')); });
+            expect(scheduler().playing).toBe(true);
+            expect(screen.getByTestId('play-toggle')).toHaveTextContent('DETENER');
+            fireEvent.pointerDown(within(bar).getByRole('button', { name: 'Subir tempo' }), { button: 0 });
+            expect(bpmInput().value).toBe('121');
+            expect(within(bar).getByTestId('compact-bpm')).toHaveTextContent('121');
+            setHeaderVisible(true);
+            expect(screen.queryByTestId('compact-transport')).toBeNull();
+        });
+
+        it('the pocket-mode − and + buttons step the tempo and are blocked by the speed trainer', async () => {
+            render(<App />);
+            fireEvent.pointerDown(screen.getByTestId('bpm-up'), { button: 0 });
+            fireEvent.pointerDown(screen.getByTestId('bpm-down'), { button: 0 });
+            fireEvent.pointerDown(screen.getByTestId('bpm-down'), { button: 0 });
+            expect(bpmInput().value).toBe('119');
+
+            fireEvent.click(screen.getByText('Modos de práctica'));
+            fireEvent.click(screen.getByLabelText('Entrenador de velocidad'));
+            await act(async () => { fireEvent.click(screen.getByTestId('play-toggle')); });
+            expect(screen.getByTestId('bpm-up')).toBeDisabled();
+        });
+    });
+
+    it('opens the stage mode from the Vista menu and closes it again', async () => {
+        render(<App />);
+        fireEvent.click(screen.getByTestId('view-menu-button'));
+        fireEvent.click(screen.getByTestId('stage-menu-item'));
+        const stage = await screen.findByRole('dialog', { name: 'Modo escenario' });
+        expect(within(stage).getByTestId('stage-bpm')).toHaveTextContent('120');
+        await act(async () => { fireEvent.click(within(stage).getByTestId('stage-play-toggle')); });
+        expect(scheduler().playing).toBe(true);
+        fireEvent.click(within(stage).getByTestId('stage-close'));
+        await waitForElementToBeRemoved(() => screen.queryByRole('dialog', { name: 'Modo escenario' }));
+        expect(scheduler().playing).toBe(true); // closing the stage does not stop the metronome
+    });
+
+    it('toggles the stage mode with F, and lists it in the cheat sheet and the palette', async () => {
+        render(<App />);
+        fireEvent.keyDown(document.body, { code: 'KeyF', key: 'f' });
+        expect(await screen.findByRole('dialog', { name: 'Modo escenario' })).toBeInTheDocument();
+        fireEvent.keyDown(document.body, { code: 'KeyF', key: 'f' });
+        await waitForElementToBeRemoved(() => screen.queryByRole('dialog', { name: 'Modo escenario' }));
+
+        fireEvent.keyDown(document.body, { code: 'Slash', key: '?', shiftKey: true });
+        const sheet = await screen.findByRole('dialog', { name: 'Atajos de teclado' });
+        expect(within(sheet).getByText('Modo escenario (atril)')).toBeInTheDocument();
+        fireEvent.keyDown(sheet, { key: 'Escape' });
+        await waitForElementToBeRemoved(() => screen.queryByRole('dialog', { name: 'Atajos de teclado' }));
+
+        fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
+        fireEvent.change(await screen.findByPlaceholderText(/Buscá un comando/), { target: { value: 'escenario' } });
+        fireEvent.click(await screen.findByText('Modo escenario (atril)'));
+        expect(await screen.findByRole('dialog', { name: 'Modo escenario' })).toBeInTheDocument();
+    });
+
+    it('asks for fullscreen inside the click that opens the stage (before any animation) where it is supported', async () => {
+        Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
+        const request = vi.fn(async () => {});
+        HTMLElement.prototype.requestFullscreen = request;
+        render(<App />);
+        fireEvent.click(screen.getByTestId('view-menu-button'));
+        fireEvent.click(screen.getByTestId('stage-menu-item'));
+        expect(request).toHaveBeenCalledTimes(1);
+        await screen.findByRole('dialog', { name: 'Modo escenario' });
+        Reflect.deleteProperty(document, 'fullscreenEnabled');
     });
 });

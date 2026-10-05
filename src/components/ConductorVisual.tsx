@@ -4,6 +4,7 @@ import SpeedIcon from '@mui/icons-material/Speed';
 import { useEffect, useRef, useState } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 import { usePlayback } from '../state/PlaybackContext';
+import { LANDSCAPE_COMPACT_QUERY } from '../theme/breakpoints';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 import {
     conductorPath,
@@ -461,6 +462,7 @@ export default function ConductorVisual({
                 alignItems: 'center',
                 width: 50,
                 height: 60,
+                [`@media ${LANDSCAPE_COMPACT_QUERY}`]: { height: 44 },
                 justifyContent: 'center'
             }}>
                 <CircleIcon sx={{
@@ -468,6 +470,7 @@ export default function ConductorVisual({
                     color: isActiveBeat ? 'primary.main' : 'text.disabled',
                     transform: isActiveBeat ? (isAccent ? 'scale(1.7)' : 'scale(1.35)') : 'scale(1)',
                     transition: 'transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                    '@media (prefers-reduced-motion: reduce)': { transition: 'none', transform: 'none' },
                     filter: isActiveBeat ? (isAccent ? 'drop-shadow(0 0 10px #ff6d00)' : 'drop-shadow(0 0 8px #e5a95f)') : 'none'
                 }} />
 
@@ -550,6 +553,7 @@ export default function ConductorVisual({
                 size="small"
                 sx={{
                     mb: 1.5,
+                    [`@media ${LANDSCAPE_COMPACT_QUERY}`]: { mb: 0.5 },
                     border: '1px solid rgba(215, 204, 200, 0.08)',
                     bgcolor: 'rgba(0,0,0,0.2)',
                     borderRadius: 4,
@@ -578,6 +582,7 @@ export default function ConductorVisual({
             <Box sx={{
                 width: '100%',
                 height: 180,
+                [`@media ${LANDSCAPE_COMPACT_QUERY}`]: { height: 'clamp(96px, 34svh, 140px)', mb: 0.5 },
                 borderRadius: 4,
                 bgcolor: 'rgba(0,0,0,0.3)',
                 border: '1px solid rgba(215, 204, 200, 0.04)',
