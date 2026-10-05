@@ -113,8 +113,10 @@ button, [role='button'], [role='slider'], [role='switch'], [role='tab'], .MuiSli
   /* BPM readable from a music stand. */
   .app-header .tempo-panel .MuiInputBase-input { font-size: 2.6rem !important; }
   .app-header .play-button { width: 100%; height: 48px; }
-  .app-header .library-row { flex-direction: row; gap: 8px; width: 100%; }
-  .app-header .library-row > .MuiButton-root { width: auto; padding-inline: 10px; }
-  .app-header .library-row > .MuiFormControl-root { flex: 1; width: auto; }
+  /* Library and Vista share a row; the rhythm picker gets the full width below them. */
+  .app-header .library-row { flex-direction: row; flex-wrap: wrap; gap: 8px; width: 100%; }
+  .app-header .library-row > .MuiButton-root { width: auto; flex: 1; padding-inline: 6px; font-size: 0.78rem; }
+  .app-header .library-row > .MuiButton-root .MuiButton-startIcon { margin-right: 4px; }
+  .app-header .library-row > .MuiFormControl-root { flex: 1 1 100%; width: auto; order: 3; }
   .area-pulse > section { padding: 8px 10px !important; gap: 6px !important; }
 }

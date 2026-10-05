@@ -23,7 +23,9 @@ test.describe('panels', () => {
         expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
         await page.reload();
         await expect(page.getByRole('region', { name: 'Secuenciador' })).toHaveCount(0);
-        await page.getByRole('button', { name: 'Mostrar secuenciador' }).click();
+        await page.getByTestId('view-menu-button').click();
+        await page.getByRole('menuitemcheckbox', { name: 'Secuenciador' }).click();
+        await page.keyboard.press('Escape');
         await expect(page.getByRole('region', { name: 'Secuenciador' })).toBeVisible();
     });
 
@@ -32,5 +34,29 @@ test.describe('panels', () => {
         await page.getByTestId('panel-toggle-mixer').click();
         await page.getByTestId('panel-toggle-mixer').click();
         await expect(page.getByTestId('mute-kick')).toHaveAttribute('aria-pressed', 'true');
+    });
+});
+
+test.describe('view presets', () => {
+    test('a new user starts on "Ritmos" and can switch to "Todo" and back', async ({ page }) => {
+        await openApp(page, { newUser: true });
+        await expect(page.getByRole('region', { name: 'Piano' })).toHaveCount(0);
+        await expect(page.getByRole('region', { name: 'Secuenciador' })).toBeVisible();
+        await page.getByTestId('view-menu-button').click();
+        await expect(page.getByRole('menuitemradio', { name: 'Ritmos' })).toHaveAttribute('aria-checked', 'true');
+        await page.getByRole('menuitemradio', { name: 'Todo' }).click();
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('region', { name: 'Piano' })).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+        await page.reload();
+        await expect(page.getByRole('region', { name: 'Piano' })).toBeVisible();
+    });
+
+    test('the Vista control is reachable and 44 px tall on touch screens', async ({ page, isMobile }) => {
+        await openApp(page);
+        const button = page.getByTestId('view-menu-button');
+        await button.scrollIntoViewIfNeeded();
+        await expect(button).toBeVisible();
+        if (isMobile) expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     });
 });

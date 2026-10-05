@@ -38,6 +38,8 @@ export interface HeaderToolbarProps {
   onSelectPreset: (patternId: string) => void;
   /** The speed trainer owns the tempo while it runs. */
   tempoLocked?: boolean;
+  /** Extra control after the rhythm picker (the "Vista" menu). */
+  viewControl?: React.ReactNode;
 }
 
 /** Text field that only commits a BPM on blur/Enter, so typing "1" on the way to "120" is harmless. */
@@ -95,7 +97,8 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
   selectedPatternId,
   availablePresets,
   onSelectPreset,
-  tempoLocked = false
+  tempoLocked = false,
+  viewControl
 }) => {
   const queuedPatternId = usePlayback(s => s.queuedPatternId);
   const compound = isCompoundMeter(timeSignature);
@@ -253,6 +256,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
             ))}
           </Select>
         </FormControl>
+        {viewControl}
       </Stack>
 
       {/*
