@@ -22,6 +22,7 @@ import { CUSTOM_PATTERN_ID } from '../rhythms/patternLibrary';
 import { MAX_BPM, MIN_BPM, clampBpm, isCompoundMeter } from '../rhythms/meter';
 import type { TimeSignature } from '../rhythms/meter';
 import { usePlayback } from '../state/PlaybackContext';
+import { BeatLeds, BpmStepButton } from './TransportControls';
 import { shortcutById, withShortcut } from '../shortcuts/registry';
 import { usePianoGlobalMode } from '../shortcuts/dispatcher';
 
@@ -40,6 +41,12 @@ export interface HeaderToolbarProps {
   tempoLocked?: boolean;
   /** Extra control after the rhythm picker (the "Vista" menu). */
   viewControl?: React.ReactNode;
+  /** Pattern being played: lets the phone bar show the beat LEDs. */
+  pattern?: RhythmPattern;
+  /** Relative tempo change (the − / + buttons). Defaults to onBpmChange(bpm + delta). */
+  onNudgeBpm?: (delta: number) => void;
+  /** Ref to the header element (the page watches it to know when to show the slim bar). */
+  headerRef?: React.Ref<HTMLElement>;
 }
 
 /** Text field that only commits a BPM on blur/Enter, so typing "1" on the way to "120" is harmless. */
@@ -98,8 +105,12 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
   availablePresets,
   onSelectPreset,
   tempoLocked = false,
-  viewControl
+  viewControl,
+  pattern,
+  onNudgeBpm,
+  headerRef
 }) => {
+  const nudge = onNudgeBpm ?? ((delta: number) => onBpmChange(bpm + delta));
   const queuedPatternId = usePlayback(s => s.queuedPatternId);
   const compound = isCompoundMeter(timeSignature);
   const pianoKeysOwnT = usePianoGlobalMode();
@@ -108,6 +119,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
   return (
     <Paper
       component="header"
+      ref={headerRef}
       className="brass-trim app-header"
       elevation={6}
       sx={{
@@ -264,6 +276,8 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
         grid cell; on a portrait phone adaptive.css turns it into a thumb-reach bar fixed to the bottom.
       */}
       <Box className="transport-bar">
+      {/* Phone pocket mode only (adaptive.css): the pulse stays visible next to the thumb. */}
+      {pattern && <BeatLeds pattern={pattern} isPlaying={isPlaying} className="transport-leds" />}
       {/* BPM Controls & Tap Tempo */}
       <Stack
         className="tempo-panel"
@@ -280,6 +294,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           minWidth: 0,
         }}>
         {/* Fixed width: "♩ BPM" grows to "♩ BPM · ♩.=67" in compound meters and must not push the slider. */}
+        <BpmStepButton direction={-1} onStep={nudge} disabled={tempoLocked} className="tempo-step" size={56} testId="bpm-down" />
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: { xs: 84, sm: 104 }, flexShrink: 0 }}>
           <BpmInput bpm={bpm} disabled={tempoLocked} onCommit={onBpmChange} />
           <Tooltip title={compound ? `En ${timeSignature[0]}/${timeSignature[1]} el pulso con puntillo (♩.) va a ${Math.round(bpm * 2 / 3)}` : 'Pulsos de negra por minuto'}>
@@ -288,6 +303,8 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
             </Typography>
           </Tooltip>
         </Box>
+
+        <BpmStepButton direction={1} onStep={nudge} disabled={tempoLocked} className="tempo-step" size={56} testId="bpm-up" />
 
         <Slider
           value={bpm}

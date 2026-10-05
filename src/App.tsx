@@ -48,6 +48,8 @@ import { LayoutContext } from './state/LayoutContext';
 import { PANEL_IDS, PANEL_LABELS, PANEL_PRESET_ORDER, PRESET_LABELS } from './state/layout';
 import type { PanelId } from './state/layout';
 import { ViewMenu } from './components/ViewMenu';
+import { CompactTransport } from './components/CompactTransport';
+import { useElementOutOfView } from './hooks/useElementOutOfView';
 import { BluetoothNotice } from './components/BluetoothNotice';
 import { PlaybackContext } from './state/PlaybackContext';
 import { isBoolean, isNumber, isPlainObject, isString } from './state/storage';
@@ -136,6 +138,10 @@ function App() {
   const tempoLocked = trainer.active && isPlaying;
   const guardedTap = useCallback(() => { if (!tempoLocked) handleTap(); }, [tempoLocked, handleTap]);
 
+  const nudgeBpm = useCallback((delta: number) => {
+    if (!tempoLocked) setBpmRaw(prev => clampBpm(prev + delta));
+  }, [tempoLocked, setBpmRaw]);
+
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const rhythmCommands = useMemo<PaletteCommand[]>(() => PRESET_PATTERNS.map(p => ({
@@ -185,6 +191,10 @@ function App() {
     'palette.open': () => setPaletteOpen(prev => !prev),
   });
 
+  // The slim bar appears once the full header has scrolled away (not on portrait phones: their bar is always there).
+  const [headerEl, setHeaderEl] = useState<HTMLElement | null>(null);
+  const headerOutOfView = useElementOutOfView(headerEl);
+
   // Settings edited inside a card reach the engine from here, so a hidden or folded card keeps its sound.
   const mixer = useMixer(currentPattern, {
     onVolumeChange: engine.setChannelVolume,
@@ -222,7 +232,23 @@ function App() {
               onSelectPreset={loadPreset}
               tempoLocked={tempoLocked}
               viewControl={<ViewMenu />}
+              pattern={currentPattern}
+              onNudgeBpm={nudgeBpm}
+              headerRef={setHeaderEl}
             />
+
+            {headerOutOfView && (
+              <CompactTransport
+                pattern={currentPattern}
+                bpm={bpm}
+                isPlaying={isPlaying}
+                tempoLocked={tempoLocked}
+                onTogglePlay={toggle}
+                onNudgeBpm={nudgeBpm}
+                onTapTempo={guardedTap}
+                viewControl={<ViewMenu compact />}
+              />
+            )}
 
             <BluetoothNotice isPlaying={isPlaying} />
 
