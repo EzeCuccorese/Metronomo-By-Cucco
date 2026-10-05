@@ -4,7 +4,7 @@ Planes de trabajo que guiaron el desarrollo. Cada archivo lleva al inicio un blo
 
 | Plan | Estado | Resumen |
 |------|--------|---------|
-| [mejoras-ux-y-teclado](mejoras-ux-y-teclado.plan.md) | Pendiente | Propuesta: paneles ocultables y presets de vista, transporte fijo, descubribilidad del Teclado PC, atajos con `?`, mezclador compacto y evaluación de librerías. |
+| [mejoras-ux-y-teclado](mejoras-ux-y-teclado.plan.md) | Completado | Paneles ocultables y presets de vista, transporte fijo, Teclado PC descubrible, atajos con `?`, mezclador compacto, modo escenario, paleta ⌘K y MIDI (#48–#60). Faltan los atajos `1`…`5` y `M`, y el brillo opcional del chasis en el tiempo 1. |
 | [auditoria-critica-y-plan-de-mejoras](auditoria-critica-y-plan-de-mejoras.plan.md) | Completado | Auditoría de bugs, arquitectura, PWA y despliegue, con plan en cuatro fases ya implementado. |
 | [actualizacion-seguridad-owasp-nginx](actualizacion-seguridad-owasp-nginx.plan.md) | Completado | Cabeceras HTTP de seguridad OWASP en nginx (hoy en `deploy/security-headers.conf`). |
 | [buscar-imagenes-instrumentos](buscar-imagenes-instrumentos.plan.md) | Completado | Imágenes reales de instrumentos y portadas de géneros (rutas finales distintas a las del plan). |

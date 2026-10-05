@@ -1,4 +1,4 @@
-> **Estado:** Pendiente (propuesta). Auditoría hecha sobre `main` en `5dcab7c` (2026-10-04). No hay cambios de código: esto es un plan para leer y decidir.
+> **Estado:** Completado en lo principal (2026-10). Implementado en `main`: U1 paneles plegables (#53), U2 menú Vista (#54), U3 y U8 transporte fijo con LEDs de pulso (#56), U4 Teclado PC descubrible, velocidad C/V y pedal (#49), U4.8 y U4.9 etiquetas por layout y distribución tracker (#55), U5 registro de atajos y hoja `?` (#48), U6 mezclador compacto con Solo (#57), U7 modo escenario (#58; el wake lock entró antes con #41), U9 jerarquía y contraste (#59), U10 tips (#60), U11 paleta ⌘K (#51), U12 MIDI (#52) y Tonal.js (#50). **Pendiente:** los atajos `1`…`5` (presets de vista) y `M` (mute del click) de U5 no están en el registro, y el borde del chasis que se ilumina en el tiempo 1 (U8, opcional) no se hizo. U13 queda descartado. La auditoría y las capturas describen `main` en `5dcab7c` (2026-10-04).
 
 # Plan de mejoras de UX y teclado — Metrónomo by Cucco
 
