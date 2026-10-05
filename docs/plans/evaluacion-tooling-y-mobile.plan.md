@@ -1,4 +1,4 @@
-> **Estado:** En ejecución. Base: `main` en `5dcab7c` (2026-10-04). **En PR:** M0 (endurecer audio en iOS, PR aparte), pnpm, Oxlint, Vitest Browser Mode y Cloudflare. **Pendiente:** fase Adaptativo (sección C). Los PR #20 (samples Opus) y #26 (piano y melodía) ya están mergeados. Decisión del usuario: **web adaptativa instalable (PWA), sin app nativa**.
+> **Estado:** Completado (2026-10). Todo lo recomendado está en `main`: M0 audio en iOS (#41), pnpm 11 (#38), Oxlint type-aware y solo TS 7 (#39), Vitest Browser Mode y WebKit en Playwright (#44), fase Adaptativo (#45: manifest, metas de iOS, safe areas, layouts, objetivos de 44 px, aviso de actualización y proyectos de Playwright por dispositivo) y hosting en Cloudflare Workers Static Assets (#46, deploy manual). **Queda fuera del código:** el checklist manual en el iPhone (M0 y fase Adaptativo). Siguen opcionales o a demanda: oxfmt, vúmetros en AudioWorklet y la migración de MUI. El plan se conserva tal como se escribió; las columnas "Hoy" describen `main` en `5dcab7c` (2026-10-04).
 
 # Evaluación de tooling, librerías y uso en el celular — Metrónomo by Cucco
 
@@ -121,7 +121,7 @@ Requiere que la app esté servida por **HTTPS** (hosting en Cloudflare, sección
 
 #### M0. Endurecer el audio en iOS (se implementa en un PR aparte)
 
-> **Estado:** en PR (aparte de este plan). Lo que sigue es el alcance y el checklist de validación.
+> **Estado:** implementado en #41. El checklist manual en el iPhone (punto 4) queda a cargo del usuario.
 
 1. En `src/audio/AudioContextManager.ts`:
    - Antes del primer `resume()`, si existe `navigator.audioSession`, setear `navigator.audioSession.type = 'playback'`.
