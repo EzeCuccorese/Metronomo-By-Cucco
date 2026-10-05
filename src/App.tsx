@@ -282,7 +282,7 @@ function App() {
               )}
               {shown('instruments') && (
                 <Grid size={{ xs: 12, md: shown('pulse') ? 7 : 12, lg: shown('pulse') ? 8 : 12 }}>
-                  <Panel id="instruments" title="Instrumentos" summary={currentPattern.name} sx={{ justifyContent: 'center' }}>
+                  <Panel id="instruments" title="Instrumentos" summary={currentPattern.name} sx={{ height: 'auto' }}>
                     <InteractiveInstrumentVisual
                       pattern={currentPattern}
                       isPlaying={isPlaying}

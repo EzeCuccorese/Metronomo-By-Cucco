@@ -197,7 +197,7 @@ html, body {
 .mixer-channels-container {
   display: grid;
   /* Fits as many strips per row as the card allows (8 wide, 4 on tablets, 3-4 on phones). */
-  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
   gap: 8px;
   flex: 1;
   background-color: #0b0908;
@@ -283,9 +283,9 @@ html, body {
 }
 
 .channel-param-label {
-  font-size: 0.55rem;
+  font-size: 0.6875rem;
   font-weight: 900;
-  color: #8c7f72;
+  color: #b8a994;
   letter-spacing: 0.1em;
   margin-bottom: 4px;
 }
@@ -317,8 +317,8 @@ html, body {
 
 .pan-value-display {
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.5rem;
-  color: #ff9100;
+  font-size: 0.6875rem;
+  color: #ffb74d;
   margin-top: 1px;
   font-weight: bold;
 }
@@ -378,9 +378,9 @@ html, body {
   flex-direction: column;
   justify-content: space-between;
   height: 100%;
-  font-size: 0.45rem;
+  font-size: 0.6875rem;
   font-weight: bold;
-  color: #6d6154;
+  color: #a99b8a;
   padding-right: 2px;
   text-align: right;
   user-select: none;
@@ -523,8 +523,8 @@ html, body {
 }
 
 .channel-label-screen .vfd-text {
-  font-size: 0.55rem;
-  letter-spacing: 0.05em;
+  font-size: 0.6875rem;
+  letter-spacing: 0.03em;
   font-weight: bold;
 }
 
@@ -621,7 +621,8 @@ html, body {
   border: 1px solid rgba(229, 169, 95, 0.12);
   border-radius: 10px;
 }
-.mixer-row.muted { opacity: 0.5; }
+/* Muted rows dim their controls, not their text: the labels must stay readable. */
+.mixer-row.muted .channel-avatar, .mixer-row.muted .MuiSlider-root { opacity: 0.45; }
 
 /* Thin level bar behind the row (scaled imperatively from the playback loop). */
 .mixer-row .vu-fill {

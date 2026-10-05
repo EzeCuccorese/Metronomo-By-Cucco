@@ -30,7 +30,7 @@ describe('StudyTools', () => {
         expect(screen.getByText('25:00')).toBeInTheDocument();
         fireEvent.click(screen.getByText('Descanso'));
         expect(screen.getByText('05:00')).toBeInTheDocument();
-        fireEvent.click(screen.getByText('Focus'));
+        fireEvent.click(screen.getByText('Foco'));
         expect(screen.getByText('25:00')).toBeInTheDocument();
     });
 

@@ -389,7 +389,9 @@ describe('PianoPanel', () => {
 
     it('downloads the samples on first interest only, and lifts held keys on unmount', () => {
         const { engine, unmount } = renderPanel(makeEngine({ pianoStatus: 'ready' }));
-        expect(screen.getByTestId('piano-status')).toHaveTextContent('Piano de cola');
+        // A loaded piano needs no badge next to the card title.
+        expect(screen.queryByTestId('piano-status-badge')).toBeNull();
+        expect(screen.getByTestId('piano-status')).toHaveAttribute('data-status', 'ready');
         const panel = screen.getByTestId('piano-panel');
         fireEvent.pointerEnter(panel);
         fireEvent.focus(keyEl(48));
@@ -398,9 +400,14 @@ describe('PianoPanel', () => {
         expect(engine.releaseAllPianoKeys).toHaveBeenCalled();
     });
 
+    it('shows a badge only while the samples load', () => {
+        renderPanel(makeEngine({ pianoStatus: 'loading' }));
+        expect(screen.getByTestId('piano-status-badge')).toHaveTextContent('Cargando piano…');
+    });
+
     it('labels a synthesized fallback', () => {
         renderPanel(makeEngine({ pianoStatus: 'failed' }));
-        expect(screen.getByTestId('piano-status')).toHaveTextContent('Sonido sintetizado');
+        expect(screen.getByTestId('piano-status-badge')).toHaveTextContent('Sonido sintetizado');
     });
 });
 

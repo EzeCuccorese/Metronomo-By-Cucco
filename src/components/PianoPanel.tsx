@@ -225,15 +225,16 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
             data-pc-keys={settings.computerKeys ? 'global' : focusInside ? 'focus' : 'off'}
             sx={{ border: '1px solid', borderRadius: 3, p: 0.5, borderColor: settings.computerKeys || focusInside ? '#4fc3f7' : 'transparent', boxShadow: settings.computerKeys || focusInside ? '0 0 0 1px rgba(79,195,247,0.45)' : 'none', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }}
         >
-            <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
-                <Chip
+            <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1.5, minHeight: 24 }}>
+                {/* Only when it tells something: loading, or the synthesised fallback. The row keeps its height so nothing jumps when the badge goes. */}
+                <span className="visually-hidden" role="status" data-testid="piano-status" data-status={engine.pianoStatus}>{STATUS_LABEL[engine.pianoStatus]}</span>
+                {(engine.pianoStatus === 'loading' || engine.pianoStatus === 'failed') && <Chip
                     size="small"
                     label={STATUS_LABEL[engine.pianoStatus]}
-                    data-testid="piano-status"
-                    data-status={engine.pianoStatus}
-                    color={engine.pianoStatus === 'ready' ? 'success' : engine.pianoStatus === 'failed' ? 'warning' : 'default'}
+                    data-testid="piano-status-badge"
+                    color={engine.pianoStatus === 'failed' ? 'warning' : 'default'}
                     variant="outlined"
-                />
+                />}
                 {chord && (
                     <Typography variant="caption" sx={{ color: '#e5a95f' }} data-testid="piano-chord">
                         Acorde: {chordSymbol(chord)} ({chord.map(n => { const m = noteToMidi(n); return m === null ? n : spanishNoteName(m); }).join(' · ')})

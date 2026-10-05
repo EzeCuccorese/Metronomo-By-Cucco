@@ -94,7 +94,6 @@ test.describe('adaptive layout', () => {
     test('axe: no serious or critical violations in this orientation', async ({ page }) => {
         const results = await new AxeBuilder({ page })
             .withTags(['wcag2a', 'wcag2aa'])
-            .disableRules(['color-contrast']) // the vintage console palette is a deliberate design choice
             .analyze();
         const serious = results.violations.filter(v => v.impact === 'serious' || v.impact === 'critical');
         expect(serious.map(v => `${v.id}: ${v.nodes.slice(0, 3).map(n => n.target.join(' ')).join(' | ')}`)).toEqual([]);
