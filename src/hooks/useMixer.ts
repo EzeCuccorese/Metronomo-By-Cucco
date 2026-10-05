@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
-import { CHANNEL_IDS } from '../audio/instrumentChannels';
+import { CHANNEL_IDS, getChannelForInstrument } from '../audio/instrumentChannels';
 import type { ChannelId } from '../audio/instrumentChannels';
 import { CUSTOM_PATTERN_ID, isMetronomePattern } from '../rhythms/patternLibrary';
 import { usePersistentState } from './usePersistentState';
 import { isBoolean, isNumber, isPlainObject, isString } from '../state/storage';
+import { isMelody } from '../audio/piano/melody';
+import type { Melody } from '../audio/piano/melody';
 
 export interface ChannelState {
     id: ChannelId;
@@ -62,34 +64,79 @@ export interface MixerEngine {
     onMuteChange: (channel: string, muted: boolean) => void;
 }
 
+/** Names shown in the mixer (the stored `name` is the old upper-case label). */
+export const CHANNEL_LABELS: Record<ChannelId, string> = {
+    bombo: 'Bombo',
+    clave: 'Clave',
+    shaker: 'Shaker',
+    kick: 'Bombo de batería',
+    snare: 'Redoblante',
+    hihat: 'Hi-hat',
+    click: 'Click',
+    synth: 'Teclado',
+    piano: 'Piano',
+};
+
+export type MixerView = 'console' | 'compact';
+const isMixerView = (v: unknown): v is MixerView => v === 'console' || v === 'compact';
+const PHONE_QUERY = '(max-width: 599.98px)';
+
+/** Linear gain -> dB for the readout (1.0 = 0 dB). */
+export const gainToDb = (gain: number): number => (gain <= 0 ? -Infinity : 20 * Math.log10(gain));
+export const formatDb = (gain: number): string => {
+    const db = gainToDb(gain);
+    return db === -Infinity ? '−∞ dB' : `${db > 0.05 ? '+' : db < -0.05 ? '−' : ''}${Math.abs(db).toFixed(0)} dB`;
+};
+
 export interface MixerApi {
+    /** Every channel, in console order (this is what is saved and sent to the engine). */
     channels: ChannelState[];
+    /** The strips to draw: the ones this rhythm and the harmony/piano use, or all of them. */
+    visibleChannels: ChannelState[];
+    showAll: boolean;
+    setShowAll: (showAll: boolean) => void;
+    view: MixerView;
+    setView: (view: MixerView) => void;
+    /** Channels in solo (while any is, only those sound). */
+    solo: ReadonlySet<ChannelId>;
+    toggleSolo: (id: ChannelId) => void;
     setVolume: (id: ChannelId, volume: number) => void;
     setPan: (id: ChannelId, pan: number) => void;
     toggleMute: (id: ChannelId) => void;
 }
 
+const isSequenceArray = (v: unknown): v is unknown[] => Array.isArray(v);
+const isStoredMelody = (v: unknown): v is Melody | null => v === null || isMelody(v);
+
 /**
- * The mix (volumes, pan, mutes), its persistence and its link to the audio engine.
+ * The mix (volumes, pan, mutes, solo), its persistence and its link to the audio engine.
  * It lives in App, not in the mixer card: hiding or folding the card must never change the sound.
  *
  * (ES) La mezcla vive en App: ocultar o plegar el mezclador no cambia el sonido.
  */
 export function useMixer(pattern: RhythmPattern, { onVolumeChange, onPanChange, onMuteChange }: MixerEngine): MixerApi {
     const [mixer, setMixer] = usePersistentState<MixerState>('mixer', INITIAL_MIXER, { sanitize: sanitizeMixerState });
+    const [showAll, setShowAll] = usePersistentState('mixer.showAll', false, isBoolean);
+    const [storedView, setView] = usePersistentState<MixerView | null>('mixer.view', null, (v): v is MixerView | null => v === null || isMixerView(v));
+    const [solo, setSolo] = useState<ReadonlySet<ChannelId>>(() => new Set());
+    // Same persisted values the harmony and piano cards write (see usePersistentState): no state is threaded through.
+    const [sequence] = usePersistentState<unknown[]>('harmony.sequence', [], isSequenceArray);
+    const [melody] = usePersistentState<Melody | null>('piano.melody.v1', null, isStoredMelody);
     const channels = mixer.channels;
 
     // Push mixer changes to the engine (only what changed, to avoid piling up automation events).
-    const pushedRef = useRef<Partial<Record<ChannelId, ChannelState>>>({});
+    // While any channel is in solo, only the soloed ones sound; mutes come back when the solo ends.
+    const pushedRef = useRef<Partial<Record<ChannelId, { volume: number; pan: number; muted: boolean }>>>({});
     useEffect(() => {
         channels.forEach(ch => {
+            const muted = solo.size > 0 ? !solo.has(ch.id) : ch.isMuted;
             const prev = pushedRef.current[ch.id];
             if (prev?.volume !== ch.volume) onVolumeChange(ch.id, ch.volume);
             if (prev?.pan !== ch.pan) onPanChange(ch.id, ch.pan);
-            if (prev?.isMuted !== ch.isMuted) onMuteChange(ch.id, ch.isMuted);
-            pushedRef.current[ch.id] = ch;
+            if (prev?.muted !== muted) onMuteChange(ch.id, muted);
+            pushedRef.current[ch.id] = { volume: ch.volume, pan: ch.pan, muted };
         });
-    }, [channels, onVolumeChange, onPanChange, onMuteChange]);
+    }, [channels, solo, onVolumeChange, onPanChange, onMuteChange]);
 
     // Automatic click mute when the selected pattern changes (not on reload of the same pattern).
     if (mixer.clickRulePatternId !== pattern.id) {
@@ -107,6 +154,33 @@ export function useMixer(pattern: RhythmPattern, { onVolumeChange, onPanChange, 
     const setVolume = useCallback((id: ChannelId, volume: number) => update(id, () => ({ volume })), [update]);
     const setPan = useCallback((id: ChannelId, pan: number) => update(id, () => ({ pan })), [update]);
     const toggleMute = useCallback((id: ChannelId) => update(id, ch => ({ isMuted: !ch.isMuted })), [update]);
+    const toggleSolo = useCallback((id: ChannelId) => setSolo(prev => {
+        const next = new Set(prev);
+        if (!next.delete(id)) next.add(id);
+        return next;
+    }), []);
 
-    return { channels, setVolume, setPan, toggleMute };
+    const used = useMemo(() => {
+        const ids = new Set<ChannelId>(['click']);
+        pattern.steps.forEach(step => ids.add(getChannelForInstrument(step.instrument)));
+        if (sequence.length > 0) { ids.add('synth'); ids.add('piano'); }
+        if (melody && melody.notes.length > 0) ids.add('piano');
+        return ids;
+    }, [pattern, sequence.length, melody]);
+    // A soloed channel stays on screen so its Solo can be switched off.
+    const visibleChannels = useMemo(
+        () => showAll ? channels : channels.filter(ch => used.has(ch.id) || solo.has(ch.id)),
+        [channels, showAll, used, solo],
+    );
+
+    const [phone, setPhone] = useState(() => typeof window !== 'undefined' && window.matchMedia(PHONE_QUERY).matches);
+    useEffect(() => {
+        const query = window.matchMedia(PHONE_QUERY);
+        const onChange = (e: MediaQueryListEvent) => setPhone(e.matches);
+        query.addEventListener('change', onChange);
+        return () => query.removeEventListener('change', onChange);
+    }, []);
+    const view: MixerView = storedView ?? (phone ? 'compact' : 'console');
+
+    return { channels, visibleChannels, showAll, setShowAll, view, setView, solo, toggleSolo, setVolume, setPan, toggleMute };
 }
