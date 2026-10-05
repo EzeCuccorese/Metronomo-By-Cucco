@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import { COMPUTER_KEY_VELOCITY } from '../../hooks/usePianoComputerKeyboard';
 import PianoPanel from '../PianoPanel';
+import { useMelodySync } from '../../hooks/useEngineSync';
 import { PlaybackContext } from '../../state/PlaybackContext';
 import { createPlaybackStore } from '../../state/playbackStore';
 import type { PlaybackStore } from '../../state/playbackStore';
@@ -40,10 +41,16 @@ function WithDispatcher({ children }: { children: React.ReactNode }) {
     return children;
 }
 
+/** App wires the melody loop to the engine (so it survives a hidden card); the card only edits it. */
+const WithMelodySync = ({ engine, isPlaying }: { engine: ReturnType<typeof makeEngine>; isPlaying: boolean }) => {
+    useMelodySync(engine);
+    return <PianoPanel engine={engine as never} isPlaying={isPlaying} />;
+};
+
 function renderPanel(engine = makeEngine(), isPlaying = false, store: PlaybackStore = createPlaybackStore()) {
     const utils = render(
         <PlaybackContext.Provider value={store}>
-            <WithDispatcher><PianoPanel engine={engine as never} isPlaying={isPlaying} /></WithDispatcher>
+            <WithDispatcher><WithMelodySync engine={engine} isPlaying={isPlaying} /></WithDispatcher>
         </PlaybackContext.Provider>
     );
     return { ...utils, engine, store };

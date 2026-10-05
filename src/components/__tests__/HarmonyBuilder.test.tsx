@@ -1,11 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import HarmonyBuilder from '../HarmonyBuilder';
+import { useHarmonySync } from '../../hooks/useEngineSync';
 import { STORAGE_PREFIX } from '../../state/storage';
+
+/** What App does: the card edits the saved harmony, `useHarmonySync` sends it to the engine. */
+function Synced({ engine }: { engine: { setHarmonyProgression: (p: string[][]) => void; setHarmonyVolume: (v: number) => void; setAccompanimentStyle: (s: never) => void } }) {
+    useHarmonySync(engine as never);
+    return <HarmonyBuilder />;
+}
 
 const renderBuilder = () => {
     const onUpdateProgression = vi.fn();
-    render(<HarmonyBuilder onUpdateProgression={onUpdateProgression} onVolumeChange={vi.fn()} onStyleChange={vi.fn()} />);
+    render(<Synced engine={{ setHarmonyProgression: onUpdateProgression, setHarmonyVolume: vi.fn(), setAccompanimentStyle: vi.fn() }} />);
     return { onUpdateProgression };
 };
 

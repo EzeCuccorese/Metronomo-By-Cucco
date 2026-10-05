@@ -1,5 +1,4 @@
 import { Box, Typography } from '@mui/material';
-import type { SxProps, Theme } from '@mui/material/styles';
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
@@ -37,8 +36,6 @@ interface InteractiveInstrumentVisualProps {
     pattern: RhythmPattern;
     isPlaying: boolean;
     onPreviewInstrument: (instrument: string, modifier?: string) => void;
-    /** Extra styles for the outer card (e.g. to match the surrounding panels). */
-    sx?: SxProps<Theme>;
 }
 
 /** Keyboard / screen-reader alternative to the clickable canvas. */
@@ -324,7 +321,6 @@ export default function InteractiveInstrumentVisual({
     pattern,
     isPlaying,
     onPreviewInstrument,
-    sx
 }: InteractiveInstrumentVisualProps) {
     const store = usePlaybackStore();
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -597,30 +593,9 @@ export default function InteractiveInstrumentVisual({
     };
 
     return (
-        <Box sx={[{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            width: '100%',
-            p: 1.5,
-            pb: 2,
-            bgcolor: 'rgba(0,0,0,0.3)',
-            borderRadius: 4,
-            border: '1px solid rgba(229, 169, 95, 0.08)',
-            boxShadow: 'inset 0 0 25px rgba(0,0,0,0.6)'
-        }, ...(Array.isArray(sx) ? sx : [sx])]}>
-            <Typography
-                variant="overline"
-                sx={{
-                    color: "text.secondary",
-                    fontSize: { xs: '0.56rem', sm: '0.62rem' },
-                    lineHeight: 1.5,
-                    textAlign: 'center',
-                    mb: 1,
-                    letterSpacing: { xs: '0.1em', sm: '0.15em' },
-                    fontWeight: 'bold'
-                }}>
-                INSTRUMENTOS RÍTMICOS TÁCTILES (TOCA PARA PROBAR)
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', flex: 1, minHeight: 0, justifyContent: 'center' }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', textAlign: 'center', mb: 1 }}>
+                Tocá un instrumento para probarlo
             </Typography>
 
             <Box

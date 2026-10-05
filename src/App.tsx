@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Box, Grid } from '@mui/material';
+import { Box, Button, Grid, Stack, Typography } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import './App.css';
@@ -30,8 +30,7 @@ import PianoPanel from './components/PianoPanel';
 import type { FormasSettings, SilenceSettings } from './components/PracticeModes';
 import { darkTheme } from './theme/darkTheme';
 import { HeaderToolbar } from './components/HeaderToolbar';
-import { Fill, Panel } from './components/Panel';
-import type { SxProps, Theme } from '@mui/material/styles';
+import { Panel } from './components/Panel';
 import { PwaUpdater } from './pwa/PwaUpdater';
 import { GenreSelectorModal } from './components/GenreSelectorModal';
 import { useMetronomeEngine } from './hooks/useMetronomeEngine';
@@ -42,6 +41,12 @@ import ShortcutsDialog from './components/ShortcutsDialog';
 import CommandPalette from './components/CommandPalette';
 import type { PaletteCommand } from './components/CommandPalette';
 import { useWakeLock } from './hooks/useWakeLock';
+import { useLayout } from './hooks/useLayout';
+import { useMixer } from './hooks/useMixer';
+import { useHarmonySync, useMelodySync } from './hooks/useEngineSync';
+import { LayoutContext } from './state/LayoutContext';
+import { PANEL_IDS, PANEL_LABELS } from './state/layout';
+import type { PanelId } from './state/layout';
 import { BluetoothNotice } from './components/BluetoothNotice';
 import { PlaybackContext } from './state/PlaybackContext';
 import { isBoolean, isNumber, isPlainObject, isString } from './state/storage';
@@ -61,18 +66,6 @@ const isSilence = (v: unknown): v is SilenceSettings =>
 const isFormas = (v: unknown): v is FormasSettings =>
   isPlainObject(v) && isBoolean(v.enabled) && FORM_GENRES.includes(v.genre as FormGenre) &&
   isNumber(v.introBars) && v.introBars >= 1;
-
-const CARD_BORDER = '1px solid rgba(229, 169, 95, 0.14)';
-
-/** Chrome shared with {@link Panel}, passed to components that draw their own card. */
-const cardChildSx: SxProps<Theme> = {
-  bgcolor: '#141210',
-  border: CARD_BORDER,
-  borderRadius: '16px',
-  boxShadow: '0 6px 20px rgba(0, 0, 0, 0.35)',
-};
-
-const instrumentsCardSx: SxProps<Theme> = [cardChildSx, { p: { xs: 1.5, md: 2 }, justifyContent: 'center' }];
 
 function App() {
   const [bpm, setBpmRaw] = usePersistentState('bpm', 120, isBpm);
@@ -172,11 +165,27 @@ function App() {
     'palette.open': () => setPaletteOpen(prev => !prev),
   });
 
+  // Settings edited inside a card reach the engine from here, so a hidden or folded card keeps its sound.
+  const layout = useLayout();
+  const mixer = useMixer(currentPattern, {
+    onVolumeChange: engine.setChannelVolume,
+    onPanChange: engine.setChannelPan,
+    onMuteChange: engine.setChannelMute,
+  });
+  const harmonySummary = useHarmonySync(engine);
+  useMelodySync(engine);
+
+  const shown = (id: PanelId) => layout.panels[id] !== 'hidden';
+  const hiddenPanels = PANEL_IDS.filter(id => !shown(id));
+  const mutedChannels = mixer.channels.filter(ch => ch.isMuted);
+  const mixerSummary = `${mixer.channels.length} canales · ${mutedChannels.length === 0 ? 'sin mutes' : mutedChannels.length === 1 ? `${mutedChannels[0].name} en mute` : `${mutedChannels.length} en mute`}`;
+
   const canRestore = currentPattern.id !== CUSTOM_PATTERN_ID && !!overrides[currentPattern.id];
 
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
+      <LayoutContext.Provider value={layout}>
       <PlaybackContext.Provider value={engine.store}>
         <Box component="main" className="app-shell" sx={{ minHeight: '100dvh', width: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#070605', overflowX: 'hidden', alignItems: 'center', boxSizing: 'border-box' }}>
 
@@ -198,91 +207,114 @@ function App() {
 
             <BluetoothNotice isPlaying={isPlaying} />
 
-            {/* Rows of an aligned 12-column grid; every cell stretches to the row height. */}
+            {hiddenPanels.length > 0 && (
+              <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center', gap: 1 }} data-testid="hidden-panels">
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>Paneles ocultos:</Typography>
+                {hiddenPanels.map(id => (
+                  <Button key={id} size="small" variant="outlined" onClick={() => layout.setPanelState(id, 'open')} sx={{ textTransform: 'none' }}>
+                    Mostrar {PANEL_LABELS[id].toLowerCase()}
+                  </Button>
+                ))}
+              </Stack>
+            )}
+
+            {/* Rows of an aligned 12-column grid; cells stretch to the row height. Hidden panels leave no gap. */}
             <Grid container spacing={{ xs: 1.5, md: 2 }} sx={{ width: '100%' }}>
 
               {/* Row 1: pulse (primary) + instruments */}
-              <Grid size={{ xs: 12, md: 5, lg: 4 }} className="area-pulse">
-                <Panel title="Pulso">
-                  <ConductorVisual
-                    pattern={currentPattern}
-                    isPlaying={isPlaying}
-                    trainerActive={trainer.active}
-                    totalBarsInterval={trainer.barsPerStep}
-                    bpm={bpm}
-                  />
-                </Panel>
-              </Grid>
-              <Grid size={{ xs: 12, md: 7, lg: 8 }}>
-                <Fill>
-                  <InteractiveInstrumentVisual
-                    pattern={currentPattern}
-                    isPlaying={isPlaying}
-                    onPreviewInstrument={(instrument, modifier) => void engine.previewInstrument(instrument, modifier)}
-                    sx={instrumentsCardSx}
-                  />
-                </Fill>
-              </Grid>
+              {shown('pulse') && (
+                <Grid size={{ xs: 12, md: shown('instruments') ? 5 : 12, lg: shown('instruments') ? 4 : 12 }} className="area-pulse">
+                  <Panel id="pulse" title="Pulso" summary={`${bpm} BPM · ${currentPattern.name}`}>
+                    <ConductorVisual
+                      pattern={currentPattern}
+                      isPlaying={isPlaying}
+                      trainerActive={trainer.active}
+                      totalBarsInterval={trainer.barsPerStep}
+                      bpm={bpm}
+                    />
+                  </Panel>
+                </Grid>
+              )}
+              {shown('instruments') && (
+                <Grid size={{ xs: 12, md: shown('pulse') ? 7 : 12, lg: shown('pulse') ? 8 : 12 }}>
+                  <Panel id="instruments" title="Instrumentos" summary={currentPattern.name} sx={{ justifyContent: 'center' }}>
+                    <InteractiveInstrumentVisual
+                      pattern={currentPattern}
+                      isPlaying={isPlaying}
+                      onPreviewInstrument={(instrument, modifier) => void engine.previewInstrument(instrument, modifier)}
+                    />
+                  </Panel>
+                </Grid>
+              )}
 
               {/* Row 2: step sequencer, full width */}
-              <Grid size={12}>
-                <Panel title="Secuenciador" sx={{ '& > section': { mt: 0 } }}>
-                  <PatternEditor
-                    pattern={currentPattern}
-                    onPatternUpdate={handlePatternUpdate}
-                    isPlaying={isPlaying}
-                    onPreviewInstrument={(instrument, modifier) => void engine.previewInstrument(instrument, modifier)}
-                    canRestore={canRestore}
-                    onRestore={handleRestorePattern}
-                  />
-                </Panel>
-              </Grid>
+              {shown('sequencer') && (
+                <Grid size={12}>
+                  <Panel id="sequencer" title="Secuenciador" summary={currentPattern.name} sx={{ '& section': { mt: 0 } }}>
+                    <PatternEditor
+                      pattern={currentPattern}
+                      onPatternUpdate={handlePatternUpdate}
+                      isPlaying={isPlaying}
+                      onPreviewInstrument={(instrument, modifier) => void engine.previewInstrument(instrument, modifier)}
+                      canRestore={canRestore}
+                      onRestore={handleRestorePattern}
+                    />
+                  </Panel>
+                </Grid>
+              )}
 
-              {/* Row 3: mixer + practice modes */}
-              <Grid size={{ xs: 12, lg: 8 }}>
-                <Fill>
-                  <MixerConsole
-                    pattern={currentPattern}
-                    isPlaying={isPlaying}
-                    onVolumeChange={engine.setChannelVolume}
-                    onPanChange={engine.setChannelPan}
-                    onMuteChange={engine.setChannelMute}
-                    getChannelLevel={engine.getChannelLevel}
-                  />
-                </Fill>
-              </Grid>
-              <Grid size={{ xs: 12, lg: 4 }} sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 2 } }}>
-                <PracticeModes
-                  trainer={trainer}
-                  onTrainerChange={setTrainer}
-                  silence={silence}
-                  onSilenceChange={setSilence}
-                  formas={formas}
-                  onFormasChange={setFormas}
-                  isPlaying={isPlaying}
-                />
-                <Fill>
-                  <HarmonyBuilder
-                    onUpdateProgression={engine.setHarmonyProgression}
-                    onVolumeChange={engine.setHarmonyVolume}
-                    onStyleChange={engine.setAccompanimentStyle}
-                    isPlaying={isPlaying}
-                    sx={cardChildSx}
-                  />
-                </Fill>
-              </Grid>
+              {/* Row 3: mixer + practice modes and harmony */}
+              {shown('mixer') && (
+                <Grid size={{ xs: 12, lg: shown('practice') || shown('harmony') ? 8 : 12 }}>
+                  <Panel id="mixer" title="Mezclador" summary={mixerSummary}>
+                    <MixerConsole
+                      channels={mixer.channels}
+                      onVolume={mixer.setVolume}
+                      onPan={mixer.setPan}
+                      onToggleMute={mixer.toggleMute}
+                      pattern={currentPattern}
+                      isPlaying={isPlaying}
+                      getChannelLevel={engine.getChannelLevel}
+                    />
+                  </Panel>
+                </Grid>
+              )}
+              {(shown('practice') || shown('harmony')) && (
+                <Grid size={{ xs: 12, lg: shown('mixer') ? 4 : 12 }} sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 2 } }}>
+                  {shown('practice') && (
+                    <PracticeModes
+                      trainer={trainer}
+                      onTrainerChange={setTrainer}
+                      silence={silence}
+                      onSilenceChange={setSilence}
+                      formas={formas}
+                      onFormasChange={setFormas}
+                      isPlaying={isPlaying}
+                    />
+                  )}
+                  {shown('harmony') && (
+                    <Panel id="harmony" title="Armonía" summary={harmonySummary} sx={{ flex: 1, height: 'auto' }}>
+                      <HarmonyBuilder isPlaying={isPlaying} />
+                    </Panel>
+                  )}
+                </Grid>
+              )}
 
               {/* Row 4: study tools, full width (laid out horizontally inside) */}
-              <Grid size={12}>
-                <Fill>
+              {shown('study') && (
+                <Grid size={12}>
                   <StudyTools onStopRequest={engine.stop} />
-                </Fill>
-              </Grid>
+                </Grid>
+              )}
 
               {/* Row 5: piano (harmony, playable keyboard, melody looper) */}
-              <Grid size={12}>
-                <PianoPanel engine={engine} isPlaying={isPlaying} />
-              </Grid>
+              {shown('piano') && (
+                <Grid size={12}>
+                  <Panel id="piano" title="Piano" summary="Teclado y melodías">
+                    <PianoPanel engine={engine} isPlaying={isPlaying} />
+                  </Panel>
+                </Grid>
+              )}
 
             </Grid>
           </Box>
@@ -299,6 +331,7 @@ function App() {
           onSelectPattern={loadPreset}
         />
       </PlaybackContext.Provider>
+      </LayoutContext.Provider>
     </ThemeProvider>
   );
 }

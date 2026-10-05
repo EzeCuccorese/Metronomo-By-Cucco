@@ -1,15 +1,34 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import { MixerConsole } from '../MixerConsole';
+import { useMixer } from '../../hooks/useMixer';
+import type { MixerEngine } from '../../hooks/useMixer';
+import type { RhythmPattern } from '../../rhythms/RhythmPatterns';
 import { PRESET_PATTERNS } from '../../rhythms/RhythmPatterns';
 import { DEFAULT_CUSTOM_PATTERN, METRONOME_PATTERN_ID } from '../../rhythms/patternLibrary';
 
 const metronome = PRESET_PATTERNS.find(p => p.id === METRONOME_PATTERN_ID)!;
 const rock = PRESET_PATTERNS.find(p => p.id === 'rock_basic')!;
 
+/** What App does: the mix lives in `useMixer`, the card only draws it. */
+const MixerHarness = ({ pattern, isPlaying = false, getChannelLevel, ...engine }: { pattern: RhythmPattern; isPlaying?: boolean; getChannelLevel?: (id: string) => number } & MixerEngine) => {
+    const mixer = useMixer(pattern, engine);
+    return (
+        <MixerConsole
+            channels={mixer.channels}
+            onVolume={mixer.setVolume}
+            onPan={mixer.setPan}
+            onToggleMute={mixer.toggleMute}
+            pattern={pattern}
+            isPlaying={isPlaying}
+            getChannelLevel={getChannelLevel}
+        />
+    );
+};
+
 const renderMixer = (pattern = metronome) => {
     const handlers = { onVolumeChange: vi.fn(), onPanChange: vi.fn(), onMuteChange: vi.fn() };
-    const utils = render(<MixerConsole pattern={pattern} isPlaying={false} {...handlers} />);
+    const utils = render(<MixerHarness pattern={pattern} {...handlers} />);
     return { ...utils, ...handlers };
 };
 
@@ -33,7 +52,7 @@ describe('MixerConsole', () => {
 
     it('mutes the click when a rhythm preset is selected', () => {
         const { rerender, onMuteChange } = renderMixer(metronome);
-        rerender(<MixerConsole pattern={rock} isPlaying={false} onVolumeChange={vi.fn()} onPanChange={vi.fn()} onMuteChange={onMuteChange} />);
+        rerender(<MixerHarness pattern={rock} onVolumeChange={vi.fn()} onPanChange={vi.fn()} onMuteChange={onMuteChange} />);
         expect(screen.getByTestId('mute-click')).toHaveAttribute('aria-pressed', 'true');
         expect(onMuteChange).toHaveBeenLastCalledWith('click', true);
     });
@@ -113,7 +132,7 @@ describe('MixerConsole', () => {
             vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb));
             vi.stubGlobal('cancelAnimationFrame', () => {});
             const getChannelLevel = vi.fn((id: string) => levels[id] ?? 0);
-            render(<MixerConsole pattern={rock} isPlaying onVolumeChange={vi.fn()} onPanChange={vi.fn()} onMuteChange={vi.fn()} getChannelLevel={getChannelLevel} />);
+            render(<MixerHarness pattern={rock} isPlaying onVolumeChange={vi.fn()} onPanChange={vi.fn()} onMuteChange={vi.fn()} getChannelLevel={getChannelLevel} />);
             act(() => { frames.shift()?.(0); });
         };
 
@@ -136,7 +155,7 @@ describe('MixerConsole', () => {
             const frames: FrameRequestCallback[] = [];
             vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb));
             vi.stubGlobal('cancelAnimationFrame', () => {});
-            render(<MixerConsole pattern={rock} isPlaying={false} onVolumeChange={vi.fn()} onPanChange={vi.fn()} onMuteChange={vi.fn()} getChannelLevel={() => 0} />);
+            render(<MixerHarness pattern={rock} isPlaying={false} onVolumeChange={vi.fn()} onPanChange={vi.fn()} onMuteChange={vi.fn()} getChannelLevel={() => 0} />);
             act(() => { frames.shift()?.(0); });
             expect(frames).toHaveLength(0); // nothing queued right away
             act(() => { vi.advanceTimersByTime(200); });
