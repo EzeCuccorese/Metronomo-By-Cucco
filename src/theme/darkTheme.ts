@@ -1,6 +1,10 @@
 import { createTheme } from '@mui/material/styles';
+import { BREAKPOINT_VALUES, COARSE_POINTER_QUERY, TOUCH_TARGET } from './breakpoints';
+
+const coarse = `@media ${COARSE_POINTER_QUERY}`;
 
 export const darkTheme = createTheme({
+  breakpoints: { values: { ...BREAKPOINT_VALUES } },
   palette: {
     mode: 'dark',
     primary: {
@@ -10,8 +14,10 @@ export const darkTheme = createTheme({
     secondary: {
       main: '#ff6d00',
     },
+    // White text on this red reaches 4.98:1 (MUI's default red is 3.7:1).
+    error: { main: '#d32f2f' },
     background: {
-      default: '#0c0b0a',
+      default: '#070605',
       paper: '#161412',
     },
     text: {
@@ -45,18 +51,28 @@ export const darkTheme = createTheme({
         },
       },
     },
-    // Comfortable touch targets on coarse pointers (phones/tablets).
+    // Touch targets of at least 44 px on coarse pointers (phones/tablets).
     MuiToggleButton: {
-      styleOverrides: { root: { '@media (pointer: coarse)': { minHeight: 40, minWidth: 40 } } },
+      styleOverrides: { root: { [coarse]: { minHeight: TOUCH_TARGET, minWidth: TOUCH_TARGET } } },
     },
     MuiIconButton: {
-      styleOverrides: { root: { '@media (pointer: coarse)': { minHeight: 40, minWidth: 40 } } },
+      styleOverrides: { root: { [coarse]: { minHeight: TOUCH_TARGET, minWidth: TOUCH_TARGET } } },
     },
     MuiButton: {
-      styleOverrides: { root: { '@media (pointer: coarse)': { minHeight: 40 } } },
+      styleOverrides: { root: { [coarse]: { minHeight: TOUCH_TARGET } } },
     },
     MuiOutlinedInput: {
-      styleOverrides: { root: { '@media (pointer: coarse)': { minHeight: 44 } } },
+      styleOverrides: { root: { [coarse]: { minHeight: TOUCH_TARGET } } },
+    },
+    MuiChip: {
+      styleOverrides: { root: { [coarse]: { height: TOUCH_TARGET, minWidth: TOUCH_TARGET } } },
+    },
+    MuiCheckbox: {
+      styleOverrides: { root: { [coarse]: { minHeight: TOUCH_TARGET, minWidth: TOUCH_TARGET } } },
+    },
+    // The visible track is thin; the hit area (root padding) is what must reach 44 px.
+    MuiSlider: {
+      styleOverrides: { root: { [coarse]: { paddingBlock: 20, '&.MuiSlider-vertical': { paddingBlock: 0, paddingInline: 20 } } } },
     },
   },
 });

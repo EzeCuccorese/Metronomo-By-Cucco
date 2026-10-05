@@ -11,6 +11,10 @@ describe('instrumentAssets', () => {
         expect(getInstrumentImage('non_existent_instrument')).toBe('/instruments/click.webp');
     });
 
+    it('does not map the caja coplera to the conga photo (it is drawn as a vector)', () => {
+        expect(INSTRUMENT_IMAGES.caja).toBeUndefined();
+    });
+
     it('should contain mapped images in INSTRUMENT_IMAGES object', () => {
         expect(INSTRUMENT_IMAGES.snare).toBe('/instruments/snare.webp');
     });

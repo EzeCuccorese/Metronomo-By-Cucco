@@ -4,15 +4,18 @@
 FROM node:26.10.0-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS builder
 WORKDIR /app
 
+# Node 26 no trae corepack: pnpm va en su propia capa (no se invalida con cada cambio de dependencias)
+RUN npm i -g pnpm@11
+
 # Copy package descriptors first to cache dependency layers
-COPY package*.json ./
-RUN npm ci
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 
 # Copy all source files and configuration
 COPY . .
 
 # Build the production static bundle
-RUN npm run build
+RUN pnpm build
 
 # Stage 2: Serve the application using Nginx
 FROM nginx:1.31.0-alpine@sha256:2f07d83bf561b506400dc183b1b2003803e39efbd22451f848adaba14d28c7c7

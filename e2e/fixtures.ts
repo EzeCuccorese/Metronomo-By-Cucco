@@ -50,7 +50,7 @@ function installAudioProbe() {
             probe.starts.push({ when: when ?? 0, at: this.context.currentTime, kind: this.constructor.name });
         }
         return (originalStart as (...a: unknown[]) => void).call(this, when, ...rest);
-    } as typeof AudioScheduledSourceNode.prototype.start;
+    };
 
     // AudioBufferSourceNode overrides start(), so the hook above never sees sampled voices.
     const originalBufferStart = AudioBufferSourceNode.prototype.start;
@@ -59,7 +59,7 @@ function installAudioProbe() {
             probe.starts.push({ when: when ?? 0, at: this.context.currentTime, kind: this.constructor.name });
         }
         return (originalBufferStart as (...a: unknown[]) => void).call(this, when, ...rest);
-    } as typeof AudioBufferSourceNode.prototype.start;
+    };
 }
 
 export class AudioProbe {
@@ -133,14 +133,24 @@ export const test = base.extend<{ probe: AudioProbe; consoleErrors: string[] }>(
 export { expect };
 
 /** Opens the app with a clean slate (no persisted settings) unless told otherwise. */
-export async function openApp(page: Page, { keepStorage = false } = {}) {
+/** Panels as they were before the "Vista" presets existed (every panel shown): what existing users get. */
+const LAYOUT_TODO = JSON.stringify({ preset: 'todo', panels: { pulse: 'open', instruments: 'open', sequencer: 'open', mixer: 'open', practice: 'collapsed', harmony: 'open', study: 'open', piano: 'open' } });
+
+/**
+ * Opens the app with clean storage. The specs written before the view presets exist expect every panel,
+ * so by default the layout is seeded with "Todo"; pass `newUser: true` for the real first-run layout and `tips: true` to see the first-use tips.
+ */
+export async function openApp(page: Page, { keepStorage = false, newUser = false, tips = false } = {}) {
     if (!keepStorage) {
-        await page.addInitScript(() => {
+        await page.addInitScript(([todo, fresh, showTips]) => {
             if (!sessionStorage.getItem('__e2e_cleared')) {
                 localStorage.clear();
+                if (!fresh) localStorage.setItem('metronomo:v1:ui.layout.v1', todo);
+                // The first-use tips float over the page: off unless a test is about them.
+                if (!showTips) localStorage.setItem('metronomo:v1:tips.seen', '["play","piano","layout"]');
                 sessionStorage.setItem('__e2e_cleared', '1');
             }
-        });
+        }, [LAYOUT_TODO, newUser, tips] as const);
     }
     await page.goto('/');
     await expect(page.getByTestId('play-toggle')).toBeVisible();

@@ -11,6 +11,27 @@ test.describe('controls', () => {
         expect(consoleErrors).toEqual([]);
     });
 
+    test('? opens the shortcut cheat sheet', async ({ page }) => {
+        await openApp(page);
+        await page.keyboard.press('Shift+Slash');
+        const dialog = page.getByRole('dialog', { name: 'Atajos de teclado' });
+        await expect(dialog).toBeVisible();
+        await expect(dialog).toContainText('Tap tempo');
+        await page.keyboard.press('Escape');
+        await expect(dialog).toBeHidden();
+    });
+
+    test('Ctrl+K opens the command palette and a typed number sets the tempo', async ({ page }) => {
+        await openApp(page);
+        await page.keyboard.press('Control+k');
+        const input = page.getByPlaceholder(/Buscá un comando/);
+        await expect(input).toBeFocused();
+        await input.fill('95');
+        await page.keyboard.press('Enter');
+        await expect(page.getByTestId('bpm-input')).toHaveValue('95');
+        await expect(input).toBeHidden();
+    });
+
     test('tap tempo measures the tapped tempo', async ({ page }) => {
         await openApp(page);
         // Taps are fired from inside the page so test-runner latency doesn't skew the intervals.
@@ -64,6 +85,7 @@ test.describe('controls', () => {
         await openApp(page);
         await selectPreset(page, 'Zamba');
         await setBpm(page, 97);
+        await page.getByRole('switch', { name: 'Mostrar todos' }).click();
         await page.getByTestId('mute-shaker').click();
         await page.getByTestId('cell-palmas-2').dispatchEvent('pointerdown', { button: 0 });
 

@@ -1,0 +1,16 @@
+# pnpm 11 bloquea los scripts de instalación (postinstall, etc.) de las dependencias
+# salvo que estén listadas acá. Hoy ninguna dependencia del árbol los necesita
+# (el lockfile no tiene ningún paquete con `requiresBuild`): Vite 8 usa Rolldown/Oxc
+# con binarios prebuilt por plataforma y los navegadores de Playwright se bajan con
+# `playwright install`, no con un postinstall. Si una dependencia futura lo pide,
+# agregarla de forma explícita (`pnpm approve-builds`) y documentar por qué.
+# `minimumReleaseAge` queda en el valor por defecto de pnpm 11 (1440 min = 24 h).
+#
+# wrangler (despliegue en Cloudflare) trae `esbuild` y `workerd`, que declaran un postinstall.
+# Se dejan explícitamente en `false`: ambos solo copian el binario de su paquete por plataforma a
+# una ruta más corta (optimización de arranque) y wrangler funciona sin eso (`wrangler dev` y
+# `wrangler deploy` verificados con los scripts bloqueados). Declararlos en false evita que
+# `pnpm install` falle con ERR_PNPM_IGNORED_BUILDS.
+allowBuilds:
+  esbuild: false
+  workerd: false

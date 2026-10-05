@@ -50,15 +50,15 @@ const INSTRUMENTS_DISPLAY: { type: InstrumentType; label: string; group: string 
     { type: 'rim', label: 'Aro', group: 'latino' },
     { type: 'clave', label: 'Clave', group: 'latino' },
     { type: 'shaker', label: 'Shaker', group: 'latino' },
-    { type: 'kick', label: 'Kick', group: 'drums' },
-    { type: 'snare', label: 'Snare', group: 'drums' },
-    { type: 'hihat', label: 'Hi-Hat', group: 'drums' },
-    { type: 'hihat_foot', label: 'HH Foot', group: 'drums' },
+    { type: 'kick', label: 'Bombo bat.', group: 'drums' },
+    { type: 'snare', label: 'Redoblante', group: 'drums' },
+    { type: 'hihat', label: 'Hi-hat', group: 'drums' },
+    { type: 'hihat_foot', label: 'Hi-hat pie', group: 'drums' },
     { type: 'ride', label: 'Ride', group: 'drums' },
     { type: 'crash', label: 'Crash', group: 'drums' },
     { type: 'tom_high', label: 'Tom 1', group: 'drums' },
     { type: 'tom_low', label: 'Tom 2', group: 'drums' },
-    { type: 'tom_floor', label: 'Floor', group: 'drums' },
+    { type: 'tom_floor', label: 'Tom piso', group: 'drums' },
     { type: 'click', label: 'Click', group: 'metronome' },
 ];
 
@@ -331,6 +331,11 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
                         gridTemplateColumns: `120px repeat(${sub}, minmax(22px, 1fr))`,
                         gap: '1px',
                         minWidth: 120 + sub * 24,
+                        // Touch: 44 px cells; the grid scrolls inside its own container.
+                        '@media (pointer: coarse)': {
+                            gridTemplateColumns: `120px repeat(${sub}, minmax(44px, 1fr))`,
+                            minWidth: 120 + sub * 45,
+                        },
                         '& .is-current': { boxShadow: 'inset 0 0 0 1px #f48fb1' }
                     }}
                 >
@@ -432,6 +437,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
                                                 all: 'unset',
                                                 boxSizing: 'border-box',
                                                 height: 40,
+                                                '@media (pointer: coarse)': { height: 44 },
                                                 bgcolor: isGroupStart ? 'rgba(255,255,255,0.03)' : isPulseStart ? 'rgba(255,255,255,0.015)' : 'transparent',
                                                 borderRight: isGroupStart ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,255,255,0.03)',
                                                 borderBottom: '1px solid rgba(255,255,255,0.03)',

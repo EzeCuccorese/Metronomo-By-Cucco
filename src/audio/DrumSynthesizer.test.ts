@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* oxlint-disable typescript/no-explicit-any */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const mockAudioParam = () => ({
@@ -42,6 +42,12 @@ const mockAudioContext = {
         createdOscillators.push(osc);
         return osc;
     }),
+    createAnalyser: vi.fn(() => ({
+        fftSize: 2048,
+        getFloatTimeDomainData: vi.fn(),
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+    })),
     createWaveShaper: vi.fn(() => ({
         curve: null,
         oversample: 'none',
@@ -92,6 +98,7 @@ class MockAudioContext {
     createOscillator() { return mockAudioContext.createOscillator(); }
     createWaveShaper() { return mockAudioContext.createWaveShaper(); }
     createStereoPanner() { return mockAudioContext.createStereoPanner(); }
+    createAnalyser() { return mockAudioContext.createAnalyser(); }
     createBufferSource(...args: unknown[]) { return mockAudioContext.createBufferSource(...args); }
     createBuffer(c: any, l: any, s: any) { return mockAudioContext.createBuffer(c, l, s); }
     decodeAudioData(d: any) { return mockAudioContext.decodeAudioData(d); }
@@ -137,7 +144,7 @@ vi.mock('./AudioContextManager', () => {
 import DrumSynthesizer from './DrumSynthesizer';
 import { addTrimmedSamples } from './sampleLibrary';
 import { PRESET_PATTERNS } from '../rhythms/RhythmPatterns';
-import { INSTRUMENT_CHANNEL } from './instrumentChannels';
+import { CHANNEL_IDS, INSTRUMENT_CHANNEL } from './instrumentChannels';
 
 describe('DrumSynthesizer', () => {
     let synth: DrumSynthesizer;
@@ -347,6 +354,17 @@ describe('DrumSynthesizer', () => {
         voices.forEach(n => expect(n.stop).toHaveBeenCalled());
         expect(synth.activeVoiceCount).toBe(0);
         expect((synth as any).drumTransport.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, expect.any(Number));
+    });
+
+    it('reads each channel meter from its own analyser (piano and synth are independent)', () => {
+        const analysers = mockAudioContext.createAnalyser.mock.results.map(r => r.value as { getFloatTimeDomainData: ReturnType<typeof vi.fn> });
+        expect(analysers).toHaveLength(CHANNEL_IDS.length);
+        analysers.forEach(a => a.getFloatTimeDomainData.mockImplementation((buf: Float32Array) => buf.fill(0)));
+        analysers[CHANNEL_IDS.indexOf('piano')].getFloatTimeDomainData
+            .mockImplementation((buf: Float32Array) => buf.fill(0.2));
+        expect(synth.getChannelLevel('piano')).toBeCloseTo(0.6);
+        expect(synth.getChannelLevel('synth')).toBe(0);
+        expect(synth.getChannelLevel('nope')).toBe(0);
     });
 
     it('dispose() disconnects the mixer graph', () => {

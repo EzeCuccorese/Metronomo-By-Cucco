@@ -75,32 +75,58 @@ src/
 
 Solo se soportan los navegadores más recientes: Safari (iOS y macOS) y Chrome en su última versión. No hay transpilación ni polyfills para navegadores antiguos (`build.target: esnext`).
 
-Requiere Node 26 (CI y Docker usan Node 26; ver `.nvmrc`). El typecheck corre con TypeScript 7 y ESLint usa TypeScript 6 (ver notas en el PR: typescript-eslint aún no soporta la API de TS 7).
+Requiere Node 26 (CI y Docker usan Node 26; ver `.nvmrc`) y pnpm 11. Node 25+ ya no trae corepack, así que pnpm se instala con `npm i -g pnpm@11` (o mise/fnm). Todo el tooling usa una sola versión de TypeScript (7.x): el typecheck es `tsc -b` y el lint es Oxlint con reglas que usan tipos (`oxlint-tsgolint`).
 
 ## Desarrollo
 
+El gestor es **pnpm 11** (`packageManager` y `devEngines` en `package.json`). Por defecto pnpm 11 espera 24 h antes de instalar una versión recién publicada (`minimumReleaseAge`) y no corre los scripts de instalación de las dependencias: `pnpm-workspace.yaml` tiene `allowBuilds` vacío porque hoy ninguna los necesita. Si alguna dependencia futura lo requiere, se agrega ahí de forma explícita y con su motivo.
+
 ```bash
-npm install
-npm run dev            # servidor de desarrollo
-npm run build          # build de producción (typecheck + vite)
-npm run lint
-npm run typecheck
-npm test               # tests unitarios e integración (Vitest + Testing Library)
-npm run test:coverage  # con umbrales de cobertura
-npm run test:e2e       # Playwright contra el build de producción
-npm run check          # todo lo anterior
+pnpm install
+pnpm dev               # servidor de desarrollo
+pnpm build             # build de producción (typecheck + vite)
+pnpm lint              # Oxlint (type-aware)
+pnpm typecheck
+pnpm test              # Vitest: proyectos unit (jsdom) y browser (Chromium real)
+pnpm test:unit         # solo el proyecto unit
+pnpm test:browser      # solo el proyecto browser (audio real con OfflineAudioContext)
+pnpm test:coverage     # con umbrales de cobertura
+pnpm test:e2e          # Playwright contra el build de producción
+pnpm check             # todo lo anterior
 ```
 
 La app requiere un contexto seguro (`crypto.randomUUID`, Web Audio, service worker): funciona en HTTPS, en Capacitor (`capacitor://localhost`) y en `localhost`. Para probar en un teléfono por LAN, `http://192.168.x.x` no es un contexto seguro; usá la app dentro de Capacitor, un túnel HTTPS o el hosting HTTPS de la PWA.
 
 ### Tests
 
-- **Unitarios e integración (Vitest).** Cubren el Scheduler (timing, cambios de patrón, trainer, silencios y formas), los sintetizadores (ruteo, corte de voces), los hooks, la persistencia y la app completa con un motor simulado.
-- **End-to-end (Playwright).** Corren sobre el bundle de producción servido con los mismos headers de seguridad que nginx. Una sonda intercepta la salida del `AudioContext` y mide el audio que realmente se escucha. Así se verifica, por ejemplo, que el preset Metrónomo marca cada tiempo, que una edición de la grilla suena en el compás siguiente y que detener deja el audio en silencio. También se prueban el teclado, la persistencia, la PWA y la accesibilidad (axe).
+- **Unitarios e integración (Vitest, proyecto `unit`, jsdom).** Cubren el Scheduler (timing, cambios de patrón, trainer, silencios y formas), los sintetizadores (ruteo, corte de voces), los hooks, la persistencia y la app completa con un motor simulado. Web Audio está simulado con mocks.
+- **Audio real (Vitest Browser Mode, proyecto `browser`, Chromium vía `@vitest/browser-playwright`).** Los archivos `*.browser.test.ts` corren el motor de verdad (Scheduler, DrumSynthesizer, PolyphonicSynth, PianoSampler) sobre un `OfflineAudioContext`: renderizan audio y miden las muestras. Por ejemplo, que el click caiga cada 0,5 s a 120 BPM con diferencia de pocas muestras, que el acento sea más fuerte, que un canal silenciado no suene y que stop() corte el sonido. Los helpers están en `src/test/browser/audioHarness.ts`. Hace falta Chromium de Playwright (`pnpm exec playwright install chromium`). La cobertura v8 funciona en Chromium y se combina con la del proyecto `unit`: los umbrales se evalúan sobre el total, así que `pnpm test:browser` solo (sin los tests unit) no los alcanza; usar `pnpm test:coverage`.
+- **End-to-end (Playwright, proyectos `desktop-chromium` y `desktop-webkit`).** Corren sobre el bundle de producción servido con los mismos headers de seguridad que nginx. Una sonda intercepta la salida del `AudioContext` y mide el audio que realmente se escucha. Así se verifica, por ejemplo, que el preset Metrónomo marca cada tiempo, que una edición de la grilla suena en el compás siguiente y que detener deja el audio en silencio. También se prueban el teclado, la persistencia, la PWA y la accesibilidad (axe). El proyecto WebKit (el motor de Safari) corre solo los tests de UI y PWA (`controls` y `pwa-a11y`, sin los dos que avanzan por tiempo de audio: formas folklóricas y speed trainer): el WebKit de Playwright no es Safari de iOS y no permite medir el audio como Chromium, así que las pruebas de audio real son solo de Chromium y el audio en iPhone se verifica a mano. Para correrlo localmente: `pnpm exec playwright install webkit`.
 
 ## Créditos
 
 Piano: [Salamander Grand Piano](https://archive.org/details/SalamanderGrandPianoV3) de Alexander Holm, licencia [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/). Se usan 17 notas (Do2 a Do6, cada tercera menor), recortadas a 2,8 s y recodificadas. Detalle en [`public/audio/piano/LICENSE.txt`](public/audio/piano/LICENSE.txt).
+
+## Deploy en Cloudflare
+
+La app es 100% estática, así que se publica en **Cloudflare Workers Static Assets** (CDN global y HTTPS gratis). Docker y nginx (sección Despliegue) siguen disponibles para self-hosting.
+
+> **Estado actual: el deploy está apagado.** Por ahora la app se usa solo en local y no se publica nada automáticamente (ni Cloudflare ni imagen Docker). Esta sección documenta cómo activarlo a mano cuando se quiera.
+
+- `wrangler.jsonc` sirve `dist/` con `not_found_handling: single-page-application` (rutas desconocidas devuelven `index.html`).
+- `vite build` genera `dist/_headers` a partir de `deploy/security-headers.conf` (CSP y demás headers de seguridad) más la política de caché de `nginx.conf`: `sw.js`, `index.html`, `registerSW.js`, `workbox-*` y el manifest con `no-cache`; `/assets/*` (con hash) inmutable por un año; audio, imágenes y fuentes por una semana. `deploy/cloudflareHeaders.test.ts` verifica que ambos destinos coincidan. Se comprobó con `wrangler dev` que cada ruta responde con los headers esperados.
+- `.github/workflows/deploy.yml` es **solo manual** (`workflow_dispatch`): no se dispara solo después de CI ni en ningún otro evento. Si lo ejecutas a mano, necesita el secret `CLOUDFLARE_API_TOKEN` y la variable `CLOUDFLARE_ACCOUNT_ID`; si faltan, termina sin error y deja un aviso.
+
+Configuración única (una sola vez):
+
+1. Crear una cuenta gratuita en [dash.cloudflare.com](https://dash.cloudflare.com/sign-up).
+2. Copiar el **Account ID** (en el panel, Workers & Pages, columna derecha).
+3. Crear un **API token** (My Profile, API Tokens, Create Token) con la plantilla *Edit Cloudflare Workers* (o permisos `Workers Scripts: Edit` sobre tu cuenta).
+4. En GitHub, Settings, Secrets and variables, Actions: agregar el secret `CLOUDFLARE_API_TOKEN` y la variable (pestaña Variables) `CLOUDFLARE_ACCOUNT_ID`.
+5. Ejecutar a mano el workflow *Deploy (Cloudflare)* desde la pestaña Actions (o `pnpm build && pnpm exec wrangler deploy`): la app queda en `https://metronomo-by-cucco.<tu-subdominio>.workers.dev`.
+6. Opcional, dominio propio: en el panel, Workers & Pages, `metronomo-by-cucco`, Settings, Domains & Routes, Add, Custom domain (el dominio debe estar en tu cuenta de Cloudflare).
+
+Para probar localmente: `pnpm build && pnpm exec wrangler dev`. Para publicar a mano: `pnpm build && pnpm exec wrangler deploy` (requiere `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID` en el entorno, o `wrangler login`).
 
 ## Despliegue
 

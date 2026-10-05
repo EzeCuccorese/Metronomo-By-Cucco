@@ -1,30 +1,13 @@
 
 import AudioContextManager from './AudioContextManager';
 import { VoiceTracker } from './VoiceTracker';
+import { midiToFrequency, noteToMidi } from './piano/notes';
 import type { PianoStyle } from './piano/pianoAccompaniment';
 
-// Basic frequency map for Octave 4 (Middle C)
-const BASE_FREQUENCIES: Record<string, number> = {
-    'C': 261.63, 'C#': 277.18, 'Db': 277.18,
-    'D': 293.66, 'D#': 311.13, 'Eb': 311.13,
-    'E': 329.63,
-    'F': 349.23, 'F#': 369.99, 'Gb': 369.99,
-    'G': 392.00, 'G#': 415.30, 'Ab': 415.30,
-    'A': 440.00, 'A#': 466.16, 'Bb': 466.16,
-    'B': 493.88
-};
-
-// Helper to get freq for note + octave (e.g. "C4", "G3")
+// Frequency of a note name with octave (e.g. "C4", "G3"), any Tonal spelling (E#, Cb...).
 const getFrequency = (noteStr: string): number => {
-    const match = noteStr.match(/([A-G][#b]?)([0-8])/);
-    if (!match) return 440;
-    const note = match[1];
-    const octave = parseInt(match[2]);
-    const base = BASE_FREQUENCIES[note];
-    if (!base) return 440;
-
-    // Calculate offset from Octave 4
-    return base * Math.pow(2, octave - 4);
+    const midi = noteToMidi(noteStr.match(/[A-G](?:##|bb|#|b)?-?[0-8]/)?.[0] ?? '');
+    return midi !== null ? midiToFrequency(midi) : 440;
 };
 
 /** Synth styles are played here; piano styles are routed by the Scheduler to the PianoSampler. */

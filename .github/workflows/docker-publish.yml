@@ -1,11 +1,9 @@
 name: Publish Docker image
 
-# Publishes only after CI succeeded on main (workflow_run), or on demand.
+# Manual only for now: the app is run locally and nothing is deployed automatically.
+# To publish again after CI on main, restore the workflow_run trigger:
+#   workflow_run: { workflows: [CI], types: [completed], branches: [main] }
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
