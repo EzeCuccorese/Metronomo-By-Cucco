@@ -48,6 +48,7 @@ import { LayoutContext } from './state/LayoutContext';
 import { PANEL_IDS, PANEL_LABELS, PANEL_PRESET_ORDER, PRESET_LABELS } from './state/layout';
 import type { PanelId } from './state/layout';
 import { ViewMenu } from './components/ViewMenu';
+import { FirstUseTips } from './components/FirstUseTips';
 import { enterFullscreen } from './hooks/useFullscreen';
 import { StageMode } from './components/StageMode';
 import { CompactTransport } from './components/CompactTransport';
@@ -381,6 +382,7 @@ function App() {
           onTogglePlay={toggle}
           onNudgeBpm={nudgeBpm}
         />
+        <FirstUseTips />
         <PwaUpdater isPlaying={isPlaying} />
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={paletteCommands} onSetBpm={setBpmFromPalette} tempoLocked={tempoLocked} />
         <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
