@@ -1,0 +1,194 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1.2 -1.6 34.5 43.5" width="1380" height="1740" style="background:#fff">
+<style>
+.wall{fill:none;stroke:#111;stroke-width:0.09}
+.lot{fill:#fff;stroke:#111;stroke-width:0.16}
+.exist{fill:url(#hatchA);stroke:#111;stroke-width:0.09}
+.hatch{fill:url(#hatchB);stroke:#111;stroke-width:0.06}
+.chg{fill:#fde7c7;stroke:#c2410c;stroke-width:0.12}
+.open{fill:none;stroke:#999;stroke-width:0.04;stroke-dasharray:0.2 0.15}
+.dash{fill:none;stroke:#555;stroke-width:0.06;stroke-dasharray:0.3 0.2}
+.stripe{stroke:#444;stroke-width:0.05}
+.window{stroke:#0ea5e9;stroke-width:0.18}
+.dim{stroke:#2563eb;stroke-width:0.04}
+.dimt{font:0.42px sans-serif;fill:#2563eb}
+.lbl{font:0.5px sans-serif;fill:#111;font-weight:bold}
+.small{font:0.38px sans-serif;fill:#222}
+.lblS{font:0.4px sans-serif;fill:#111;font-weight:bold}
+.title{font:0.7px sans-serif;fill:#111;font-weight:bold}
+</style>
+<defs>
+<pattern id="hatchA" width="0.5" height="0.5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<line x1="0" y1="0" x2="0" y2="0.5" stroke="#666" stroke-width="0.05"/></pattern>
+<pattern id="hatchB" width="0.4" height="0.4" patternUnits="userSpaceOnUse">
+<line x1="0" y1="0" x2="0" y2="0.4" stroke="#888" stroke-width="0.05"/></pattern>
+</defs>
+<rect x="0" y="0" width="21.75" height="39.7" class="lot" />
+<text x="10.9" y="40.25" class="small" text-anchor="middle">Calle Valais</text>
+<text x="0.2" y="41.6" class="title" text-anchor="start">PLANTA GENERAL (PROPUESTA MODIFICADA - ESQUEMÁTICA)</text>
+<rect x="3.1" y="0" width="18.65" height="6.65" class="exist" />
+<text x="12.4" y="3.4" class="small" text-anchor="middle">CONSTRUCCIÓN EXISTENTE</text>
+<line x1="3.1" y1="-0.5" x2="21.75" y2="-0.5" class="dim"/>
+<line x1="3.1" y1="-0.62" x2="3.1" y2="-0.38" class="dim"/>
+<line x1="21.75" y1="-0.62" x2="21.75" y2="-0.38" class="dim"/>
+<text x="12.425" y="-0.6" class="dimt" text-anchor="middle">18.60</text>
+<line x1="2.6" y1="0" x2="2.6" y2="6.65" class="dim"/>
+<line x1="2.48" y1="0" x2="2.72" y2="0" class="dim"/>
+<line x1="2.48" y1="6.65" x2="2.72" y2="6.65" class="dim"/>
+<text x="2.75" y="3.325" class="dimt" text-anchor="start" transform="rotate(90 2.75 3.325)">6.67</text>
+<rect x="0" y="6.65" width="1.5" height="4.65" class="wall" />
+<text x="0.75" y="8.5" class="small" text-anchor="middle">SALA DE</text>
+<text x="0.75" y="8.9" class="small" text-anchor="middle">HERRAMIENTAS</text>
+<rect x="1.5" y="6.65" width="6.36" height="4.65" class="wall" />
+<text x="4.7" y="9.0" class="lbl" text-anchor="middle">QUINCHO</text>
+<line x1="1.5" y1="11.75" x2="7.86" y2="11.75" class="dim"/>
+<line x1="1.5" y1="11.63" x2="1.5" y2="11.87" class="dim"/>
+<line x1="7.86" y1="11.63" x2="7.86" y2="11.87" class="dim"/>
+<text x="4.68" y="11.65" class="dimt" text-anchor="middle">6.36</text>
+<rect x="0" y="11.3" width="9.1" height="3.2" class="dash" />
+<text x="4.5" y="13.2" class="lbl" text-anchor="middle">GALERÍA</text>
+<rect x="2.5" y="16.4" width="6.0" height="3.0" class="wall" />
+<text x="5.5" y="18.0" class="lbl" text-anchor="middle">PILETA</text>
+<line x1="9.5" y1="14.5" x2="9.5" y2="16.4" class="dim"/>
+<line x1="9.38" y1="14.5" x2="9.62" y2="14.5" class="dim"/>
+<line x1="9.38" y1="16.4" x2="9.62" y2="16.4" class="dim"/>
+<text x="9.65" y="15.45" class="dimt" text-anchor="start" transform="rotate(90 9.65 15.45)">2.00</text>
+<line x1="9.5" y1="16.4" x2="9.5" y2="19.4" class="dim"/>
+<line x1="9.38" y1="16.4" x2="9.62" y2="16.4" class="dim"/>
+<line x1="9.38" y1="19.4" x2="9.62" y2="19.4" class="dim"/>
+<text x="9.65" y="17.9" class="dimt" text-anchor="start" transform="rotate(90 9.65 17.9)">3.00</text>
+<rect x="1.0" y="29.8" width="7.0" height="2.7" class="hatch" />
+<text x="4.5" y="31.4" class="small" text-anchor="middle">PÉRGOLA</text>
+<line x1="1.0" y1="20.4" x2="2.5" y2="20.4" class="stripe"/>
+<line x1="1.0" y1="20.759999999999998" x2="2.5" y2="20.759999999999998" class="stripe"/>
+<line x1="1.0" y1="21.119999999999997" x2="2.5" y2="21.119999999999997" class="stripe"/>
+<line x1="1.0" y1="21.479999999999997" x2="2.5" y2="21.479999999999997" class="stripe"/>
+<line x1="1.0" y1="21.84" x2="2.5" y2="21.84" class="stripe"/>
+<line x1="1.0" y1="22.2" x2="2.5" y2="22.2" class="stripe"/>
+<line x1="1.0" y1="22.56" x2="2.5" y2="22.56" class="stripe"/>
+<line x1="1.0" y1="22.919999999999998" x2="2.5" y2="22.919999999999998" class="stripe"/>
+<line x1="1.0" y1="23.279999999999998" x2="2.5" y2="23.279999999999998" class="stripe"/>
+<line x1="1.0" y1="23.639999999999997" x2="2.5" y2="23.639999999999997" class="stripe"/>
+<line x1="1.0" y1="24.0" x2="2.5" y2="24.0" class="stripe"/>
+<line x1="8.1" y1="33.8" x2="8.1" y2="39.7" class="stripe"/>
+<line x1="8.25" y1="33.8" x2="8.25" y2="39.7" class="stripe"/>
+<line x1="8.4" y1="33.8" x2="8.4" y2="39.7" class="stripe"/>
+<line x1="8.549999999999999" y1="33.8" x2="8.549999999999999" y2="39.7" class="stripe"/>
+<line x1="8.7" y1="33.8" x2="8.7" y2="39.7" class="stripe"/>
+<line x1="8.85" y1="33.8" x2="8.85" y2="39.7" class="stripe"/>
+<line x1="9.0" y1="33.8" x2="9.0" y2="39.7" class="stripe"/>
+<line x1="9.15" y1="33.8" x2="9.15" y2="39.7" class="stripe"/>
+<line x1="9.299999999999999" y1="33.8" x2="9.299999999999999" y2="39.7" class="stripe"/>
+<line x1="9.45" y1="33.8" x2="9.45" y2="39.7" class="stripe"/>
+<rect x="1.87" y="24.3" width="3.6" height="4.4" class="chg" />
+<text x="3.67" y="25.8" class="lbl" text-anchor="middle">GALERÍA DE</text>
+<text x="3.67" y="26.3" class="lbl" text-anchor="middle">PARRILLA</text>
+<text x="3.67" y="27.3" class="small" text-anchor="middle">3.60 (antes 5.40)</text>
+<line x1="1.87" y1="23.9" x2="5.47" y2="23.9" class="dim"/>
+<line x1="1.87" y1="23.779999999999998" x2="1.87" y2="24.02" class="dim"/>
+<line x1="5.47" y1="23.779999999999998" x2="5.47" y2="24.02" class="dim"/>
+<text x="3.67" y="23.799999999999997" class="dimt" text-anchor="middle">3.60</text>
+<rect x="0" y="24.3" width="1.87" height="4.4" class="open" />
+<rect x="5.47" y="24.3" width="8.4" height="4.2" class="chg" />
+<line x1="8.67" y1="24.3" x2="8.67" y2="28.5" class="wall"/>
+<line x1="11.27" y1="24.3" x2="11.27" y2="28.5" class="wall"/>
+<text x="7.07" y="26.0" class="lbl" text-anchor="middle">LIVING</text>
+<text x="9.97" y="26.0" class="lbl" text-anchor="middle">COMEDOR</text>
+<text x="12.57" y="26.0" class="lbl" text-anchor="middle">COCINA</text>
+<line x1="5.47" y1="23.9" x2="13.87" y2="23.9" class="dim"/>
+<line x1="5.47" y1="23.779999999999998" x2="5.47" y2="24.02" class="dim"/>
+<line x1="13.87" y1="23.779999999999998" x2="13.87" y2="24.02" class="dim"/>
+<text x="9.67" y="23.799999999999997" class="dimt" text-anchor="middle">8.40</text>
+<line x1="14.2" y1="24.3" x2="14.2" y2="28.5" class="dim"/>
+<line x1="14.08" y1="24.3" x2="14.319999999999999" y2="24.3" class="dim"/>
+<line x1="14.08" y1="28.5" x2="14.319999999999999" y2="28.5" class="dim"/>
+<text x="14.35" y="26.4" class="dimt" text-anchor="start" transform="rotate(90 14.35 26.4)">4.20</text>
+<rect x="13.87" y="24.3" width="1.35" height="3.2" class="wall" />
+<text x="14.54" y="25.9" class="small" text-anchor="middle">TOIL.</text>
+<rect x="15.22" y="24.3" width="2.1" height="3.2" class="wall" />
+<text x="16.27" y="25.9" class="small" text-anchor="middle">LAVAD.</text>
+<line x1="13.87" y1="23.9" x2="15.22" y2="23.9" class="dim"/>
+<line x1="13.87" y1="23.779999999999998" x2="13.87" y2="24.02" class="dim"/>
+<line x1="15.22" y1="23.779999999999998" x2="15.22" y2="24.02" class="dim"/>
+<text x="14.545" y="23.799999999999997" class="dimt" text-anchor="middle">1.35</text>
+<line x1="15.22" y1="23.9" x2="17.32" y2="23.9" class="dim"/>
+<line x1="15.22" y1="23.779999999999998" x2="15.22" y2="24.02" class="dim"/>
+<line x1="17.32" y1="23.779999999999998" x2="17.32" y2="24.02" class="dim"/>
+<text x="16.27" y="23.799999999999997" class="dimt" text-anchor="middle">2.10</text>
+<rect x="14.7" y="7.2" width="5.3" height="14.3" class="wall" />
+<line x1="18.9" y1="7.2" x2="18.9" y2="21.5" class="wall"/>
+<line x1="14.7" y1="12.6" x2="18.9" y2="12.6" class="wall"/>
+<line x1="14.7" y1="13.9" x2="18.9" y2="13.9" class="wall"/>
+<line x1="14.7" y1="16.8" x2="18.9" y2="16.8" class="wall"/>
+<line x1="14.7" y1="18.7" x2="18.9" y2="18.7" class="wall"/>
+<text x="16.8" y="9.9" class="small" text-anchor="middle">HABITACIÓN</text>
+<text x="16.8" y="10.3" class="small" text-anchor="middle">PRINCIPAL</text>
+<text x="16.8" y="13.3" class="small" text-anchor="middle">BAÑO</text>
+<text x="16.8" y="15.3" class="small" text-anchor="middle">HAB. CHICOS 2</text>
+<text x="16.8" y="17.8" class="small" text-anchor="middle">BAÑO</text>
+<text x="16.8" y="20.1" class="small" text-anchor="middle">HAB. CHICOS 1</text>
+<text x="19.45" y="14.5" class="small" text-anchor="middle" transform="rotate(90 19.45 14.5)">PASILLO</text>
+<line x1="14.7" y1="6.85" x2="20.0" y2="6.85" class="dim"/>
+<line x1="14.7" y1="6.7299999999999995" x2="14.7" y2="6.97" class="dim"/>
+<line x1="20.0" y1="6.7299999999999995" x2="20.0" y2="6.97" class="dim"/>
+<text x="17.35" y="6.75" class="dimt" text-anchor="middle">5.30</text>
+<rect x="10.4" y="28.7" width="4.2" height="3.6" class="chg" />
+<text x="12.5" y="29.45" class="lblS" text-anchor="middle">OFICINA /</text>
+<text x="12.5" y="29.9" class="lblS" text-anchor="middle">SALA MÚSICA</text>
+<text x="12.5" y="30.8" class="small" text-anchor="middle">4.20 x 3.60</text>
+<line x1="10.4" y1="32.75" x2="14.6" y2="32.75" class="dim"/>
+<line x1="10.4" y1="32.63" x2="10.4" y2="32.87" class="dim"/>
+<line x1="14.6" y1="32.63" x2="14.6" y2="32.87" class="dim"/>
+<text x="12.5" y="32.65" class="dimt" text-anchor="middle">4.20</text>
+<line x1="9.8" y1="28.7" x2="9.8" y2="32.3" class="dim"/>
+<line x1="9.680000000000001" y1="28.7" x2="9.92" y2="28.7" class="dim"/>
+<line x1="9.680000000000001" y1="32.3" x2="9.92" y2="32.3" class="dim"/>
+<text x="9.950000000000001" y="30.5" class="dimt" text-anchor="start" transform="rotate(90 9.950000000000001 30.5)">3.60</text>
+<line x1="10.4" y1="30.9" x2="10.4" y2="31.9" class="window"/>
+<text x="9.85" y="31.5" class="small" text-anchor="end">V nueva</text>
+<rect x="14.6" y="28.7" width="5.4" height="5.4" class="chg" />
+<line x1="17.3" y1="28.7" x2="17.3" y2="34.1" class="dash"/>
+<text x="15.95" y="31.5" class="lbl" text-anchor="middle">COCHERA</text>
+<text x="15.95" y="32.1" class="small" text-anchor="middle">5.40 x 5.40</text>
+<text x="18.65" y="31.5" class="small" text-anchor="middle">SOLO TECHO</text>
+<text x="18.65" y="32.1" class="small" text-anchor="middle">(etapa 1)</text>
+<line x1="14.6" y1="34.5" x2="20.0" y2="34.5" class="dim"/>
+<line x1="14.6" y1="34.38" x2="14.6" y2="34.62" class="dim"/>
+<line x1="20.0" y1="34.38" x2="20.0" y2="34.62" class="dim"/>
+<text x="17.3" y="34.4" class="dimt" text-anchor="middle">5.40</text>
+<line x1="20.4" y1="28.7" x2="20.4" y2="34.1" class="dim"/>
+<line x1="20.279999999999998" y1="28.7" x2="20.52" y2="28.7" class="dim"/>
+<line x1="20.279999999999998" y1="34.1" x2="20.52" y2="34.1" class="dim"/>
+<text x="20.549999999999997" y="31.4" class="dimt" text-anchor="start" transform="rotate(90 20.549999999999997 31.4)">5.40</text>
+<rect x="10.4" y="32.3" width="4.2" height="1.8" class="dash" />
+<text x="12.5" y="33.4" class="small" text-anchor="middle">ACCESO</text>
+<g transform="translate(1.5,36.5)"><circle r="0.5" class="wall" fill="none"/><line x1="0" y1="0.5" x2="0" y2="-0.5" class="wall"/><text x="0" y="-0.65" class="lbl" text-anchor="middle">N</text></g>
+<text x="23.0" y="1.0" class="lbl" text-anchor="start">REFERENCIAS</text>
+<rect x="23.0" y="1.4" width="0.9" height="0.6" class="chg" />
+<text x="24.1" y="1.8" class="small" text-anchor="start">Ambiente modificado</text>
+<rect x="23.0" y="2.4" width="0.9" height="0.6" class="wall" />
+<text x="24.1" y="2.8" class="small" text-anchor="start">Muro / existente sin cambios</text>
+<rect x="23.0" y="3.4" width="0.9" height="0.6" class="dash" />
+<text x="24.1" y="3.8" class="small" text-anchor="start">Límite / solo techo</text>
+<rect x="23.0" y="4.3999999999999995" width="0.9" height="0.6" class="hatch" />
+<text x="24.1" y="4.8" class="small" text-anchor="start">Pérgola / hachurado</text>
+<text x="23.0" y="6.4" class="lbl" text-anchor="start">MEDIDAS NUEVAS</text>
+<text x="23.0" y="7.3" class="small" text-anchor="start">Living-comedor-cocina: 9.60 x 4.20 -> 8.40 x 4.20</text>
+<text x="23.0" y="8.0" class="small" text-anchor="start">   (-1.20 m de largo; se corre toilette y lavadero)</text>
+<text x="23.0" y="8.7" class="small" text-anchor="start">Oficina/sala de música: 2.90 x 6.00 -> 4.20 x 3.60</text>
+<text x="23.0" y="9.399999999999999" class="small" text-anchor="start">   (ventana de cochera reubicada a muro oeste)</text>
+<text x="23.0" y="10.1" class="small" text-anchor="start">Cochera: 5.82 x 6.00 -> 5.40 x 5.40 (solo techo)</text>
+<text x="23.0" y="10.8" class="small" text-anchor="start">Galería de parrilla: 5.40 -> 3.60 de largo</text>
+<text x="23.0" y="11.5" class="small" text-anchor="start">   (se mantiene pegada al living)</text>
+<text x="23.0" y="12.8" class="lbl" text-anchor="start">CÁLCULO DE PLACAS (DURLOCK 1,20 m)</text>
+<text x="23.0" y="14.2" class="small" text-anchor="start">8.40 m = 7 placas exactas (sin desperdicio)</text>
+<text x="23.0" y="14.899999999999999" class="small" text-anchor="start">3.60 m = 3 placas exactas</text>
+<text x="23.0" y="15.6" class="small" text-anchor="start">4.20 m = 3 placas + 0,60 m (sobra de 0,60)</text>
+<text x="23.0" y="16.299999999999997" class="small" text-anchor="start">5.40 m = 4,5 placas: usar la mitad como cierre</text>
+<text x="23.0" y="17.0" class="small" text-anchor="start">Perfiles cada 0,60 m: 4.20, 8.40, 3.60 y 5.40 cierran</text>
+<text x="23.0" y="18.2" class="lbl" text-anchor="start">SUPERFICIES (aprox.)</text>
+<text x="23.0" y="19.6" class="small" text-anchor="start">Living: 40.32 -> 35.28 m2 (-5.04)</text>
+<text x="23.0" y="20.3" class="small" text-anchor="start">Oficina: 17.40 -> 15.12 m2 (-2.28)</text>
+<text x="23.0" y="21.0" class="small" text-anchor="start">Cochera: 34.92 -> 29.16 m2 (-5.76)</text>
+<text x="23.0" y="21.700000000000003" class="small" text-anchor="start">Galería: -1.80 m de largo (~ -7.9 m2 si prof. 4.40)</text>
+<text x="23.0" y="23.2" class="small" text-anchor="start">Dibujo esquemático a partir del PDF; medidas no</text>
+<text x="23.0" y="23.9" class="small" text-anchor="start">verificadas contra el DWG original.</text></svg>
