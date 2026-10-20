@@ -27,10 +27,16 @@ test.describe('first-use tips', () => {
         await openApp(page, { tips: true });
         const height = page.viewportSize()?.height ?? (await page.evaluate(() => window.innerHeight));
         const tip = page.getByTestId('first-use-tip');
-        // Long scrolls back and forth until the tip shows (engines differ a little in when they deliver scroll events).
+        // Long scrolls back and forth until the tip shows. Scroll events are dispatched in the page's rendering update, and
+        // headless WebKit on a loaded Linux runner can skip updates: two scrollTo calls in between would collapse into no
+        // movement at all. Waiting two animation frames after each scrollTo guarantees the scroll event has fired; the
+        // pause that follows is longer than the app's idle window, so each movement is measured on its own.
         for (let i = 0; i < 10 && (await tip.count()) === 0; i++) {
-            await page.evaluate((y) => window.scrollTo(0, y), i % 2 === 0 ? height * 1.5 : 0);
-            await page.waitForTimeout(700);
+            await page.evaluate(async (y) => {
+                window.scrollTo(0, y);
+                await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+            }, i % 2 === 0 ? height * 1.5 : 0);
+            await page.waitForTimeout(500);
         }
         await expect(tip).toContainText('"Vista"');
         const phonePortrait = await page.evaluate(() => matchMedia('(max-width: 599.98px) and (orientation: portrait)').matches);
