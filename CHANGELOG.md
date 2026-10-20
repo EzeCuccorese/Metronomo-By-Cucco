@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1 - 2026-10-20
+
+### Fixes
+- Refresh lockfiles after the version bump.
+
 ## 1.0.0 - 2026-10-20
 
 ### Features
