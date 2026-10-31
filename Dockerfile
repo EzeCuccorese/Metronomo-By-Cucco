@@ -18,7 +18,7 @@ COPY . .
 RUN pnpm build
 
 # Stage 2: Serve the application using Nginx
-FROM nginx:1.31.0-alpine@sha256:2f07d83bf561b506400dc183b1b2003803e39efbd22451f848adaba14d28c7c7
+FROM nginx:1.31.7-alpine@sha256:892bb2152464f0c5d8972593a5f5afaf8054552580b699d95f8ff4af08c2d33d
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Custom Nginx configuration and shared security headers
