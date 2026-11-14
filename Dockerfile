@@ -1,7 +1,7 @@
 # Multi-stage build for Metrónomo by Cucco
 
 # Stage 1: Build the React/Vite application
-FROM node:26.12.0-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5 AS builder
+FROM node:26.13.1-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS builder
 WORKDIR /app
 
 # Node 26 no trae corepack: pnpm va en su propia capa (no se invalida con cada cambio de dependencias)
