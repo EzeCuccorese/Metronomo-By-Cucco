@@ -852,8 +852,9 @@ describe('Scheduler', () => {
             expect(pianoFallback.dispose).toHaveBeenCalled();
         });
 
-        it('falls back to the synth voice with note names and velocity', () => {
+        it('falls back to the synth voice with note names', () => {
             // The sampler receives a fallback that plays through the second PolyphonicSynth, on the piano strip.
+            expect(typeof pianoFallbackVoice).toBe('function');
             expect(piano.connect).toHaveBeenCalled();
             expect(pianoFallback.connect).toHaveBeenCalled();
             expect(drum.getChannelNode).toHaveBeenCalledWith('piano');

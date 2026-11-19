@@ -1,34 +1,26 @@
 /** Offline-rendered buffers for the bombo legüero (cheaper than synthesizing per hit). */
 
-/** Renders the deep bombo head (parche) hit. */
-export function renderBomboParche(sampleRate: number = 44100): Promise<AudioBuffer> {
-    const sr = Math.max(8000, Math.round(sampleRate));
-    const bomboCtx = new OfflineAudioContext(1, Math.round(sr * 1.2), sr);
-    const bomboGain = bomboCtx.createGain();
-    bomboGain.connect(bomboCtx.destination);
+function addParcheTransient(ctx: OfflineAudioContext, dest: AudioNode) {
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(180, 0);
+    osc.frequency.exponentialRampToValueAtTime(55, 0.01);
 
-    // 1. SKIN TRANSIENT (Triangle sweep 180Hz -> 55Hz in 10ms for a thick, woolly mazo strike impact)
-    const transientOsc = bomboCtx.createOscillator();
-    transientOsc.type = 'triangle';
-    transientOsc.frequency.setValueAtTime(180, 0);
-    transientOsc.frequency.exponentialRampToValueAtTime(55, 0.01);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, 0);
+    gain.gain.linearRampToValueAtTime(0.9, 0.001);
+    gain.gain.exponentialRampToValueAtTime(0.001, 0.012);
 
-    const transientGain = bomboCtx.createGain();
-    transientGain.gain.setValueAtTime(0, 0);
-    transientGain.gain.linearRampToValueAtTime(0.9, 0.001);
-    transientGain.gain.exponentialRampToValueAtTime(0.001, 0.012);
+    osc.connect(gain);
+    gain.connect(dest);
+    osc.start(0);
+}
 
-    transientOsc.connect(transientGain);
-    transientGain.connect(bomboGain);
-    transientOsc.start(0);
-
-    // 2. LEATHER RESONANCE (Pink Noise to emulate animal fur scraping on thick goat skin)
-    const leatherNoise = bomboCtx.createBufferSource();
-    const noiseBuf = bomboCtx.createBuffer(1, Math.round(sr * 0.6), sr);
-    const noiseDataArray = noiseBuf.getChannelData(0);
-    
+function createPinkNoiseBuffer(ctx: OfflineAudioContext, seconds: number, sr: number): AudioBuffer {
+    const buf = ctx.createBuffer(1, Math.round(sr * seconds), sr);
+    const data = buf.getChannelData(0);
     let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-    for (let i = 0; i < noiseBuf.length; i++) {
+    for (let i = 0; i < buf.length; i++) {
         const white = Math.random() * 2 - 1;
         b0 = 0.99886 * b0 + white * 0.0555179;
         b1 = 0.99332 * b1 + white * 0.0750759;
@@ -36,111 +28,93 @@ export function renderBomboParche(sampleRate: number = 44100): Promise<AudioBuff
         b3 = 0.86650 * b3 + white * 0.3104856;
         b4 = 0.55000 * b4 + white * 0.5329522;
         b5 = -0.7616 * b5 - white * 0.0168980;
-        noiseDataArray[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
-        noiseDataArray[i] *= 0.11; // Normalize approximate volume
+        data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
         b6 = white * 0.115926;
     }
-    leatherNoise.buffer = noiseBuf;
-
-    const leatherFilter = bomboCtx.createBiquadFilter();
-    leatherFilter.type = 'lowpass';
-    leatherFilter.frequency.setValueAtTime(85, 0);
-    leatherFilter.Q.setValueAtTime(4.0, 0);
-
-    const leatherBandpass = bomboCtx.createBiquadFilter();
-    leatherBandpass.type = 'bandpass';
-    leatherBandpass.frequency.setValueAtTime(150, 0);
-    leatherBandpass.Q.setValueAtTime(2.0, 0);
-
-    const leatherGain = bomboCtx.createGain();
-    leatherGain.gain.setValueAtTime(0, 0);
-    leatherGain.gain.linearRampToValueAtTime(0.75, 0.005);
-    leatherGain.gain.exponentialRampToValueAtTime(0.001, 0.25);
-
-    const noiseGainLow = bomboCtx.createGain();
-    noiseGainLow.gain.setValueAtTime(0.8, 0);
-    const noiseGainBP = bomboCtx.createGain();
-    noiseGainBP.gain.setValueAtTime(0.3, 0);
-
-    leatherNoise.connect(leatherFilter);
-    leatherFilter.connect(noiseGainLow);
-    noiseGainLow.connect(leatherGain);
-
-    leatherNoise.connect(leatherBandpass);
-    leatherBandpass.connect(noiseGainBP);
-    noiseGainBP.connect(leatherGain);
-
-    leatherGain.connect(bomboGain);
-    leatherNoise.start(0);
-
-    // 3. CAVITY BOOM & MEMBRANE RESONANCE (Acoustic physical modeling of drum shell and skin)
-    // 3.1. Deep sub-bass fundamental at 58Hz
-    const subOsc = bomboCtx.createOscillator();
-    subOsc.type = 'sine';
-    subOsc.frequency.setValueAtTime(58, 0);
-
-    const subGain = bomboCtx.createGain();
-    subGain.gain.setValueAtTime(0, 0);
-    subGain.gain.linearRampToValueAtTime(0.9, 0.015);
-    subGain.gain.exponentialRampToValueAtTime(0.001, 0.7);
-
-    subOsc.connect(subGain);
-    subGain.connect(bomboGain);
-    subOsc.start(0);
-
-    // 3.2. Circular membrane inharmonic mode (1,1) at 58Hz * 1.59 = 92.2Hz
-    const inharmonicOsc = bomboCtx.createOscillator();
-    inharmonicOsc.type = 'sine';
-    inharmonicOsc.frequency.setValueAtTime(58 * 1.59, 0);
-
-    const inharmonicGain = bomboCtx.createGain();
-    inharmonicGain.gain.setValueAtTime(0, 0);
-    inharmonicGain.gain.linearRampToValueAtTime(0.35, 0.01);
-    inharmonicGain.gain.exponentialRampToValueAtTime(0.001, 0.18);
-
-    inharmonicOsc.connect(inharmonicGain);
-    inharmonicGain.connect(bomboGain);
-    inharmonicOsc.start(0);
-
-    // 3.3. Ceibo wood drum shell resonance at 58Hz * 2 = 116Hz
-    const ceiboResonance = bomboCtx.createOscillator();
-    ceiboResonance.type = 'triangle'; // triangle waves add pleasant woody warmth
-    ceiboResonance.frequency.setValueAtTime(116, 0);
-
-    const ceiboGain = bomboCtx.createGain();
-    ceiboGain.gain.setValueAtTime(0, 0);
-    ceiboGain.gain.linearRampToValueAtTime(0.2, 0.01);
-    ceiboGain.gain.exponentialRampToValueAtTime(0.001, 0.3);
-
-    ceiboResonance.connect(ceiboGain);
-    ceiboGain.connect(bomboGain);
-    ceiboResonance.start(0);
-
-    return bomboCtx.startRendering();
+    return buf;
 }
 
-/** Renders the bombo rim (aro) click using FM synthesis. */
-export function renderBomboAro(sampleRate: number = 44100): Promise<AudioBuffer> {
+function addLeatherResonance(ctx: OfflineAudioContext, dest: AudioNode, sr: number) {
+    const noise = ctx.createBufferSource();
+    noise.buffer = createPinkNoiseBuffer(ctx, 0.6, sr);
+
+    const low = ctx.createBiquadFilter();
+    low.type = 'lowpass';
+    low.frequency.setValueAtTime(85, 0);
+    low.Q.setValueAtTime(4.0, 0);
+
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(150, 0);
+    bp.Q.setValueAtTime(2.0, 0);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, 0);
+    gain.gain.linearRampToValueAtTime(0.75, 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.001, 0.25);
+
+    const lowGain = ctx.createGain();
+    lowGain.gain.setValueAtTime(0.8, 0);
+    const bpGain = ctx.createGain();
+    bpGain.gain.setValueAtTime(0.3, 0);
+
+    noise.connect(low);
+    low.connect(lowGain);
+    lowGain.connect(gain);
+    noise.connect(bp);
+    bp.connect(bpGain);
+    bpGain.connect(gain);
+    gain.connect(dest);
+    noise.start(0);
+}
+
+function addResonantMode(
+    ctx: OfflineAudioContext,
+    dest: AudioNode,
+    spec: { type: OscillatorType; freq: number; peak: number; attack: number; decay: number }
+) {
+    const osc = ctx.createOscillator();
+    osc.type = spec.type;
+    osc.frequency.setValueAtTime(spec.freq, 0);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, 0);
+    gain.gain.linearRampToValueAtTime(spec.peak, spec.attack);
+    gain.gain.exponentialRampToValueAtTime(0.001, spec.decay);
+
+    osc.connect(gain);
+    gain.connect(dest);
+    osc.start(0);
+}
+
+/** Renders the deep bombo head (parche) hit. */
+export function renderBomboParche(sampleRate: number = 44100): Promise<AudioBuffer> {
     const sr = Math.max(8000, Math.round(sampleRate));
-    const aroCtx = new OfflineAudioContext(1, Math.round(sr * 0.5), sr);
-    const aroOut = aroCtx.createGain();
-    aroOut.connect(aroCtx.destination);
+    const ctx = new OfflineAudioContext(1, Math.round(sr * 1.2), sr);
+    const out = ctx.createGain();
+    out.connect(ctx.destination);
 
-    // 1. FM SYNTHESIS (Ceibo hollow thick wood trunk modeling at lower inharmonic frequencies)
-    const carrier = aroCtx.createOscillator();
-    const modulator = aroCtx.createOscillator();
-    const modGain = aroCtx.createGain();
+    addParcheTransient(ctx, out);
+    addLeatherResonance(ctx, out, sr);
+    addResonantMode(ctx, out, { type: 'sine', freq: 58, peak: 0.9, attack: 0.015, decay: 0.7 });
+    addResonantMode(ctx, out, { type: 'sine', freq: 58 * 1.59, peak: 0.35, attack: 0.01, decay: 0.18 });
+    addResonantMode(ctx, out, { type: 'triangle', freq: 116, peak: 0.2, attack: 0.01, decay: 0.3 });
 
+    return ctx.startRendering();
+}
+
+function addAroFm(ctx: OfflineAudioContext, dest: AudioNode) {
+    const carrier = ctx.createOscillator();
+    const modulator = ctx.createOscillator();
+    const modGain = ctx.createGain();
     carrier.type = 'sine';
-    carrier.frequency.setValueAtTime(200, 0); // Carrier at 200Hz
-
+    carrier.frequency.setValueAtTime(200, 0);
     modulator.type = 'sine';
-    modulator.frequency.setValueAtTime(390, 0); // Modulator at 390Hz (inharmonic ratio ~1.95)
-
-    modGain.gain.setValueAtTime(360, 0); // High index for high wooden strike transient
+    modulator.frequency.setValueAtTime(390, 0);
+    modGain.gain.setValueAtTime(360, 0);
     modGain.gain.exponentialRampToValueAtTime(0.01, 0.03);
 
-    const fmGain = aroCtx.createGain();
+    const fmGain = ctx.createGain();
     fmGain.gain.setValueAtTime(0, 0);
     fmGain.gain.linearRampToValueAtTime(0.9, 0.001);
     fmGain.gain.exponentialRampToValueAtTime(0.001, 0.055);
@@ -148,48 +122,44 @@ export function renderBomboAro(sampleRate: number = 44100): Promise<AudioBuffer>
     modulator.connect(modGain);
     modGain.connect(carrier.frequency);
     carrier.connect(fmGain);
-    fmGain.connect(aroOut);
-
+    fmGain.connect(dest);
     modulator.start(0);
     carrier.start(0);
+}
 
-    // 1.2. Secondary wood resonance mode (Helmholtz hollow box tone at 580Hz)
-    const ceiboHollow = aroCtx.createOscillator();
-    ceiboHollow.type = 'sine';
-    ceiboHollow.frequency.setValueAtTime(580, 0);
+function addAroCrack(ctx: OfflineAudioContext, dest: AudioNode, sr: number) {
+    const noise = ctx.createBufferSource();
+    const buf = ctx.createBuffer(1, Math.round(sr * 0.15), sr);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < buf.length; i++) data[i] = Math.random() * 2 - 1;
+    noise.buffer = buf;
 
-    const hollowGain = aroCtx.createGain();
-    hollowGain.gain.setValueAtTime(0, 0);
-    hollowGain.gain.linearRampToValueAtTime(0.25, 0.001);
-    hollowGain.gain.exponentialRampToValueAtTime(0.001, 0.02);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(1000, 0);
+    filter.Q.setValueAtTime(3.0, 0);
 
-    ceiboHollow.connect(hollowGain);
-    hollowGain.connect(aroOut);
-    ceiboHollow.start(0);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, 0);
+    gain.gain.linearRampToValueAtTime(0.5, 0.001);
+    gain.gain.exponentialRampToValueAtTime(0.001, 0.016);
 
-    // 2. STICK SCRAPE & WOOD CRACK (Band-pass filtered wood noise)
-    const aroNoise = aroCtx.createBufferSource();
-    const aroNoiseBuf = aroCtx.createBuffer(1, Math.round(sr * 0.15), sr);
-    const aroND = aroNoiseBuf.getChannelData(0);
-    for (let i = 0; i < aroNoiseBuf.length; i++) {
-        aroND[i] = Math.random() * 2 - 1;
-    }
-    aroNoise.buffer = aroNoiseBuf;
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+    noise.start(0);
+}
 
-    const crackFilter = aroCtx.createBiquadFilter();
-    crackFilter.type = 'bandpass';
-    crackFilter.frequency.setValueAtTime(1000, 0); // 1.0kHz band-pass resonances
-    crackFilter.Q.setValueAtTime(3.0, 0);
+/** Renders the bombo rim (aro) click using FM synthesis. */
+export function renderBomboAro(sampleRate: number = 44100): Promise<AudioBuffer> {
+    const sr = Math.max(8000, Math.round(sampleRate));
+    const ctx = new OfflineAudioContext(1, Math.round(sr * 0.5), sr);
+    const out = ctx.createGain();
+    out.connect(ctx.destination);
 
-    const crackGain = aroCtx.createGain();
-    crackGain.gain.setValueAtTime(0, 0);
-    crackGain.gain.linearRampToValueAtTime(0.5, 0.001);
-    crackGain.gain.exponentialRampToValueAtTime(0.001, 0.016);
+    addAroFm(ctx, out);
+    addResonantMode(ctx, out, { type: 'sine', freq: 580, peak: 0.25, attack: 0.001, decay: 0.02 });
+    addAroCrack(ctx, out, sr);
 
-    aroNoise.connect(crackFilter);
-    crackFilter.connect(crackGain);
-    crackGain.connect(aroOut);
-    aroNoise.start(0);
-
-    return aroCtx.startRendering();
+    return ctx.startRendering();
 }
