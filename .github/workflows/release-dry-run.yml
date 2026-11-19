@@ -18,7 +18,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          fetch-tags: true
 
       - name: Compute next version
         run: |
@@ -33,5 +32,9 @@ jobs:
           range="$last_release..HEAD"
           git log --format='%s%n%b%x00' "$range" > commits.txt
           echo "Range: $range"
+          if [ ! -s commits.txt ]; then
+            echo "No new commits since release $last_release." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           python3 scripts/release.py next --log commits.txt | tee version.txt
           echo "Next version: $(cat version.txt)" >> "$GITHUB_STEP_SUMMARY"
