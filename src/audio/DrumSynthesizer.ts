@@ -229,12 +229,12 @@ class DrumSynthesizer {
 
     private releaseGain(node: GainNode) {
         node.disconnect();
-        this.gainPool.push(node);
+        if (this.gainPool.length < 64) this.gainPool.push(node);
     }
 
     private releaseFilter(node: BiquadFilterNode) {
         node.disconnect();
-        this.filterPool.push(node);
+        if (this.filterPool.length < 64) this.filterPool.push(node);
     }
 
     private async loadAssets() {
@@ -255,12 +255,15 @@ class DrumSynthesizer {
         source.buffer = buffer;
         source.playbackRate.setValueAtTime(pitchRate, time);
 
-        const gainNode = this.context.createGain();
+        const gainNode = this.getGain();
         const gainVal = Math.pow(velocity, 1.5); // Fixed: do not scale by channel.originalVolume twice!
         gainNode.gain.setValueAtTime(gainVal, time);
 
         source.connect(gainNode);
         gainNode.connect(channel.gain);
+        source.onended = () => {
+            this.releaseGain(gainNode);
+        };
 
         this.startVoice(source, time);
         return true;
@@ -284,7 +287,8 @@ class DrumSynthesizer {
      * Pre-renders complex sounds using OfflineAudioContext to save CPU.
      */
     private async initPreRenderedSounds() {
-        [this.bomboBuffer, this.aroBuffer] = await Promise.all([renderBomboParche(), renderBomboAro()]);
+        const sr = this.context.sampleRate || 44100;
+        [this.bomboBuffer, this.aroBuffer] = await Promise.all([renderBomboParche(sr), renderBomboAro(sr)]);
     }
 
     /** Adapter handed to the synthesized voices (see ./voices). */
@@ -347,17 +351,17 @@ class DrumSynthesizer {
     // Each public play* method tries the recorded sample first and falls back to the synthesized voice.
 
     /** Plays a Rock Kick Drum (Tight, punchy). */
-    public playRockKick(time: number, velocity: number = 1.0) {
-        if (this.playBuffer('kick', INSTRUMENT_CHANNEL.kick, time, velocity)) return;
-        synthKick(this.host, time, velocity);
+    public playRockKick(time: number, velocity: number = 1.0, channel: ChannelId = INSTRUMENT_CHANNEL.kick) {
+        if (this.playBuffer('kick', channel, time, velocity)) return;
+        synthKick(this.host, time, velocity, channel);
     }
 
     /** Plays a Tom (High, Low, Floor). */
-    public playTom(time: number, velocity: number, pitch: number) {
+    public playTom(time: number, velocity: number, pitch: number, channel?: ChannelId) {
         let bufName = 'tom_low';
         if (pitch > 180) bufName = 'tom_high';
         else if (pitch < 120) bufName = 'tom_floor';
-        const channelName = pitch > 180 ? INSTRUMENT_CHANNEL.tom_high : (pitch < 120 ? INSTRUMENT_CHANNEL.tom_floor : INSTRUMENT_CHANNEL.tom_low);
+        const channelName = channel ?? (pitch > 180 ? INSTRUMENT_CHANNEL.tom_high : (pitch < 120 ? INSTRUMENT_CHANNEL.tom_floor : INSTRUMENT_CHANNEL.tom_low));
         if (this.playBuffer(bufName, channelName, time, velocity)) return;
         synthTom(this.host, time, velocity, pitch, channelName);
     }
@@ -440,7 +444,7 @@ class DrumSynthesizer {
         const isAro = modifier === 'aro' || modifier === 'open';
         const pitch = isAro ? 1.55 : 1.0;
         if (this.playBuffer('cajon', INSTRUMENT_CHANNEL.cajon, time, velocity, pitch)) return;
-        this.playRockKick(time, velocity * (isAro ? 0.65 : 1.0));
+        this.playRockKick(time, velocity * (isAro ? 0.65 : 1.0), INSTRUMENT_CHANNEL.cajon);
     }
 
     public playPalmas(time: number, velocity: number = 1.0) {
@@ -450,17 +454,17 @@ class DrumSynthesizer {
 
     public playCandombeChico(time: number, velocity: number = 1.0) {
         if (this.playBuffer('candombe_chico', INSTRUMENT_CHANNEL.candombe_chico, time, velocity)) return;
-        this.playTom(time, velocity, 200);
+        this.playTom(time, velocity, 200, INSTRUMENT_CHANNEL.candombe_chico);
     }
 
     public playCandombeRepique(time: number, velocity: number = 1.0) {
         if (this.playBuffer('candombe_repique', INSTRUMENT_CHANNEL.candombe_repique, time, velocity)) return;
-        this.playTom(time, velocity, 150);
+        this.playTom(time, velocity, 150, INSTRUMENT_CHANNEL.candombe_repique);
     }
 
     public playCandombePiano(time: number, velocity: number = 1.0) {
         if (this.playBuffer('candombe_piano', INSTRUMENT_CHANNEL.candombe_piano, time, velocity)) return;
-        this.playTom(time, velocity, 100);
+        this.playTom(time, velocity, 100, INSTRUMENT_CHANNEL.candombe_piano);
     }
 }
 

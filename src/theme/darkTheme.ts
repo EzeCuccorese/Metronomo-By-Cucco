@@ -51,6 +51,16 @@ export const darkTheme = createTheme({
         },
       },
     },
+    MuiSnackbarContent: {
+      styleOverrides: {
+        root: {
+          backgroundColor: '#24201c',
+          color: '#f4f1ed',
+          border: '1px solid rgba(229, 169, 95, 0.35)',
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6)',
+        },
+      },
+    },
     // Touch targets of at least 44 px on coarse pointers (phones/tablets).
     MuiToggleButton: {
       styleOverrides: { root: { [coarse]: { minHeight: TOUCH_TARGET, minWidth: TOUCH_TARGET } } },

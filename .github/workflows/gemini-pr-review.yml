@@ -2,12 +2,12 @@ name: Gemini PR Code Review
 
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review, labeled]
+    types: [opened, reopened, ready_for_review, synchronize, labeled]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  # Don't cancel: an unrelated label event must not abort a review in progress.
-  cancel-in-progress: false
+  # Cancel stale incremental runs on new pushes; keep labeled/open runs intact.
+  cancel-in-progress: ${{ github.event.action == 'synchronize' }}
 
 # A reusable workflow can't get more token permissions than its caller grants:
 # without this block the nested job (which needs pull-requests: write to post
@@ -18,15 +18,15 @@ permissions:
 
 jobs:
   review:
-    # Automatic once per PR (opened/reopened/ready, never for drafts); on demand with the
+    # Automatic on PR open/reopen/ready/synchronize (never for drafts); on demand with the
     # `gemini-review` label, even on drafts.
     if: >-
       (github.event.action == 'labeled' && github.event.label.name == 'gemini-review') ||
       (github.event.action != 'labeled' && github.event.pull_request.draft == false)
     # Pinned to a commit: this job gets pull-requests: write and the Gemini key, so a
-    # push to the engine's main branch must not change what runs here. Bump both SHAs
-    # together on purpose (Dependabot only proposes it when the engine publishes tags).
-    uses: EzeCuccorese/ia-spec-ops-engine/.github/workflows/reusable-gemini-review.yml@0e429590f98b7e24cb427f52e0909a699d518cc7 # main @ 2026-10-03
+    # push to the upstream main branch must not change what runs here. Bump both SHAs
+    # together on purpose (Dependabot only proposes it when tags are published).
+    uses: EzeCuccorese/ia-spec-ops-engine/.github/workflows/reusable-gemini-review.yml@89136f9fcec4350cc8e4c877315391f719307517 # v3.0.0
     secrets:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     with:
@@ -35,7 +35,7 @@ jobs:
       standards: "SOLID, Clean Code, Resource Safety, Web Audio Timing Accuracy, React Performance"
       model: "gemini-flash-latest"
       # The reusable workflow downloads its review script separately: pin that too.
-      engine-ref: "0e429590f98b7e24cb427f52e0909a699d518cc7"
+      engine-ref: "89136f9fcec4350cc8e4c877315391f719307517"
 
   clear-label:
     needs: review

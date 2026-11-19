@@ -172,6 +172,7 @@ export class PianoSampler {
                     return map.size > 0;
                 },
                 () => {
+                    if (this.disposed) return false;
                     this.loading = null;
                     this.setStatus('failed');
                     return false;
@@ -307,6 +308,7 @@ export class PianoSampler {
         this.disposed = true;
         this.silence();
         this.statusListeners.clear();
+        Object.values(this.buses).forEach(bus => bus.disconnect());
         this.output.disconnect();
     }
 }
