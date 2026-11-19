@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-    Box, Typography, Button, Stack, Paper, IconButton,
+    Box, Typography, Button, ButtonBase, Stack, Paper, IconButton,
     CircularProgress, Chip, List, ListItem, ListItemText,
     TextField, Checkbox, Dialog, DialogTitle,
     DialogContent, DialogActions,
@@ -29,7 +29,7 @@ const TomatoIcon = ({ filled, size = 16 }: { filled: boolean; size?: number }) =
              display: 'inline-block',
              lineHeight: 0,
              mr: 0.5,
-             filter: filled ? 'none' : 'grayscale(100%) opacity(0.2)',
+             filter: filled ? 'none' : 'grayscale(100%) opacity(0.45)',
              transform: filled ? 'scale(1)' : 'scale(0.9)',
              transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
          }}
@@ -69,14 +69,15 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
     // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [newTaskTitle, setNewTaskTitle] = useState('');
-    const [newTaskPomodoros, setNewTaskPomodoros] = useState(1);
+    const [newTaskPomodoros, setNewTaskPomodoros] = useState('1');
     const [newTaskSubtasks, setNewTaskSubtasks] = useState<string>('');
 
     const handleAddTask = () => {
-        if (!addTask(newTaskTitle, newTaskPomodoros, newTaskSubtasks)) return;
+        const parsedPomodoros = Math.max(1, Math.min(10, Number(newTaskPomodoros) || 1));
+        if (!addTask(newTaskTitle, parsedPomodoros, newTaskSubtasks)) return;
         setNewTaskTitle('');
         setNewTaskSubtasks('');
-        setNewTaskPomodoros(1);
+        setNewTaskPomodoros('1');
         setIsDialogOpen(false);
     };
 
@@ -225,17 +226,23 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
                                     </IconButton>
 
                                     <ListItemText
+                                        slotProps={{ secondary: { component: 'div' } }}
                                         primary={
-                                            <Typography variant="body2" sx={{
-                                                textDecoration: task.isCompleted ? 'line-through' : 'none',
-                                                cursor: 'pointer',
-                                                fontWeight: isActive ? 'bold' : 'normal',
-                                                color: isActive ? '#ffcccb' : 'text.primary'
-                                            }}
+                                            <ButtonBase
                                                 onClick={() => setActiveTaskId(task.id)}
+                                                sx={{
+                                                    textAlign: 'left',
+                                                    borderRadius: 0.5,
+                                                    fontSize: '0.875rem',
+                                                    lineHeight: 1.43,
+                                                    textDecoration: task.isCompleted ? 'line-through' : 'none',
+                                                    fontWeight: isActive ? 'bold' : 'normal',
+                                                    color: isActive ? '#ffcccb' : 'text.primary',
+                                                    '&:focus-visible': { outline: '2px solid #ffd54f', outlineOffset: 2 },
+                                                }}
                                             >
                                                 {task.title}
-                                            </Typography>
+                                            </ButtonBase>
                                         }
                                         secondary={
                                             <Stack direction="row" spacing={0} sx={{ alignItems: 'center', mt: 0.5 }}>
@@ -261,6 +268,7 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
                                                     <Checkbox
                                                         size="small"
                                                         checked={sub.completed}
+                                                        slotProps={{ input: { 'aria-label': sub.title } }}
                                                         onChange={() => toggleSubtask(task.id, sub.id)}
                                                         sx={{ p: 0.5, color: 'text.disabled', '&.Mui-checked': { color: '#ef5350' } }}
                                                     />
@@ -281,39 +289,41 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
         </Box>
             {/* ADD TASK DIALOG */}
             <Dialog open={isDialogOpen} onClose={() => setIsDialogOpen(false)} fullWidth maxWidth="xs">
-                <DialogTitle>Nueva Tarea</DialogTitle>
-                <DialogContent>
-                    <Stack spacing={2} sx={{ mt: 1 }}>
-                        <TextField
-                            autoFocus
-                            label="Título de la tarea"
-                            fullWidth
-                            value={newTaskTitle}
-                            onChange={(e) => setNewTaskTitle(e.target.value)}
-                        />
-                        <TextField
-                            label="Estimación (Pomodoros)"
-                            type="number"
-                            fullWidth
-                            slotProps={{ htmlInput: { min: 1, max: 10 } }}
-                            value={newTaskPomodoros}
-                            onChange={(e) => setNewTaskPomodoros(Number(e.target.value))}
-                        />
-                        <TextField
-                            label="Subtareas (una por línea)"
-                            multiline
-                            rows={3}
-                            fullWidth
-                            placeholder="- Escalas Mayores&#10;- Arpegios"
-                            value={newTaskSubtasks}
-                            onChange={(e) => setNewTaskSubtasks(e.target.value)}
-                        />
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-                    <Button onClick={handleAddTask} variant="contained" color="secondary">Agregar</Button>
-                </DialogActions>
+                <Box component="form" onSubmit={(e) => { e.preventDefault(); handleAddTask(); }}>
+                    <DialogTitle>Nueva Tarea</DialogTitle>
+                    <DialogContent>
+                        <Stack spacing={2} sx={{ mt: 1 }}>
+                            <TextField
+                                autoFocus
+                                label="Título de la tarea"
+                                fullWidth
+                                value={newTaskTitle}
+                                onChange={(e) => setNewTaskTitle(e.target.value)}
+                            />
+                            <TextField
+                                label="Estimación (Pomodoros)"
+                                type="number"
+                                fullWidth
+                                slotProps={{ htmlInput: { min: 1, max: 10 } }}
+                                value={newTaskPomodoros}
+                                onChange={(e) => setNewTaskPomodoros(e.target.value)}
+                            />
+                            <TextField
+                                label="Subtareas (una por línea)"
+                                multiline
+                                rows={3}
+                                fullWidth
+                                placeholder="- Escalas Mayores&#10;- Arpegios"
+                                value={newTaskSubtasks}
+                                onChange={(e) => setNewTaskSubtasks(e.target.value)}
+                            />
+                        </Stack>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button type="button" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+                        <Button type="submit" variant="contained" color="secondary">Agregar</Button>
+                    </DialogActions>
+                </Box>
             </Dialog>
             <Snackbar
                 open={notice !== null}

@@ -139,13 +139,14 @@ export function useMixer(pattern: RhythmPattern, { onVolumeChange, onPanChange, 
     }, [channels, solo, onVolumeChange, onPanChange, onMuteChange]);
 
     // Automatic click mute when the selected pattern changes (not on reload of the same pattern).
-    if (mixer.clickRulePatternId !== pattern.id) {
+    useEffect(() => {
+        if (mixer.clickRulePatternId === pattern.id) return;
         const muteClick = shouldMuteClick(pattern);
         setMixer(prev => ({
             clickRulePatternId: pattern.id,
             channels: prev.channels.map(ch => ch.id === 'click' ? { ...ch, isMuted: muteClick } : ch),
         }));
-    }
+    }, [mixer.clickRulePatternId, pattern, setMixer]);
 
     const update = useCallback((id: ChannelId, patch: (ch: ChannelState) => Partial<ChannelState>) => {
         setMixer(prev => ({ ...prev, channels: prev.channels.map(ch => ch.id === id ? { ...ch, ...patch(ch) } : ch) }));

@@ -129,12 +129,12 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
         alignItems: 'center',
         columnGap: 2,
         rowGap: 1.5,
-        // xs/sm: brand + play on top, tempo and library below; md: tempo joins the first row; lg: one row.
-        gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', md: 'minmax(0, 1fr) auto auto', lg: 'minmax(0, 1fr) auto auto auto' },
+        // xs/sm: brand + play on top, tempo and library below; md/lg: tempo joins the first row; xl: one row.
+        gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', md: 'minmax(0, 1fr) auto auto', xl: 'minmax(0, 1fr) auto auto auto' },
         gridTemplateAreas: {
           xs: '"brand play" "tempo tempo" "lib lib"',
           md: '"brand tempo play" "lib lib lib"',
-          lg: '"brand lib tempo play"',
+          xl: '"brand lib tempo play"',
         },
         bgcolor: '#13110f',
         boxShadow: '0 6px 16px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,255,255,0.02)'
@@ -243,7 +243,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           Biblioteca de Ritmos
         </Button>
 
-        <FormControl size="small" sx={{ minWidth: 0, flex: { sm: 1, lg: 'none' }, width: { xs: '100%', lg: 210 } }}>
+        <FormControl size="small" sx={{ minWidth: 0, flex: { sm: 1, xl: 'none' }, width: { xs: '100%', xl: 210 } }}>
           <InputLabel id="preset-select-label" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>Ritmo Predefinido</InputLabel>
           <Select
             labelId="preset-select-label"

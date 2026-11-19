@@ -174,10 +174,10 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
     // --- Samples are downloaded on first interest, not on page load ---
     const preloaded = useRef(false);
     const preload = useCallback(() => {
-        if (preloaded.current) return;
+        if (preloaded.current && engine.pianoStatus !== 'failed') return;
         preloaded.current = true;
         preloadPiano();
-    }, [preloadPiano]);
+    }, [engine.pianoStatus, preloadPiano]);
 
     // --- Sounding chord and scale ---
     const chordIndex = usePlayback(s => s.chordIndex);

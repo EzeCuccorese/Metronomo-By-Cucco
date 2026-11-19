@@ -66,7 +66,10 @@ export default function CommandPalette({ open, onClose, commands, onSetBpm, temp
 
     return (
         <Dialog open={open} onClose={close} fullWidth maxWidth="sm" data-testid="command-palette"
-            slotProps={{ paper: { 'aria-label': 'Paleta de comandos', sx: { alignSelf: 'flex-start', mt: { xs: 2, sm: '12vh' }, ...paletteSx } } }}>
+            slotProps={{
+                transition: { onExited: () => setSearch('') },
+                paper: { 'aria-label': 'Paleta de comandos', sx: { alignSelf: 'flex-start', mt: { xs: 2, sm: '12vh' }, ...paletteSx } },
+            }}>
             <Command label="Paleta de comandos" loop>
                 <Command.Input value={search} onValueChange={setSearch} placeholder="Buscá un comando, un ritmo o escribí un tempo…" autoFocus />
                 <Command.List>

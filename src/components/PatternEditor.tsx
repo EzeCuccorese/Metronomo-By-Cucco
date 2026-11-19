@@ -102,7 +102,8 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
     const [activeFilter, setActiveFilter] = useState<'used' | 'all' | 'drums' | 'latino'>('used');
     const [selectedTool, setSelectedTool] = useState<ToolType>('pen');
     const [selectedModifier, setSelectedModifier] = useState<'open' | 'closed'>('closed');
-    const [undoSteps, setUndoSteps] = useState<RhythmStep[] | null>(null);
+    const [undoState, setUndoState] = useState<{ patternId: string; steps: RhythmStep[] } | null>(null);
+    const undoSteps = undoState?.patternId === pattern.id ? undoState.steps : null;
     const paintingRef = useRef(false);
     const gridRef = useRef<HTMLDivElement | null>(null);
     const store = usePlaybackStore();
@@ -124,11 +125,18 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
     useEffect(() => {
         const grid = gridRef.current;
         if (!grid) return;
+        const columns = new Map<number, HTMLElement[]>();
+        grid.querySelectorAll<HTMLElement>('[data-col]').forEach(el => {
+            const col = Number(el.dataset.col);
+            const list = columns.get(col);
+            if (list) list.push(el);
+            else columns.set(col, [el]);
+        });
         let lastCol = -1;
         const paint = (col: number) => {
             if (col === lastCol) return;
-            grid.querySelectorAll('.is-current').forEach(el => el.classList.remove('is-current'));
-            if (col >= 0) grid.querySelectorAll(`[data-col="${col}"]`).forEach(el => el.classList.add('is-current'));
+            if (lastCol >= 0) columns.get(lastCol)?.forEach(el => el.classList.remove('is-current'));
+            if (col >= 0) columns.get(col)?.forEach(el => el.classList.add('is-current'));
             lastCol = col;
         };
         paint(isPlaying ? store.getSnapshot().step : -1);
@@ -152,13 +160,13 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
 
     const clearPattern = () => {
         if (pattern.steps.length === 0) return;
-        setUndoSteps(pattern.steps);
+        setUndoState({ patternId: pattern.id, steps: pattern.steps });
         onPatternUpdate({ ...pattern, steps: [] });
     };
 
     const undoClear = () => {
         if (undoSteps) onPatternUpdate({ ...pattern, steps: undoSteps });
-        setUndoSteps(null);
+        setUndoState(null);
     };
 
     const handleTimeSignatureChange = (label: string) => {
@@ -464,7 +472,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
             <Snackbar
                 open={undoSteps !== null}
                 autoHideDuration={6000}
-                onClose={(_, reason) => { if (reason !== 'clickaway') setUndoSteps(null); }}
+                onClose={(_, reason) => { if (reason !== 'clickaway') setUndoState(null); }}
                 message="Patrón borrado"
                 action={<Button color="primary" size="small" onClick={undoClear}>Deshacer</Button>}
             />

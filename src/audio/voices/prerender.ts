@@ -1,8 +1,9 @@
 /** Offline-rendered buffers for the bombo legüero (cheaper than synthesizing per hit). */
 
 /** Renders the deep bombo head (parche) hit. */
-export function renderBomboParche(): Promise<AudioBuffer> {
-    const bomboCtx = new OfflineAudioContext(1, 44100 * 1.2, 44100);
+export function renderBomboParche(sampleRate: number = 44100): Promise<AudioBuffer> {
+    const sr = Math.max(8000, Math.round(sampleRate));
+    const bomboCtx = new OfflineAudioContext(1, Math.round(sr * 1.2), sr);
     const bomboGain = bomboCtx.createGain();
     bomboGain.connect(bomboCtx.destination);
 
@@ -23,7 +24,7 @@ export function renderBomboParche(): Promise<AudioBuffer> {
 
     // 2. LEATHER RESONANCE (Pink Noise to emulate animal fur scraping on thick goat skin)
     const leatherNoise = bomboCtx.createBufferSource();
-    const noiseBuf = bomboCtx.createBuffer(1, 44100 * 0.6, 44100);
+    const noiseBuf = bomboCtx.createBuffer(1, Math.round(sr * 0.6), sr);
     const noiseDataArray = noiseBuf.getChannelData(0);
     
     let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
@@ -119,8 +120,9 @@ export function renderBomboParche(): Promise<AudioBuffer> {
 }
 
 /** Renders the bombo rim (aro) click using FM synthesis. */
-export function renderBomboAro(): Promise<AudioBuffer> {
-    const aroCtx = new OfflineAudioContext(1, 44100 * 0.5, 44100);
+export function renderBomboAro(sampleRate: number = 44100): Promise<AudioBuffer> {
+    const sr = Math.max(8000, Math.round(sampleRate));
+    const aroCtx = new OfflineAudioContext(1, Math.round(sr * 0.5), sr);
     const aroOut = aroCtx.createGain();
     aroOut.connect(aroCtx.destination);
 
@@ -167,7 +169,7 @@ export function renderBomboAro(): Promise<AudioBuffer> {
 
     // 2. STICK SCRAPE & WOOD CRACK (Band-pass filtered wood noise)
     const aroNoise = aroCtx.createBufferSource();
-    const aroNoiseBuf = aroCtx.createBuffer(1, 44100 * 0.15, 44100);
+    const aroNoiseBuf = aroCtx.createBuffer(1, Math.round(sr * 0.15), sr);
     const aroND = aroNoiseBuf.getChannelData(0);
     for (let i = 0; i < aroNoiseBuf.length; i++) {
         aroND[i] = Math.random() * 2 - 1;

@@ -3,7 +3,7 @@ import { defineConfig, type Plugin } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { playwright } from '@vitest/browser-playwright'
 import { VitePWA } from 'vite-plugin-pwa'
-import { buildHeadersFile } from './deploy/cloudflareHeaders'
+import { buildHeadersFile } from './deploy/cloudflareHeaders.ts'
 
 /**
  * Reuses the production nginx security headers for `vite preview`, so the E2E suite

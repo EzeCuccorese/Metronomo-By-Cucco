@@ -852,13 +852,32 @@ describe('Scheduler', () => {
             expect(pianoFallback.dispose).toHaveBeenCalled();
         });
 
-        it('falls back to the synth voice with note names', () => {
+        it('falls back to the synth voice with note names and velocity', () => {
             // The sampler receives a fallback that plays through the second PolyphonicSynth, on the piano strip.
             expect(piano.connect).toHaveBeenCalled();
             expect(pianoFallback.connect).toHaveBeenCalled();
             expect(drum.getChannelNode).toHaveBeenCalledWith('piano');
             pianoFallbackVoice!(61, 1.5, 0.6, 0.4);
-            expect(pianoFallback.playNote).toHaveBeenCalledWith('C#4', 0.4, 1.5);
+            expect(pianoFallback.playNote).toHaveBeenCalledWith('C#4', 0.4, 1.5, 0.6);
+        });
+
+        it('preserves user tempo when editing meter of the active pattern', () => {
+            scheduler.setPattern(makePattern({ id: 'rock', recommendedTempo: 110, timeSignature: [4, 4], subdivision: 4 }));
+            scheduler.setTempo(140);
+            scheduler.start();
+            // Same id, different subdivision -> queued for next bar, must NOT reset tempo to recommendedTempo.
+            scheduler.setPattern(makePattern({ id: 'rock', recommendedTempo: 110, timeSignature: [4, 4], subdivision: 8 }));
+            run(scheduler, 2.0);
+            expect(scheduler.getTempo()).toBe(140);
+        });
+
+        it('clamps resistance trainer cooldown at MIN_BPM', () => {
+            scheduler.setPattern(makePattern({ subdivision: 4, steps: [] }));
+            scheduler.configureTrainer({ active: true, startBpm: 30, targetBpm: 30, barsPerStep: 1, bpmIncrement: 5, mode: 'resistance_loop' });
+            scheduler.start();
+            // 6 bars at 30 BPM (8 s/bar) triggers resistance hold cooldown
+            run(scheduler, 50);
+            expect(scheduler.getTempo()).toBeGreaterThanOrEqual(30);
         });
     });
 });

@@ -3,12 +3,12 @@ import type { VoiceHost } from './types';
 import { scheduleFilter } from './filterSetup';
 
 /** Rock kick: sine sweep with exponential amplitude decay. */
-export function synthKick(host: VoiceHost, time: number, velocity: number): void {
+export function synthKick(host: VoiceHost, time: number, velocity: number, channel: ChannelId = 'kick'): void {
     const osc = host.context.createOscillator();
     const gain = host.getGain();
 
     osc.connect(gain);
-    host.connectVoiceToChannel(gain, 'kick');
+    host.connectVoiceToChannel(gain, channel);
 
     // Frequency sweep (50Hz -> 0Hz)
     osc.frequency.setValueAtTime(150, time);
