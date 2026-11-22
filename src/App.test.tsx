@@ -123,6 +123,22 @@ describe('App (integration with a scripted engine)', () => {
         expect(screen.getByTestId('bars-practiced')).toHaveTextContent('3');
     });
 
+    it('re-selecting an edited active preset while playing queues the factory pattern on the engine', async () => {
+        render(<App />);
+        await act(async () => { fireEvent.click(screen.getByTestId('play-toggle')); });
+
+        fireEvent.pointerDown(screen.getByTestId('cell-snare-2'), { button: 0 });
+        expect(screen.getByTestId('cell-snare-2')).toHaveAttribute('aria-pressed', 'true');
+        expect(scheduler().pattern?.steps.some(s => s.step === 2 && s.instrument === 'snare')).toBe(true);
+
+        const callsBeforeRestore = scheduler().calls.setPattern.length;
+        await choose('Ritmo Predefinido', 'Rock Estándar');
+
+        expect(scheduler().calls.setPattern.length).toBeGreaterThan(callsBeforeRestore);
+        expect(screen.getByTestId('cell-snare-2')).toHaveAttribute('aria-pressed', 'false');
+        expect(scheduler().pattern?.steps.some(s => s.step === 2 && s.instrument === 'snare')).toBe(false);
+    });
+
     it('commits typed BPM on Enter, clamps it and persists it', () => {
         const { unmount } = render(<App />);
         fireEvent.change(bpmInput(), { target: { value: '999' } });

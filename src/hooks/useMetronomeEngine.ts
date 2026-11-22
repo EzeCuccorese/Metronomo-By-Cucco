@@ -125,9 +125,9 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
                 melodyState: event.melodyState,
                 recordingBar: event.recordingBar,
             });
+            if (event.pattern === pendingPatternRef.current) pendingPatternRef.current = null;
             // Compare by id: queued events may still carry the pre-edit object of the same pattern.
             if (event.pattern.id !== patternRef.current.id) {
-                if (event.pattern === pendingPatternRef.current) pendingPatternRef.current = null;
                 callbacksRef.current.onPatternChange(event.pattern);
             }
             if (event.bpm !== lastEngineBpmRef.current) {

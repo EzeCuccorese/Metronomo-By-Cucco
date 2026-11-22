@@ -119,7 +119,8 @@ function App() {
   const loadPreset = useCallback((patternId: string) => {
     const id = normalizePatternId(patternId);
     const isCustom = id === CUSTOM_PATTERN_ID;
-    if (!isCustom) {
+    const wasOverridden = !isCustom && id in overrides;
+    if (wasOverridden) {
       setOverrides(prev => {
         if (!(id in prev)) return prev;
         const next = { ...prev };
@@ -129,7 +130,8 @@ function App() {
     }
     const next = isCustom ? resolvePattern(id, overrides) : (getBasePattern(id) ?? PRESET_PATTERNS[0]);
     if (isPlaying) {
-      if (id === currentPattern.id) {
+      if (id === currentPattern.id && !wasOverridden) {
+        queuePattern(currentPattern);
         setSelectedPatternId(id);
         return;
       }
@@ -138,7 +140,7 @@ function App() {
     }
     setSelectedPatternId(id);
     if (next.recommendedTempo && !trainer.active) setBpm(next.recommendedTempo);
-  }, [isPlaying, overrides, currentPattern.id, queuePattern, setOverrides, setSelectedPatternId, setBpm, trainer.active]);
+  }, [isPlaying, overrides, currentPattern, queuePattern, setOverrides, setSelectedPatternId, setBpm, trainer.active]);
 
   const handlePatternUpdate = useCallback((pattern: RhythmPattern) => {
     const normalized = withUsedInstruments(pattern);
