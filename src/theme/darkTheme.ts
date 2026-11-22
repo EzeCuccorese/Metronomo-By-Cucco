@@ -8,23 +8,23 @@ export const darkTheme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#e5a95f',
-      contrastText: '#181512',
+      main: '#f5b851',
+      contrastText: '#0b0e15',
     },
     secondary: {
-      main: '#ff6d00',
+      main: '#f97316',
     },
-    // White text on this red reaches 4.98:1 (MUI's default red is 3.7:1).
-    error: { main: '#d32f2f' },
+    // White text on this red reaches 4.83:1.
+    error: { main: '#dc2626' },
     background: {
-      default: '#070605',
-      paper: '#161412',
+      default: '#090c12',
+      paper: '#121722',
     },
     text: {
-      primary: '#f4f1ed',
-      secondary: '#bfae9e',
+      primary: '#f1f5f9',
+      secondary: '#94a3b8',
     },
-    divider: 'rgba(215, 204, 200, 0.08)',
+    divider: 'rgba(148, 163, 184, 0.14)',
   },
   typography: {
     fontFamily: '"Outfit", "Roboto", "Helvetica", "Arial", sans-serif',
@@ -45,18 +45,28 @@ export const darkTheme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          backgroundColor: '#161412',
-          border: '1px solid rgba(215, 204, 200, 0.06)',
+          backgroundColor: '#121722',
+          border: '1px solid rgba(148, 163, 184, 0.12)',
           boxShadow: '0 6px 20px rgba(0, 0, 0, 0.35)',
+        },
+      },
+    },
+    MuiPopover: {
+      styleOverrides: {
+        paper: {
+          backgroundImage: 'none',
+          backgroundColor: '#171e2c',
+          border: '1px solid rgba(148, 163, 184, 0.26)',
+          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.7)',
         },
       },
     },
     MuiSnackbarContent: {
       styleOverrides: {
         root: {
-          backgroundColor: '#24201c',
-          color: '#f4f1ed',
-          border: '1px solid rgba(229, 169, 95, 0.35)',
+          backgroundColor: '#1a2130',
+          color: '#f1f5f9',
+          border: '1px solid rgba(245, 184, 81, 0.35)',
           boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6)',
         },
       },

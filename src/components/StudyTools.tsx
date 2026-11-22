@@ -4,10 +4,11 @@ import {
     CircularProgress, Chip, List, ListItem, ListItemText,
     TextField, Checkbox, Dialog, DialogTitle,
     DialogContent, DialogActions,
-    Collapse, Snackbar
+    Collapse, Snackbar, Tooltip
 } from '@mui/material';
-import { usePomodoro, formatTime } from '../hooks/usePomodoro';
-import { useStudyTasks } from '../hooks/useStudyTasks';
+import { formatTime } from '../hooks/usePomodoro';
+import { useStudySession } from '../hooks/useStudySession';
+import type { StudySessionState } from '../hooks/useStudySession';
 import { usePlayback } from '../state/PlaybackContext';
 import { Panel } from './Panel';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -17,10 +18,12 @@ import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
+import PushPinIcon from '@mui/icons-material/PushPin';
+import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 
 export type { SubTask, Task } from '../hooks/useStudyTasks';
 
-const TomatoIcon = ({ filled, size = 16 }: { filled: boolean; size?: number }) => (
+export const TomatoIcon = ({ filled, size = 16 }: { filled: boolean; size?: number }) => (
     <Box
          component="span"
          sx={{
@@ -45,26 +48,27 @@ const TomatoIcon = ({ filled, size = 16 }: { filled: boolean; size?: number }) =
 
 interface StudyToolsProps {
     onStopRequest?: () => void;
+    /** Optional externally managed session so timer keeps running across pop-up / pin toggles. */
+    session?: StudySessionState;
+    /** Whether Study is currently pinned into the main workspace. */
+    pinned?: boolean;
+    /** Pin / unpin handler for top-left pop-up vs docked panel. */
+    onTogglePin?: () => void;
+    /** When true, renders the inner content directly (for the top-left Popover). */
+    bare?: boolean;
 }
 
-export default function StudyTools({ onStopRequest }: StudyToolsProps) {
+function useStudyPanelProps({ onStopRequest, session, pinned, onTogglePin }: Omit<StudyToolsProps, 'bare'>) {
     const totalBarsPracticed = usePlayback(s => s.totalBars);
-    const [notice, setNotice] = useState<string | null>(null);
+    const localSession = useStudySession(onStopRequest);
+    const activeSession = session ?? localSession;
     const {
-        tasks, activeTaskId, setActiveTaskId, addTask,
-        deleteTask, toggleSubtask, toggleTaskComplete, recordPomodoro,
-    } = useStudyTasks();
+        tasksHook: { tasks, activeTaskId, setActiveTaskId, addTask, deleteTask, toggleSubtask, toggleTaskComplete },
+        pomodoro: { mode: timerType, timeLeft, isActive, progress, toggle: toggleTimer, reset: resetTimer, setMode },
+        notice,
+        clearNotice,
+    } = activeSession;
     const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
-
-    const { mode: timerType, timeLeft, isActive, progress, toggle: toggleTimer, reset: resetTimer, setMode } = usePomodoro(mode => {
-        if (mode === 'pomodoro') {
-            recordPomodoro();
-            setNotice('¡Pomodoro completado! Tomate un descanso.');
-        } else {
-            setNotice('Descanso terminado. ¡A practicar!');
-        }
-        onStopRequest?.();
-    });
 
     // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -81,12 +85,35 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
         setIsDialogOpen(false);
     };
 
-    return (
-        <Panel
-            id="study"
-            title="Estudio"
-            summary={`${formatTime(timeLeft)} · ${isActive ? 'corriendo' : 'en pausa'} · ${tasks.length === 1 ? '1 tarea' : `${tasks.length} tareas`}`}
-        >
+    const pinButton = onTogglePin ? (
+        <Tooltip title={pinned ? 'Desfijar estudio al acceso superior' : 'Fijar estudio arriba a la izquierda'}>
+            <IconButton
+                size="small"
+                onClick={onTogglePin}
+                aria-label={pinned ? 'Desfijar estudio' : 'Fijar estudio'}
+                aria-pressed={pinned}
+                data-testid="study-pin-toggle"
+                sx={{ color: pinned ? 'primary.main' : 'text.secondary' }}
+            >
+                {pinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
+            </IconButton>
+        </Tooltip>
+    ) : null;
+
+    return { totalBarsPracticed, tasks, activeTaskId, setActiveTaskId, deleteTask, toggleSubtask, toggleTaskComplete, expandedTaskId, setExpandedTaskId, timerType, timeLeft, isActive, progress, toggleTimer, resetTimer, setMode, isDialogOpen, setIsDialogOpen, newTaskTitle, setNewTaskTitle, newTaskPomodoros, setNewTaskPomodoros, newTaskSubtasks, setNewTaskSubtasks, handleAddTask, notice, clearNotice, pinButton };
+}
+
+export default function StudyTools({ onStopRequest, session, pinned, onTogglePin, bare = false }: StudyToolsProps) {
+    const s = useStudyPanelProps({ onStopRequest, session, pinned, onTogglePin });
+    const {
+        totalBarsPracticed, tasks, activeTaskId, setActiveTaskId, deleteTask, toggleSubtask, toggleTaskComplete,
+        expandedTaskId, setExpandedTaskId, timerType, timeLeft, isActive, progress, toggleTimer, resetTimer, setMode,
+        isDialogOpen, setIsDialogOpen, newTaskTitle, setNewTaskTitle, newTaskPomodoros, setNewTaskPomodoros,
+        newTaskSubtasks, setNewTaskSubtasks, handleAddTask, notice, clearNotice, pinButton,
+    } = s;
+
+    const body = (
+        <>
         <Box sx={{
             display: 'grid', gap: { xs: 1.5, md: 2 }, alignContent: 'start', flex: 1, minHeight: 0,
             // Stacked on phones; timer | plan from tablets up.
@@ -115,28 +142,28 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
                     <Button size="small" variant={timerType === 'pomodoro' ? "contained" : "text"}
                         onClick={() => setMode('pomodoro')}
                         sx={{ 
-                            color: timerType === 'pomodoro' ? '#181512' : 'rgba(229, 169, 95, 0.65)', 
-                            bgcolor: timerType === 'pomodoro' ? '#e5a95f' : 'transparent', 
+                            color: timerType === 'pomodoro' ? '#0b0e15' : 'rgba(245, 184, 81, 0.72)', 
+                            bgcolor: timerType === 'pomodoro' ? '#f5b851' : 'transparent', 
                             fontWeight: 'bold',
                             fontFamily: '"Outfit", sans-serif',
-                            '&:hover': { bgcolor: timerType === 'pomodoro' ? '#ffd54f' : 'rgba(229, 169, 95, 0.1)' } 
+                            '&:hover': { bgcolor: timerType === 'pomodoro' ? '#ffd54f' : 'rgba(245, 184, 81, 0.1)' } 
                         }}
                     > Foco </Button>
                     <Button size="small" variant={timerType === 'break' ? "contained" : "text"}
                         onClick={() => setMode('break')}
                         sx={{ 
-                            color: timerType === 'break' ? '#181512' : 'rgba(229, 169, 95, 0.65)', 
-                            bgcolor: timerType === 'break' ? '#ff6d00' : 'transparent', 
+                            color: timerType === 'break' ? '#0b0e15' : 'rgba(245, 184, 81, 0.72)', 
+                            bgcolor: timerType === 'break' ? '#f97316' : 'transparent', 
                             fontWeight: 'bold',
                             fontFamily: '"Outfit", sans-serif',
-                            '&:hover': { bgcolor: timerType === 'break' ? '#ff8f00' : 'rgba(229, 169, 95, 0.1)' } 
+                            '&:hover': { bgcolor: timerType === 'break' ? '#fb923c' : 'rgba(245, 184, 81, 0.1)' } 
                         }}
                     > Descanso </Button>
                 </Stack>
 
                 <Box sx={{ position: 'relative', display: 'inline-flex', mb: 2 }}>
                     {/* Background Track */}
-                    <CircularProgress variant="determinate" value={100} size={140} thickness={1.2} aria-hidden sx={{ color: '#27201b', position: 'absolute' }} />
+                    <CircularProgress variant="determinate" value={100} size={140} thickness={1.2} aria-hidden sx={{ color: '#1e2636', position: 'absolute' }} />
                     <CircularProgress
                         aria-label="Progreso del temporizador"
                         variant="determinate"
@@ -208,10 +235,10 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
                         return (
                             <Paper key={task.id} variant="outlined" sx={{
                                 mb: 1,
-                                borderColor: isActive ? '#ef5350' : '#333',
-                                bgcolor: isActive ? 'rgba(239, 83, 80, 0.08)' : '#1a1a1a',
+                                borderColor: isActive ? '#ef5350' : '#273244',
+                                bgcolor: isActive ? 'rgba(239, 83, 80, 0.08)' : '#161c28',
                                 transition: 'all 0.2s',
-                                '&:hover': { borderColor: '#555' }
+                                '&:hover': { borderColor: '#475569' }
                             }}>
                                 <ListItem
                                     secondaryAction={
@@ -328,9 +355,35 @@ export default function StudyTools({ onStopRequest }: StudyToolsProps) {
             <Snackbar
                 open={notice !== null}
                 autoHideDuration={6000}
-                onClose={() => setNotice(null)}
+                onClose={clearNotice}
                 message={notice}
             />
+        </>
+    );
+
+    if (bare) {
+        return (
+            <Box sx={{ p: 2, width: { xs: 'min(92vw, 460px)', sm: 480 }, maxHeight: '78dvh', overflowY: 'auto' }}>
+                <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                    <Typography variant="overline" sx={{ color: 'text.secondary', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box component="span" aria-hidden sx={{ width: 4, height: 14, borderRadius: 1, bgcolor: 'primary.main', opacity: 0.8 }} />
+                        Estudio y Pomodoro
+                    </Typography>
+                    {pinButton}
+                </Stack>
+                {body}
+            </Box>
+        );
+    }
+
+    return (
+        <Panel
+            id="study"
+            title="Estudio"
+            actions={pinButton}
+            summary={`${formatTime(timeLeft)} · ${isActive ? 'corriendo' : 'en pausa'} · ${tasks.length === 1 ? '1 tarea' : `${tasks.length} tareas`}`}
+        >
+            {body}
         </Panel>
     );
 }

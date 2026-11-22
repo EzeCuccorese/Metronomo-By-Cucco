@@ -283,7 +283,7 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
                     <Box role="img" aria-label={`Velocidad del teclado PC: nivel ${velocityLevel + 1} de ${VELOCITY_LEVELS.length}`} data-testid="piano-velocity" data-level={velocityLevel}
                         sx={{ display: 'inline-flex', alignItems: 'flex-end', gap: '2px', height: 20, px: 0.5 }}>
                         {VELOCITY_LEVELS.map((_, i) => (
-                            <Box key={i} sx={{ width: 4, height: 6 + i * 3, borderRadius: '1px', bgcolor: i <= velocityLevel ? '#e5a95f' : '#4a4034' }} />
+                            <Box key={i} sx={{ width: 4, height: 6 + i * 3, borderRadius: '1px', bgcolor: i <= velocityLevel ? '#f5b851' : '#334155' }} />
                         ))}
                     </Box>
                 </Tooltip>

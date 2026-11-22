@@ -80,7 +80,7 @@ export const ViewMenu: React.FC<{ extra?: React.ReactNode; compact?: boolean; on
         aria-expanded={anchor !== null}
         onClick={(e) => setAnchor(e.currentTarget)}
         data-testid={compact ? 'compact-view-menu-button' : 'view-menu-button'}
-        sx={{ borderRadius: 2, borderColor: 'rgba(229,169,95,0.4)', color: '#e5a95f', textTransform: 'none', fontWeight: 'bold', flexShrink: 0, whiteSpace: 'nowrap', width: compact ? 'auto' : { xs: '100%', sm: 'auto' }, height: compact ? 44 : undefined }}
+        sx={{ borderRadius: 2, borderColor: 'rgba(245, 184, 81, 0.42)', color: '#f5b851', textTransform: 'none', fontWeight: 'bold', flexShrink: 0, whiteSpace: 'nowrap', width: compact ? 'auto' : { xs: '100%', sm: 'auto' }, height: compact ? 44 : undefined }}
       >
         Vista
       </Button>

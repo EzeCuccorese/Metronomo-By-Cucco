@@ -253,7 +253,7 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
                     onDoubleClick={() => setPan(ch.id, 0)}
                     aria-label={`Paneo ${label}`}
                     getAriaValueText={panLabel}
-                    sx={{ flex: 1, color: '#9c8f80' }}
+                    sx={{ flex: 1, color: '#94a3b8' }}
                   />
                   <span className="mixer-row__pan" aria-hidden="true">{panLabel(ch.pan)}</span>
                 </div>

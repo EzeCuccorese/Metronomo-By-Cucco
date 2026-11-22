@@ -103,8 +103,8 @@ describe('App (integration with a scripted engine)', () => {
         render(<App />);
         await choose('Ritmo Predefinido', 'Chacarera Trunca');
         expect(scheduler().pattern?.id).toBe('chacarera_trunca');
-        expect(bpmInput().value).toBe('135');
-        expect(screen.getByTestId('bpm-unit')).toHaveTextContent('♩.=90');
+        expect(bpmInput().value).toBe('132');
+        expect(screen.getByTestId('bpm-unit')).toHaveTextContent('♩.=88');
     });
 
     it('queues a preset while playing and follows the engine when it switches', async () => {
@@ -387,14 +387,40 @@ describe('App (integration with a scripted engine)', () => {
             expect(panels()).toEqual(['Pulso', 'Modos de práctica']);
             openView();
             fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Piano' }));
-            expect(panels()).toEqual(['Pulso', 'Modos de práctica', 'Piano']);
+            expect(panels()).toEqual(['Pulso', 'Piano', 'Modos de práctica']);
             openView();
             expect(screen.getByRole('menuitemradio', { name: 'Personalizado' })).toHaveAttribute('aria-checked', 'true');
             // Trying another preset does not lose the custom arrangement.
             fireEvent.click(screen.getByRole('menuitemradio', { name: 'Estudio' }));
             openView();
             fireEvent.click(screen.getByRole('menuitemradio', { name: 'Personalizado' }));
-            expect(panels()).toEqual(['Pulso', 'Modos de práctica', 'Piano']);
+            expect(panels()).toEqual(['Pulso', 'Piano', 'Modos de práctica']);
+        });
+
+        it('restores the factory preset when re-selecting an edited preset from the header dropdown', async () => {
+            render(<App />);
+            // Modify a cell on Rock Estándar
+            const cell = screen.getByTestId('cell-kick-2');
+            fireEvent.pointerDown(cell, { button: 0 });
+            expect(screen.getByTestId('cell-kick-2')).toHaveAttribute('aria-pressed', 'true');
+
+            // Re-selecting Rock Estándar restores the factory steps
+            fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Ritmo Predefinido' }));
+            fireEvent.click(within(await screen.findByRole('listbox')).getByText('Rock Estándar'));
+            expect(screen.getByTestId('cell-kick-2')).toHaveAttribute('aria-pressed', 'false');
+        });
+
+        it('unpins and re-pins Study via the top-left trigger pop-up without losing timer state', async () => {
+            render(<App />);
+            expect(document.querySelector('[data-panel="study"]')).not.toBeNull();
+            fireEvent.click(screen.getByTestId('study-pin-toggle'));
+            expect(document.querySelector('[data-panel="study"]')).toBeNull();
+
+            fireEvent.click(screen.getByTestId('study-trigger'));
+            const dialog = await screen.findByRole('dialog', { name: 'Estudio y Pomodoro' });
+            expect(dialog).toBeVisible();
+            fireEvent.click(within(dialog).getByTestId('study-pin-toggle'));
+            expect(document.querySelector('[data-panel="study"]')).not.toBeNull();
         });
 
         it('keeps the sound of a hidden mixer and harmony when a preset hides them', () => {

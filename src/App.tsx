@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Box, Grid } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -22,6 +22,8 @@ import { clampBpm } from './rhythms/meter';
 import PatternEditor from './components/PatternEditor';
 import ConductorVisual from './components/ConductorVisual';
 import StudyTools from './components/StudyTools';
+import { useStudySession } from './hooks/useStudySession';
+import { StudyTrigger } from './components/StudyTrigger';
 import HarmonyBuilder from './components/HarmonyBuilder';
 import InteractiveInstrumentVisual from './components/InteractiveInstrumentVisual';
 import { MixerConsole } from './components/MixerConsole';
@@ -116,14 +118,27 @@ function App() {
 
   const loadPreset = useCallback((patternId: string) => {
     const id = normalizePatternId(patternId);
-    const next = resolvePattern(id, overrides);
+    const isCustom = id === CUSTOM_PATTERN_ID;
+    if (!isCustom) {
+      setOverrides(prev => {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
+    const next = isCustom ? resolvePattern(id, overrides) : (getBasePattern(id) ?? PRESET_PATTERNS[0]);
     if (isPlaying) {
+      if (id === currentPattern.id) {
+        setSelectedPatternId(id);
+        return;
+      }
       queuePattern(next);
       return;
     }
     setSelectedPatternId(id);
     if (next.recommendedTempo && !trainer.active) setBpm(next.recommendedTempo);
-  }, [isPlaying, overrides, queuePattern, setSelectedPatternId, setBpm, trainer.active]);
+  }, [isPlaying, overrides, currentPattern.id, queuePattern, setOverrides, setSelectedPatternId, setBpm, trainer.active]);
 
   const handlePatternUpdate = useCallback((pattern: RhythmPattern) => {
     const normalized = withUsedInstruments(pattern);
@@ -222,13 +237,22 @@ function App() {
   ].join(' · ');
 
   const canRestore = currentPattern.id !== CUSTOM_PATTERN_ID && !!overrides[currentPattern.id];
+  const studySession = useStudySession(engine.stop);
+  const studyDockRef = useRef<HTMLDivElement | null>(null);
+  const studyPinned = shown('study');
+  const toggleStudyPin = useCallback(() => {
+    layout.setPanelState('study', studyPinned ? 'hidden' : 'open');
+  }, [layout, studyPinned]);
+  const focusPinnedStudy = useCallback(() => {
+    studyDockRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, []);
 
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
       <LayoutContext.Provider value={layout}>
       <PlaybackContext.Provider value={engine.store}>
-        <Box component="main" className="app-shell" sx={{ minHeight: '100dvh', width: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#070605', overflowX: 'hidden', alignItems: 'center', boxSizing: 'border-box' }}>
+        <Box component="main" className="app-shell" sx={{ minHeight: '100dvh', width: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#090c12', overflowX: 'hidden', alignItems: 'center', boxSizing: 'border-box' }}>
 
           <Box className="studio-chassis console-wood-edge" sx={{ width: '100%', maxWidth: '1440px', display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 2 }, p: { xs: 1, md: 2 }, boxSizing: 'border-box' }}>
 
@@ -245,6 +269,14 @@ function App() {
               onSelectPreset={loadPreset}
               tempoLocked={tempoLocked}
               viewControl={<ViewMenu onStageMode={openStage} />}
+              studyControl={(
+                <StudyTrigger
+                  session={studySession}
+                  pinned={studyPinned}
+                  onTogglePin={toggleStudyPin}
+                  onFocusPinned={focusPinnedStudy}
+                />
+              )}
               pattern={currentPattern}
               onNudgeBpm={nudgeBpm}
               headerRef={setHeaderEl}
@@ -268,9 +300,24 @@ function App() {
             {/* Rows of an aligned 12-column grid; cells stretch to the row height. Hidden panels leave no gap. */}
             <Grid container spacing={{ xs: 1.5, md: 2 }} sx={{ width: '100%' }}>
 
-              {/* Row 1: pulse (primary) + instruments */}
+              {/* Top-left pinned Study / Pomodoro dock (unpinned state lives in the header pop-up) */}
+              {studyPinned && (
+                <Grid size={12} ref={studyDockRef} className="area-study">
+                  <StudyTools
+                    onStopRequest={engine.stop}
+                    session={studySession}
+                    pinned={studyPinned}
+                    onTogglePin={toggleStudyPin}
+                  />
+                </Grid>
+              )}
+
+              {/* Row 1: compact metronome (Pulso) on left + Armonía (or Instrumentos fallback) on right */}
               {shown('pulse') && (
-                <Grid size={{ xs: 12, md: shown('instruments') ? 5 : 12, lg: shown('instruments') ? 4 : 12 }} className="area-pulse">
+                <Grid
+                  size={{ xs: 12, md: shown('harmony') || shown('instruments') ? 4 : 12, lg: shown('harmony') || shown('instruments') ? 3 : 12 }}
+                  className="area-pulse"
+                >
                   <Panel id="pulse" title="Pulso" summary={`${bpm} BPM · ${currentPattern.name}`}>
                     <ConductorVisual
                       pattern={currentPattern}
@@ -282,8 +329,15 @@ function App() {
                   </Panel>
                 </Grid>
               )}
-              {shown('instruments') && (
-                <Grid size={{ xs: 12, md: shown('pulse') ? 7 : 12, lg: shown('pulse') ? 8 : 12 }}>
+              {shown('harmony') && (
+                <Grid size={{ xs: 12, md: shown('pulse') ? 8 : 12, lg: shown('pulse') ? 9 : 12 }}>
+                  <Panel id="harmony" title="Armonía" summary={harmonySummary}>
+                    <HarmonyBuilder isPlaying={isPlaying} />
+                  </Panel>
+                </Grid>
+              )}
+              {!shown('harmony') && shown('instruments') && (
+                <Grid size={{ xs: 12, md: shown('pulse') ? 8 : 12, lg: shown('pulse') ? 9 : 12 }}>
                   <Panel id="instruments" title="Instrumentos" summary={currentPattern.name} sx={{ height: 'auto' }}>
                     <InteractiveInstrumentVisual
                       pattern={currentPattern}
@@ -294,7 +348,29 @@ function App() {
                 </Grid>
               )}
 
-              {/* Row 2: step sequencer, full width */}
+              {/* Row 2: Piano directly accessible underneath Pulso + Armonía */}
+              {shown('piano') && (
+                <Grid size={12}>
+                  <Panel id="piano" title="Piano" summary="Teclado y melodías">
+                    <PianoPanel engine={engine} isPlaying={isPlaying} />
+                  </Panel>
+                </Grid>
+              )}
+
+              {/* Row 3: Instruments (when Harmony already occupies Row 1 right) */}
+              {shown('harmony') && shown('instruments') && (
+                <Grid size={12}>
+                  <Panel id="instruments" title="Instrumentos" summary={currentPattern.name} sx={{ height: 'auto' }}>
+                    <InteractiveInstrumentVisual
+                      pattern={currentPattern}
+                      isPlaying={isPlaying}
+                      onPreviewInstrument={(instrument, modifier) => void engine.previewInstrument(instrument, modifier)}
+                    />
+                  </Panel>
+                </Grid>
+              )}
+
+              {/* Row 4: step sequencer, full width */}
               {shown('sequencer') && (
                 <Grid size={12}>
                   <Panel id="sequencer" title="Secuenciador" summary={currentPattern.name} sx={{ '& section': { mt: 0 } }}>
@@ -310,9 +386,9 @@ function App() {
                 </Grid>
               )}
 
-              {/* Row 3: mixer + practice modes and harmony */}
+              {/* Row 5: mixer + practice modes */}
               {shown('mixer') && (
-                <Grid size={{ xs: 12, lg: shown('practice') || shown('harmony') ? 8 : 12 }}>
+                <Grid size={{ xs: 12, lg: shown('practice') ? 8 : 12 }}>
                   <Panel id="mixer" title="Mezclador" summary={mixerSummary}>
                     <MixerConsole
                       channels={mixer.visibleChannels}
@@ -332,40 +408,17 @@ function App() {
                   </Panel>
                 </Grid>
               )}
-              {(shown('practice') || shown('harmony')) && (
-                <Grid size={{ xs: 12, lg: shown('mixer') ? 4 : 12 }} sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 2 } }}>
-                  {shown('practice') && (
-                    <PracticeModes
-                      trainer={trainer}
-                      onTrainerChange={setTrainer}
-                      silence={silence}
-                      onSilenceChange={setSilence}
-                      formas={formas}
-                      onFormasChange={setFormas}
-                      isPlaying={isPlaying}
-                    />
-                  )}
-                  {shown('harmony') && (
-                    <Panel id="harmony" title="Armonía" summary={harmonySummary} sx={{ flex: 1, height: 'auto' }}>
-                      <HarmonyBuilder isPlaying={isPlaying} />
-                    </Panel>
-                  )}
-                </Grid>
-              )}
-
-              {/* Row 4: study tools, full width (laid out horizontally inside) */}
-              {shown('study') && (
-                <Grid size={12}>
-                  <StudyTools onStopRequest={engine.stop} />
-                </Grid>
-              )}
-
-              {/* Row 5: piano (harmony, playable keyboard, melody looper) */}
-              {shown('piano') && (
-                <Grid size={12}>
-                  <Panel id="piano" title="Piano" summary="Teclado y melodías">
-                    <PianoPanel engine={engine} isPlaying={isPlaying} />
-                  </Panel>
+              {shown('practice') && (
+                <Grid size={{ xs: 12, lg: shown('mixer') ? 4 : 12 }}>
+                  <PracticeModes
+                    trainer={trainer}
+                    onTrainerChange={setTrainer}
+                    silence={silence}
+                    onSilenceChange={setSilence}
+                    formas={formas}
+                    onFormasChange={setFormas}
+                    isPlaying={isPlaying}
+                  />
                 </Grid>
               )}
 

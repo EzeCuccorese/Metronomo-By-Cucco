@@ -4,6 +4,7 @@ import { LAYOUT_NEW_USER, LAYOUT_TODO, PRESET_PANELS, sanitizeLayout } from '../
 import type { LayoutPreset, PanelId, PanelState } from '../state/layout';
 import type { LayoutApi } from '../state/LayoutContext';
 import { STORAGE_PREFIX, writeStored } from '../state/storage';
+import { runViewTransition } from '../state/viewTransition';
 
 const LAYOUT_KEY = 'ui.layout.v1';
 /** Saved by merely using the page (dismissing a notice, seeing a tip): they do not make someone an existing user. */
@@ -41,17 +42,27 @@ export function useLayout(): LayoutApi {
     }, []);
 
     const setPanelState = useCallback((id: PanelId, state: PanelState) => {
-        setLayout(prev => {
-            if (prev.panels[id] === state) return prev;
-            const panels = { ...prev.panels, [id]: state };
-            return { preset: 'personalizado', panels, custom: panels };
-        });
-    }, [setLayout]);
+        const update = () => {
+            setLayout(prev => {
+                if (prev.panels[id] === state) return prev;
+                const panels = { ...prev.panels, [id]: state };
+                return { preset: 'personalizado', panels, custom: panels };
+            });
+        };
+        const currentState = layout.panels[id];
+        if (currentState !== state && (currentState === 'hidden' || state === 'hidden')) {
+            runViewTransition(update);
+        } else {
+            update();
+        }
+    }, [layout.panels, setLayout]);
 
     const setPreset = useCallback((preset: LayoutPreset) => {
-        setLayout(prev => preset === 'personalizado'
-            ? { ...prev, preset, panels: prev.custom }
-            : { ...prev, preset, panels: PRESET_PANELS[preset] });
+        runViewTransition(() => {
+            setLayout(prev => preset === 'personalizado'
+                ? { ...prev, preset, panels: prev.custom }
+                : { ...prev, preset, panels: PRESET_PANELS[preset] });
+        });
     }, [setLayout]);
 
     return useMemo(() => ({ preset: layout.preset, panels: layout.panels, setPanelState, setPreset }), [layout.preset, layout.panels, setPanelState, setPreset]);

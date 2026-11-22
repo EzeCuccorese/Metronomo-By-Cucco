@@ -34,7 +34,7 @@ test.describe('contrast', () => {
                 return 0.2126 * r + 0.7152 * g + 0.0722 * b;
             };
             const parse = (color: string) => (color.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
-            const BG = [11, 9, 8]; // the strip background (#0b0908)
+            const BG = [11, 14, 21]; // the strip background (#0b0e15)
             const selectors = ['.channel-param-label', '.pan-value-display', '.fader-scale > span', '.mixer-row__db', '.mixer-row__name', '.channel-label-screen .vfd-text'];
             const out: string[] = [];
             for (const selector of selectors) {

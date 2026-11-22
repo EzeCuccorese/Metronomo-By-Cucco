@@ -79,6 +79,15 @@ export default function ConductorVisual({
 
     const lastStepTimeRef = useRef<number>(0);
     const prevStepIndexRef = useRef<number>(-1);
+    const isPlayingRef = useRef(isPlaying);
+    const scheduleRenderRef = useRef<() => void>(() => {});
+    const canvasBoxRef = useRef<HTMLDivElement | null>(null);
+    const sizeRef = useRef({ width: 0, height: 0, dpr: 1 });
+
+    useEffect(() => {
+        isPlayingRef.current = isPlaying;
+        scheduleRenderRef.current();
+    }, [isPlaying, pattern, bpm]);
 
     useEffect(() => {
         if (lastStepTimeRef.current === 0) {
@@ -99,28 +108,39 @@ export default function ConductorVisual({
         if (isBeatStart(currentStepIndex, stepsPerBeat)) {
             pulseIntensityRef.current = 1.0;
         }
+        scheduleRenderRef.current();
     }, [currentStepIndex, subdivision, stepsPerBeat]);
 
-    // Canvas animation loop
+    // Canvas animation loop (resizes via ResizeObserver and pauses rAF when settled & stopped)
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        let animationFrameId: number;
+        let animationFrameId: number | null = null;
 
-        const render = () => {
-            if (!ctx || !canvas) return;
-
-            // Handle High DPI displays: backing store in device pixels, drawing in CSS pixels.
+        const syncSize = () => {
             const dpr = window.devicePixelRatio || 1;
             const width = canvas.clientWidth;
             const height = canvas.clientHeight;
-            if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
-                canvas.width = Math.round(width * dpr);
-                canvas.height = Math.round(height * dpr);
+            if (!width || !height) return;
+            const targetW = Math.round(width * dpr);
+            const targetH = Math.round(height * dpr);
+            if (canvas.width !== targetW || canvas.height !== targetH) {
+                canvas.width = targetW;
+                canvas.height = targetH;
             }
+            sizeRef.current = { width, height, dpr };
+        };
+
+        const render = () => {
+            animationFrameId = null;
+            if (!ctx || !canvas) return;
+
+            syncSize();
+            const { width, height, dpr } = sizeRef.current;
+            if (!width || !height) return;
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
             ctx.clearRect(0, 0, width, height);
@@ -135,7 +155,7 @@ export default function ConductorVisual({
                     width / 2, height / 2, Math.max(width, height) / 1.5
                 );
                 // Warm Amber glow
-                gradient.addColorStop(0, `rgba(229, 169, 95, ${pulseIntensityRef.current * 0.15})`);
+                gradient.addColorStop(0, `rgba(245, 184, 81, ${pulseIntensityRef.current * 0.15})`);
                 gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
                 ctx.fillStyle = gradient;
                 ctx.fillRect(0, 0, width, height);
@@ -151,6 +171,14 @@ export default function ConductorVisual({
                 drawOrchestraConductor(ctx, width, height);
             }
 
+            const settling = Math.abs(targetAngleRef.current - angleRef.current) > 0.001 || pulseIntensityRef.current > 0.005;
+            if (isPlayingRef.current || settling) {
+                animationFrameId = requestAnimationFrame(render);
+            }
+        };
+
+        const scheduleRender = () => {
+            if (animationFrameId !== null) return;
             animationFrameId = requestAnimationFrame(render);
         };
 
@@ -158,19 +186,17 @@ export default function ConductorVisual({
             const layout = pendulumLayout(w, h);
             const { centerX, centerY, baseWidth, topWidth, apexY } = layout;
 
-            // --- A. Draw Metronome Wooden Body ---
-            // Outer Shadow / Ambient shadow
+            // --- A. Draw Metronome Brushed Gunmetal Body ---
             ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
             ctx.shadowBlur = 15;
             ctx.shadowOffsetY = 5;
 
-            // Gradient for warm mahogany/cedar wood
-            const woodGrad = ctx.createLinearGradient(centerX - baseWidth/2, centerY, centerX + baseWidth/2, centerY);
-            woodGrad.addColorStop(0, '#2d1a10'); // Dark left
-            woodGrad.addColorStop(0.3, '#4e2f1d'); // Rich wood warm
-            woodGrad.addColorStop(0.5, '#5c3924'); // Lighter center
-            woodGrad.addColorStop(0.7, '#4e2f1d'); // Rich wood warm
-            woodGrad.addColorStop(1, '#25150d'); // Very dark right
+            const bodyGrad = ctx.createLinearGradient(centerX - baseWidth/2, centerY, centerX + baseWidth/2, centerY);
+            bodyGrad.addColorStop(0, '#182030');
+            bodyGrad.addColorStop(0.3, '#253147');
+            bodyGrad.addColorStop(0.5, '#30405c');
+            bodyGrad.addColorStop(0.7, '#253147');
+            bodyGrad.addColorStop(1, '#141a28');
 
             ctx.beginPath();
             ctx.moveTo(centerX - baseWidth / 2, centerY);
@@ -178,23 +204,23 @@ export default function ConductorVisual({
             ctx.lineTo(centerX + topWidth / 2, apexY);
             ctx.lineTo(centerX + baseWidth / 2, centerY);
             ctx.closePath();
-            ctx.fillStyle = woodGrad;
+            ctx.fillStyle = bodyGrad;
             ctx.fill();
 
-            // Sutil wood outline
-            ctx.shadowBlur = 0; // Reset shadow
+            // Subtle metallic outline
+            ctx.shadowBlur = 0;
             ctx.shadowOffsetY = 0;
             ctx.lineWidth = 1.5;
-            ctx.strokeStyle = 'rgba(229, 169, 95, 0.12)';
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
             ctx.stroke();
 
             // --- B. Draw Inside Metal Plate Face (Scale Ticks) ---
             const { faceWidthBase, faceWidthTop, faceHeight, faceY } = layout;
 
             const faceGrad = ctx.createLinearGradient(centerX - faceWidthBase/2, centerY, centerX + faceWidthBase/2, centerY);
-            faceGrad.addColorStop(0, '#110f0e');
-            faceGrad.addColorStop(0.5, '#201c18');
-            faceGrad.addColorStop(1, '#110f0e');
+            faceGrad.addColorStop(0, '#0b0e15');
+            faceGrad.addColorStop(0.5, '#151c29');
+            faceGrad.addColorStop(1, '#0b0e15');
 
             ctx.beginPath();
             ctx.moveTo(centerX - faceWidthBase / 2, centerY - 5);
@@ -298,7 +324,7 @@ export default function ConductorVisual({
             const smoothStep = smoothStepPosition(live.currentStepIndex, elapsedMs, durationMs, reduceMotionRef.current);
             const sub = live.pattern.subdivision;
 
-            if (live.pattern.grooveType === 'chacarera_poliritmica') {
+            if (live.pattern.grooveType === 'chacarera_poliritmica' || live.pattern.grooveType === 'chacarera_trunca') {
                 // --- CHACARERA POLIRITMICA DOUBLE-SPARK VISUALIZER (HEMIOLA) ---
 
                 // 1. 3/4 feel triangle path
@@ -438,11 +464,19 @@ export default function ConductorVisual({
             }
         };
 
-        // Start animation frame loop
-        animationFrameId = requestAnimationFrame(render);
+        scheduleRenderRef.current = scheduleRender;
+        const box = canvasBoxRef.current;
+        const observer = box && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => {
+            syncSize();
+            scheduleRender();
+        }) : null;
+        if (observer && box) observer.observe(box);
+        render();
 
         return () => {
-            cancelAnimationFrame(animationFrameId);
+            scheduleRenderRef.current = () => {};
+            observer?.disconnect();
+            if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
         };
     }, [visualMode]);
 
@@ -579,13 +613,13 @@ export default function ConductorVisual({
             </ToggleButtonGroup>
 
             {/* Canvas Main Screen */}
-            <Box sx={{
+            <Box ref={canvasBoxRef} sx={{
                 width: '100%',
                 height: 180,
                 [`@media ${LANDSCAPE_COMPACT_QUERY}`]: { height: 'clamp(96px, 34svh, 140px)', mb: 0.5 },
                 borderRadius: 4,
-                bgcolor: 'rgba(0,0,0,0.3)',
-                border: '1px solid rgba(215, 204, 200, 0.04)',
+                bgcolor: 'rgba(11, 14, 21, 0.72)',
+                border: '1px solid rgba(148, 163, 184, 0.12)',
                 position: 'relative',
                 overflow: 'hidden',
                 mb: 1.5

@@ -26,7 +26,10 @@ import type { RhythmPattern, InstrumentType, RhythmStep } from '../rhythms/Rhyth
 import { INSTRUMENT_IMAGES } from '../constants/instrumentAssets';
 import { getGroupCount } from '../rhythms/meter';
 import { TIME_SIGNATURES, changeTimeSignature, remapSteps, sameSignature } from '../rhythms/patternEditing';
+import type { PatternSource } from '../rhythms/patternEditing';
 import { usePlaybackStore } from '../state/PlaybackContext';
+import { NoteGlyph } from './NoteGlyph';
+import type { NoteGlyphKind } from './NoteGlyph';
 
 interface PatternEditorProps {
     pattern: RhythmPattern;
@@ -63,19 +66,19 @@ const INSTRUMENTS_DISPLAY: { type: InstrumentType; label: string; group: string 
 ];
 
 /** Steps per pulse (per denominator note). Labels depend on the pulse unit. */
-const SUBDIVISION_OPTIONS: Record<4 | 8, { value: number; label: string; icon: string }[]> = {
+const SUBDIVISION_OPTIONS: Record<4 | 8, { value: number; label: string; glyph: NoteGlyphKind }[]> = {
     4: [
-        { value: 1, label: 'Negras', icon: '♩' },
-        { value: 2, label: 'Corcheas', icon: '♪' },
-        { value: 3, label: 'Tresillos', icon: '♪₃' },
-        { value: 4, label: 'Semicorcheas', icon: '𝅘𝅥𝅯' },
-        { value: 6, label: 'Sextillos', icon: '𝅘𝅥𝅯₆' },
+        { value: 1, label: 'Negras', glyph: 'quarter' },
+        { value: 2, label: 'Corcheas', glyph: 'eighth' },
+        { value: 3, label: 'Tresillos', glyph: 'triplet' },
+        { value: 4, label: 'Semicorcheas', glyph: 'sixteenth' },
+        { value: 6, label: 'Sextillos', glyph: 'sextuplet' },
     ],
     8: [
-        { value: 1, label: 'Corcheas', icon: '♪' },
-        { value: 2, label: 'Semicorcheas', icon: '𝅘𝅥𝅯' },
-        { value: 3, label: 'Tresillos', icon: '𝅘𝅥𝅯₃' },
-        { value: 4, label: 'Fusas', icon: '𝅘𝅥𝅰' },
+        { value: 1, label: 'Corcheas', glyph: 'eighth' },
+        { value: 2, label: 'Semicorcheas', glyph: 'sixteenth' },
+        { value: 3, label: 'Tresillos', glyph: 'triplet' },
+        { value: 4, label: 'Fusas', glyph: 'thirtysecond' },
     ],
 };
 
@@ -91,12 +94,119 @@ const getIntensityColor = (v: number) => {
     return 'text.disabled';
 };
 
-const getNoteSymbol = (stepsPerPulse: number, den: number) => {
+const getNoteGlyphKind = (stepsPerPulse: number, den: number): NoteGlyphKind => {
     const perQuarter = stepsPerPulse * (4 / den);
-    if (perQuarter <= 1) return '♩';
-    if (perQuarter <= 3) return '♪';
-    return '𝅘𝅥𝅯';
+    if (perQuarter <= 1) return 'quarter';
+    if (perQuarter <= 2) return 'eighth';
+    if (perQuarter === 3) return 'triplet';
+    if (perQuarter <= 4) return 'sixteenth';
+    if (perQuarter <= 6) return 'sextuplet';
+    return 'thirtysecond';
 };
+
+interface PatternRowProps {
+    inst: { type: InstrumentType; label: string; group: string };
+    sub: number;
+    stepsPerPulse: number;
+    cellsPerGroup: number;
+    noteGlyph: NoteGlyphKind;
+    rowNotes: (RhythmStep | undefined)[];
+    onPaintStart: (col: number, instrument: InstrumentType) => void;
+    onPaintMove: (col: number, instrument: InstrumentType) => void;
+}
+
+function renderCellVisual(inst: InstrumentType, note: RhythmStep, noteGlyph: NoteGlyphKind): React.ReactNode {
+    if (inst === 'hihat' && note.modifier === 'open') return <NoteGlyph kind="open" size={16} />;
+    if (inst === 'hihat_foot') return '△';
+    if (inst === 'snare' && note.modifier === 'snares_off') return 'T';
+    if (inst === 'rim' || note.modifier === 'aro') return <NoteGlyph kind="rim" size={16} />;
+    if (note.modifier === 'open') return <NoteGlyph kind="open" size={16} />;
+    return <NoteGlyph kind={noteGlyph} size={18} />;
+}
+
+const PatternRow = React.memo<PatternRowProps>(({
+    inst, sub, stepsPerPulse, cellsPerGroup, noteGlyph, rowNotes, onPaintStart, onPaintMove,
+}) => {
+    const Icon = InstrumentIcons[inst.type];
+    return (
+        <Box sx={{ display: 'contents' }}>
+            <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                    alignItems: 'center',
+                    p: 1,
+                    bgcolor: 'rgba(255,255,255,0.02)',
+                    borderRight: '1px solid rgba(148, 163, 184, 0.16)',
+                    minWidth: 0,
+                }}
+            >
+                {INSTRUMENT_IMAGES[inst.type] ? (
+                    <Avatar
+                        src={INSTRUMENT_IMAGES[inst.type]}
+                        alt=""
+                        sx={{ width: 18, height: 18, border: '1px solid rgba(245, 184, 81, 0.4)', boxShadow: '0 0 4px rgba(245, 184, 81, 0.2)' }}
+                    />
+                ) : (
+                    Icon && <Icon sx={{ fontSize: 16, color: '#94a3b8' }} />
+                )}
+                <Typography variant="body2" noWrap sx={{ fontSize: '0.8rem', color: '#cbd5e1' }}>{inst.label}</Typography>
+            </Stack>
+
+            {Array.from({ length: sub }).map((_, idx) => {
+                const note = rowNotes[idx];
+                const isGroupStart = Number.isInteger(cellsPerGroup) ? idx % cellsPerGroup === 0 : idx === 0;
+                const isPulseStart = Number.isInteger(stepsPerPulse) ? idx % stepsPerPulse === 0 : false;
+                return (
+                    <Box
+                        key={idx}
+                        component="button"
+                        type="button"
+                        data-col={idx}
+                        data-testid={`cell-${inst.type}-${idx + 1}`}
+                        aria-label={`${inst.label}, paso ${idx + 1}${note ? `, intensidad ${Math.round(note.velocity * 100)}%` : ''}`}
+                        aria-pressed={!!note}
+                        onPointerDown={(e: React.PointerEvent) => {
+                            if (e.button !== 0) return;
+                            e.preventDefault();
+                            onPaintStart(idx, inst.type);
+                        }}
+                        onPointerEnter={() => onPaintMove(idx, inst.type)}
+                        onKeyDown={(e: React.KeyboardEvent) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                onPaintStart(idx, inst.type);
+                            }
+                        }}
+                        sx={{
+                            all: 'unset',
+                            boxSizing: 'border-box',
+                            height: 40,
+                            '@media (pointer: coarse)': { height: 44 },
+                            bgcolor: isGroupStart ? 'rgba(255,255,255,0.03)' : isPulseStart ? 'rgba(255,255,255,0.015)' : 'transparent',
+                            borderRight: isGroupStart ? '1px solid rgba(148,163,184,0.16)' : '1px solid rgba(255,255,255,0.04)',
+                            borderBottom: '1px solid rgba(255,255,255,0.04)',
+                            cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '1.1rem',
+                            touchAction: 'none',
+                            color: note ? getIntensityColor(note.velocity) : 'transparent',
+                            '&:hover': { bgcolor: 'rgba(255,255,255,0.06)' },
+                            '&:focus-visible': { outline: '2px solid #f5b851', outlineOffset: '-2px' },
+                            userSelect: 'none',
+                        }}
+                    >
+                        {note && (
+                            <Box component="span" aria-hidden sx={{ display: 'inline-flex', alignItems: 'center', transform: note.velocity < 0.6 ? 'scale(0.8)' : 'scale(1)' }}>
+                                {renderCellVisual(inst.type, note, noteGlyph)}
+                            </Box>
+                        )}
+                    </Box>
+                );
+            })}
+        </Box>
+    );
+});
 
 export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = false, onPreviewInstrument, canRestore = false, onRestore }: PatternEditorProps) {
     const [activeFilter, setActiveFilter] = useState<'used' | 'all' | 'drums' | 'latino'>('used');
@@ -106,7 +216,37 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
     const undoSteps = undoState?.patternId === pattern.id ? undoState.steps : null;
     const paintingRef = useRef(false);
     const gridRef = useRef<HTMLDivElement | null>(null);
+    const sourceRef = useRef<{ patternId: string; source: PatternSource } | null>(null);
     const store = usePlaybackStore();
+
+    const getSource = (): PatternSource => {
+        if (sourceRef.current?.patternId === pattern.id) {
+            return sourceRef.current.source;
+        }
+        const captured: PatternSource = {
+            timeSignature: pattern.timeSignature,
+            subdivision: pattern.subdivision,
+            steps: pattern.steps,
+        };
+        sourceRef.current = { patternId: pattern.id, source: captured };
+        return captured;
+    };
+
+    const prevExternalCleanRef = useRef(canRestore);
+    useEffect(() => {
+        if (prevExternalCleanRef.current && !canRestore && pattern.id !== 'custom') {
+            sourceRef.current = null;
+        }
+        prevExternalCleanRef.current = canRestore;
+    }, [canRestore, pattern.id]);
+
+    const commitManualEdit = (next: RhythmPattern) => {
+        sourceRef.current = {
+            patternId: next.id,
+            source: { timeSignature: next.timeSignature, subdivision: next.subdivision, steps: next.steps },
+        };
+        onPatternUpdate(next);
+    };
 
     const sub = pattern.subdivision;
     const [num, den] = pattern.timeSignature;
@@ -161,24 +301,29 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
     const clearPattern = () => {
         if (pattern.steps.length === 0) return;
         setUndoState({ patternId: pattern.id, steps: pattern.steps });
-        onPatternUpdate({ ...pattern, steps: [] });
+        commitManualEdit({ ...pattern, steps: [] });
     };
 
     const undoClear = () => {
-        if (undoSteps) onPatternUpdate({ ...pattern, steps: undoSteps });
+        if (undoSteps) commitManualEdit({ ...pattern, steps: undoSteps });
         setUndoState(null);
     };
 
     const handleTimeSignatureChange = (label: string) => {
         const ts = TIME_SIGNATURES.find(t => t.label === label);
         if (!ts || sameSignature(ts.value, pattern.timeSignature)) return;
-        onPatternUpdate({ ...pattern, ...changeTimeSignature(pattern, ts.value) });
+        const source = getSource();
+        onPatternUpdate({ ...pattern, ...changeTimeSignature(source, ts.value) });
     };
 
     const handleSubdivisionChange = (newStepsPerPulse: number) => {
         const newSub = num * newStepsPerPulse;
         if (newSub === sub) return;
-        onPatternUpdate({ ...pattern, subdivision: newSub, steps: remapSteps(pattern.steps, sub, newSub) });
+        const source = getSource();
+        const aligned = sameSignature(source.timeSignature, pattern.timeSignature)
+            ? source
+            : changeTimeSignature(source, pattern.timeSignature);
+        onPatternUpdate({ ...pattern, subdivision: newSub, steps: remapSteps(aligned.steps, aligned.subdivision, newSub) });
     };
 
     const modifierFor = (instrument: InstrumentType): RhythmStep['modifier'] => {
@@ -199,18 +344,18 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
         const others = pattern.steps.filter(s => !(s.step === stepNum && s.instrument === instrument));
 
         if (selectedTool === 'eraser') {
-            if (existing) onPatternUpdate({ ...pattern, steps: others });
+            if (existing) commitManualEdit({ ...pattern, steps: others });
             return;
         }
 
         const velocity = VELOCITIES[selectedTool];
         const modifier = modifierFor(instrument);
         if (existing && existing.velocity === velocity && existing.modifier === modifier) {
-            if (!dragging) onPatternUpdate({ ...pattern, steps: others });
+            if (!dragging) commitManualEdit({ ...pattern, steps: others });
             return;
         }
 
-        onPatternUpdate({ ...pattern, steps: [...others, { step: stepNum, instrument, velocity, modifier }] });
+        commitManualEdit({ ...pattern, steps: [...others, { step: stepNum, instrument, velocity, modifier }] });
         if (!dragging && !isPlaying) onPreviewInstrument?.(instrument, modifier);
     };
 
@@ -221,7 +366,7 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
         return i.group === activeFilter;
     });
     const rows = visibleInstruments.length > 0 ? visibleInstruments : INSTRUMENTS_DISPLAY.filter(i => i.group === 'drums');
-    const noteChar = getNoteSymbol(stepsPerPulse, den);
+    const noteGlyph = getNoteGlyphKind(stepsPerPulse, den);
     const currentTs = TIME_SIGNATURES.find(t => sameSignature(t.value, pattern.timeSignature));
 
     return (
@@ -287,15 +432,20 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
                         sx={{ bgcolor: 'rgba(255,255,255,0.05)', fontSize: '0.8rem', minWidth: 120 }}
                         renderValue={(val) => {
                             const opt = pulseOptions.find(o => o.value === val);
-                            return opt ? `${opt.icon} ${opt.label}` : `${sub} pasos`;
+                            return opt ? (
+                                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                                    <NoteGlyph kind={opt.glyph} size={16} />
+                                    <span>{opt.label}</span>
+                                </Stack>
+                            ) : `${sub} pasos`;
                         }}
                     >
                         {pulseOptions.map(opt => (
                             <MenuItem key={opt.value} value={opt.value}>
-                                <Stack direction="row" spacing={1} sx={{
-                                    alignItems: "center"
-                                }}>
-                                    <Typography sx={{ fontSize: '1.2rem', minWidth: 24 }}>{opt.icon}</Typography>
+                                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                                    <Box sx={{ minWidth: 24, display: 'flex', justifyContent: 'center' }}>
+                                        <NoteGlyph kind={opt.glyph} size={18} />
+                                    </Box>
                                     <Typography variant="body2">{opt.label}</Typography>
                                 </Stack>
                             </MenuItem>
@@ -378,94 +528,24 @@ export default function PatternEditor({ pattern, onPatternUpdate, isPlaying = fa
                         })}
                     </Box>
 
-                    {rows.map((inst) => {
-                        const Icon = InstrumentIcons[inst.type];
-
-                        return (
-                            <Box key={inst.type} sx={{ display: 'contents' }}>
-                                <Stack
-                                    direction="row"
-                                    spacing={1}
-                                    sx={{
-                                        alignItems: "center",
-                                        p: 1,
-                                        bgcolor: 'rgba(255,255,255,0.02)',
-                                        borderRight: '1px solid #333',
-                                        minWidth: 0
-                                    }}>
-                                    {INSTRUMENT_IMAGES[inst.type] ? (
-                                        <Avatar
-                                            src={INSTRUMENT_IMAGES[inst.type]}
-                                            alt=""
-                                            sx={{ width: 18, height: 18, border: '1px solid rgba(229, 169, 95, 0.4)', boxShadow: '0 0 4px rgba(229, 169, 95, 0.2)' }}
-                                        />
-                                    ) : (
-                                        Icon && <Icon sx={{ fontSize: 16, color: '#888' }} />
-                                    )}
-                                    <Typography variant="body2" noWrap sx={{ fontSize: '0.8rem', color: '#ccc' }}>{inst.label}</Typography>
-                                </Stack>
-
-                                {Array.from({ length: sub }).map((_, idx) => {
-                                    const note = stepIndex.get(`${idx + 1}:${inst.type}`);
-                                    const isGroupStart = Number.isInteger(cellsPerGroup) ? idx % cellsPerGroup === 0 : idx === 0;
-                                    const isPulseStart = Number.isInteger(stepsPerPulse) ? idx % stepsPerPulse === 0 : false;
-
-                                    let noteVisual: React.ReactNode = note ? noteChar : null;
-                                    if (note) {
-                                        if (inst.type === 'hihat') noteVisual = note.modifier === 'open' ? <CircleOutlinedIcon sx={{ fontSize: 10 }} /> : noteChar;
-                                        else if (inst.type === 'hihat_foot') noteVisual = '△';
-                                        else if (inst.type === 'snare' && note.modifier === 'snares_off') noteVisual = 'T';
-                                        else if (inst.type === 'rim' || note.modifier === 'aro') noteVisual = '×';
-                                    }
-
-                                    return (
-                                        <Box
-                                            key={idx}
-                                            component="button"
-                                            type="button"
-                                            data-col={idx}
-                                            data-testid={`cell-${inst.type}-${idx + 1}`}
-                                            aria-label={`${inst.label}, paso ${idx + 1}${note ? `, intensidad ${Math.round(note.velocity * 100)}%` : ''}`}
-                                            aria-pressed={!!note}
-                                            onPointerDown={(e: React.PointerEvent) => {
-                                                if (e.button !== 0) return;
-                                                e.preventDefault();
-                                                paintingRef.current = true;
-                                                applyTool(idx, inst.type, false);
-                                            }}
-                                            onPointerEnter={() => { if (paintingRef.current) applyTool(idx, inst.type, true); }}
-                                            onKeyDown={(e: React.KeyboardEvent) => {
-                                                // Enter paints; Space stays the global play/stop shortcut.
-                                                if (e.key === 'Enter') {
-                                                    e.preventDefault();
-                                                    applyTool(idx, inst.type, false);
-                                                }
-                                            }}
-                                            sx={{
-                                                all: 'unset',
-                                                boxSizing: 'border-box',
-                                                height: 40,
-                                                '@media (pointer: coarse)': { height: 44 },
-                                                bgcolor: isGroupStart ? 'rgba(255,255,255,0.03)' : isPulseStart ? 'rgba(255,255,255,0.015)' : 'transparent',
-                                                borderRight: isGroupStart ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,255,255,0.03)',
-                                                borderBottom: '1px solid rgba(255,255,255,0.03)',
-                                                cursor: 'pointer',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                fontSize: '1.2rem',
-                                                touchAction: 'none',
-                                                color: note ? getIntensityColor(note.velocity) : 'transparent',
-                                                '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' },
-                                                '&:focus-visible': { outline: '2px solid #ffd54f', outlineOffset: '-2px' },
-                                                userSelect: 'none'
-                                            }}
-                                        >
-                                            {note && <Box component="span" aria-hidden sx={{ transform: note.velocity < 0.6 ? 'scale(0.8)' : 'scale(1)' }}>{noteVisual}</Box>}
-                                        </Box>
-                                    );
-                                })}
-                            </Box>
-                        );
-                    })}
+                    {rows.map((inst) => (
+                        <PatternRow
+                            key={inst.type}
+                            inst={inst}
+                            sub={sub}
+                            stepsPerPulse={stepsPerPulse}
+                            cellsPerGroup={cellsPerGroup}
+                            noteGlyph={noteGlyph}
+                            rowNotes={Array.from({ length: sub }, (_, idx) => stepIndex.get(`${idx + 1}:${inst.type}`))}
+                            onPaintStart={(col, type) => {
+                                paintingRef.current = true;
+                                applyTool(col, type, false);
+                            }}
+                            onPaintMove={(col, type) => {
+                                if (paintingRef.current) applyTool(col, type, true);
+                            }}
+                        />
+                    ))}
                 </Box>
             </Box>
 

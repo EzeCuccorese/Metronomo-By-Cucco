@@ -600,6 +600,9 @@ class Scheduler {
             case 'chacarera_poliritmica':
                 // Urgency on beat 3 of the 3/4 feel (step 9)
                 return activeSteps.some(s => s.step === 9) ? -0.003 : 0;
+            case 'chacarera_trunca':
+                // Trunca push lands on the characteristic step-11 resolution
+                return activeSteps.some(s => s.step === 11) ? -0.003 : 0;
             case 'zamba_tradicional':
                 // Drag on the main "Pám" (step 9)
                 return activeSteps.some(s => s.step === 9) ? stepDuration * 0.12 : 0;

@@ -3,7 +3,7 @@ import { render, screen, fireEvent, cleanup, within } from '@testing-library/rea
 import { useState } from 'react';
 import PatternEditor from '../PatternEditor';
 import type { RhythmPattern } from '../../rhythms/RhythmPatterns';
-import { DEFAULT_CUSTOM_PATTERN } from '../../rhythms/patternLibrary';
+import { DEFAULT_CUSTOM_PATTERN, resolvePattern } from '../../rhythms/patternLibrary';
 
 function Harness({ initial, onChange }: { initial: RhythmPattern; onChange: (p: RhythmPattern) => void }) {
     const [pattern, setPattern] = useState(initial);
@@ -58,5 +58,32 @@ describe('PatternEditor', () => {
         render(<PatternEditor pattern={DEFAULT_CUSTOM_PATTERN} onPatternUpdate={vi.fn()} canRestore onRestore={onRestore} />);
         fireEvent.click(screen.getByRole('button', { name: 'Restaurar ritmo original' }));
         expect(onRestore).toHaveBeenCalled();
+    });
+
+    it('preserves programmed steps across non-destructive figure switches (Corcheas -> Tresillos -> Negras -> Corcheas)', async () => {
+        const rock = resolvePattern('rock_basic', {});
+        const { last } = setup(rock);
+
+        const pickSub = async (name: string) => {
+            fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Subdivisión' }));
+            fireEvent.click(within(await screen.findByRole('listbox')).getByText(name));
+        };
+
+        await pickSub('Tresillos');
+        expect(last().subdivision).toBe(12);
+        await pickSub('Negras');
+        expect(last().subdivision).toBe(4);
+        await pickSub('Corcheas');
+        expect(last().subdivision).toBe(8);
+        expect(last().steps).toEqual(rock.steps);
+    });
+
+    it('renders SVG note glyphs without broken Unicode SMP glyphs and hides phantom Aro rows on Zamba', () => {
+        const zamba = resolvePattern('zamba', {});
+        const { container } = render(<PatternEditor pattern={zamba} onPatternUpdate={vi.fn()} />);
+        expect(container.textContent).not.toContain('𝅘𝅥𝅯');
+        expect(container.textContent).not.toContain('𝅘𝅥𝅰');
+        expect(screen.queryByText('Aro')).toBeNull();
+        expect(screen.getByTestId('cell-bombo_leguero-9').querySelector('svg')).not.toBeNull();
     });
 });

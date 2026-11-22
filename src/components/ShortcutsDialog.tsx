@@ -10,7 +10,7 @@ interface ShortcutsDialogProps {
     onClose: () => void;
 }
 
-const keycapSx = { fontFamily: '"Share Tech Mono", monospace', fontSize: 13, height: 24, borderRadius: '4px', bgcolor: '#26211b', border: '1px solid #4a4034', color: '#f0e6d8' } as const;
+const keycapSx = { fontFamily: '"Share Tech Mono", monospace', fontSize: 13, height: 24, borderRadius: '4px', bgcolor: '#1a2130', border: '1px solid #334155', color: '#cbd5e1' } as const;
 
 function conflictNote(def: ShortcutDef, labelOf: (code: string) => string): string | null {
     const note = shadowNote(def);

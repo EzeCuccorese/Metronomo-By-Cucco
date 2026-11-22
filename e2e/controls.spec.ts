@@ -87,16 +87,16 @@ test.describe('controls', () => {
         await setBpm(page, 97);
         await page.getByRole('switch', { name: 'Mostrar todos' }).click();
         await page.getByTestId('mute-shaker').click();
-        await page.getByTestId('cell-palmas-2').dispatchEvent('pointerdown', { button: 0 });
+        await page.getByTestId('cell-bombo_leguero-2').dispatchEvent('pointerdown', { button: 0 });
 
         await page.reload();
         await expect(page.getByTestId('bpm-input')).toHaveValue('97');
         await expect(page.getByRole('combobox', { name: 'Ritmo Predefinido' })).toContainText('Zamba');
         await expect(page.getByTestId('mute-shaker')).toHaveAttribute('aria-pressed', 'true');
-        await expect(page.getByTestId('cell-palmas-2')).toHaveAttribute('aria-pressed', 'true');
+        await expect(page.getByTestId('cell-bombo_leguero-2')).toHaveAttribute('aria-pressed', 'true');
 
         await page.getByRole('button', { name: 'Restaurar ritmo original' }).click();
-        await expect(page.getByTestId('cell-palmas-2')).toHaveAttribute('aria-pressed', 'false');
+        await expect(page.getByTestId('cell-bombo_leguero-2')).toHaveAttribute('aria-pressed', 'false');
     });
 
     test('compound meters show the dotted-quarter tempo', async ({ page }) => {

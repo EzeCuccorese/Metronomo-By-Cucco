@@ -30,4 +30,24 @@ describe('preset pattern aggregation', () => {
         expect(ids).toHaveLength(EXPECTED_IDS.length);
         expect([...ids].sort()).toEqual([...EXPECTED_IDS].sort());
     });
+
+    it('validates velocity bounds, valid grooveType, and avoids phantom unused instrument rows', () => {
+        const allowedGrooves = new Set([
+            undefined, 'straight', 'swing_triplet', 'samba_carioca', 'chacarera_poliritmica',
+            'chacarera_trunca', 'zamba_tradicional', 'chamame_saltadito', 'salsa_tumbao', 'cumbia_colombiana',
+        ]);
+        for (const pattern of PRESET_PATTERNS) {
+            expect(allowedGrooves.has(pattern.grooveType)).toBe(true);
+            for (const step of pattern.steps) {
+                expect(step.velocity).toBeGreaterThanOrEqual(0);
+                expect(step.velocity).toBeLessThanOrEqual(1);
+                expect(step.step).toBeGreaterThanOrEqual(1);
+                expect(step.step).toBeLessThanOrEqual(pattern.subdivision);
+            }
+            if (pattern.id !== 'metronome_4_4') {
+                const used = new Set(pattern.steps.map(s => s.instrument));
+                expect(pattern.instruments.every(inst => used.has(inst))).toBe(true);
+            }
+        }
+    });
 });

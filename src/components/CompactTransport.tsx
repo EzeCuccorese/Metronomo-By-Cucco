@@ -35,8 +35,8 @@ export const CompactTransport: React.FC<CompactTransportProps> = ({ pattern, bpm
       display: 'flex', alignItems: 'center', gap: 1.5,
       px: 'calc(12px + var(--safe-right, 0px))', pl: 'calc(12px + var(--safe-left, 0px))',
       pt: 'calc(5px + var(--safe-top, 0px))', pb: '5px',
-      background: 'linear-gradient(180deg, #1a1612 0%, #100e0c 100%)',
-      borderBottom: '1px solid rgba(229, 169, 95, 0.28)', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6)',
+      background: 'linear-gradient(180deg, #161c28 0%, #0d1118 100%)',
+      borderBottom: '1px solid rgba(148, 163, 184, 0.22)', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6)',
       '@keyframes compactIn': { from: { transform: 'translateY(-100%)' }, to: { transform: 'none' } },
       animation: 'compactIn 0.18s ease-out',
       '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
@@ -52,7 +52,7 @@ export const CompactTransport: React.FC<CompactTransportProps> = ({ pattern, bpm
       sx={{
         height: 44, minWidth: 124, px: 2, borderRadius: 2, fontWeight: 900, letterSpacing: '0.08em', fontSize: '0.85rem', whiteSpace: 'nowrap',
         background: isPlaying ? 'linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%)' : 'linear-gradient(135deg, #ffd54f 0%, #e5a95f 100%)',
-        color: isPlaying ? '#fff' : '#181512',
+        color: isPlaying ? '#fff' : '#0b0e15',
       }}
     >
       {isPlaying ? 'DETENER' : 'INICIAR'}

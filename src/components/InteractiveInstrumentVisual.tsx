@@ -86,7 +86,7 @@ const PHOTO_KEY: Partial<Record<ScaleKey, string>> = {
     shaker: 'shaker',
 };
 
-const PAD_BG = '#0e0b08';
+const PAD_BG = '#0d121b';
 
 /** Candombe drums: [height, top width, bottom width] as multiples of the pad radius. */
 const CANDOMBE_DRUMS: Partial<Record<ScaleKey, [number, number, number]>> = {
@@ -255,7 +255,7 @@ function drawItem(
     ctx.arc(0, 0, r - 0.5, 0, Math.PI * 2);
     ctx.clip();
     const inner = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
-    inner.addColorStop(0, '#2a1f15');
+    inner.addColorStop(0, '#1a2336');
     inner.addColorStop(1, PAD_BG);
     ctx.fillStyle = inner;
     ctx.fillRect(-r, -r, 2 * r, 2 * r);
@@ -275,7 +275,7 @@ function drawItem(
         ctx.drawImage(img, fit.dx + sx, fit.dy + sy, fit.dw, fit.dh);
         // Vignette hides the photo edges so differing backgrounds blend into the pad
         const vig = ctx.createRadialGradient(0, 0, r * 0.62, 0, 0, r);
-        vig.addColorStop(0, 'rgba(14, 11, 8, 0)');
+        vig.addColorStop(0, 'rgba(13, 18, 27, 0)');
         vig.addColorStop(1, PAD_BG);
         ctx.fillStyle = vig;
         ctx.fillRect(-r, -r, 2 * r, 2 * r);
@@ -334,6 +334,11 @@ export default function InteractiveInstrumentVisual({
     const particlesRef = useRef<SparkParticle[]>([]);
     const lastStepRef = useRef<number>(-1);
     const imagesRef = useRef<Record<string, HTMLImageElement>>({});
+    const requestRenderRef = useRef<(() => void) | null>(null);
+
+    const requestRender = useCallback(() => {
+        requestRenderRef.current?.();
+    }, []);
 
     // Precargar imágenes reales de instrumentos
     useEffect(() => {
@@ -342,13 +347,14 @@ export default function InteractiveInstrumentVisual({
             img.onload = () => {
                 // Skip when the synchronous cached-image path below already measured it.
                 if (!contentBoxesRef.current[key]) contentBoxesRef.current[key] = measureContent(img);
+                requestRender();
             };
             img.src = src;
             // Cached images may already be decoded (onload can be skipped or delayed).
             if (img.complete && img.naturalWidth) contentBoxesRef.current[key] = measureContent(img);
             imagesRef.current[key] = img;
         });
-    }, []);
+    }, [requestRender]);
 
     // Spring scaling values for organic bounce physics
     const scalesRef = useLazyRef(initialScales);
@@ -370,7 +376,8 @@ export default function InteractiveInstrumentVisual({
         } else {
             velocitiesRef.current[key] += amount;
         }
-    }, [velocitiesRef]);
+        requestRender();
+    }, [velocitiesRef, requestRender]);
 
     const spawnParticles = useCallback((x: number, y: number, color: string, count: number = 8) => {
         for (let i = 0; i < count; i++) {
@@ -382,11 +389,20 @@ export default function InteractiveInstrumentVisual({
         if (reduceMotionRef.current) return;
         ripplesRef.current.push(createRipple(x, y, color, maxRad));
         spawnParticles(x, y, color, 8);
-    }, [spawnParticles]);
+        requestRender();
+    }, [spawnParticles, requestRender]);
 
     // Layout is computed from the real container width (CSS px); backing store = CSS size x dpr.
     const lastDprRef = useRef(0);
     const lastSizeRef = useRef({ h: 0 });
+    const drawScheduledRef = useRef<number | null>(null);
+    const isPlayingRef = useRef(isPlaying);
+
+    useEffect(() => {
+        isPlayingRef.current = isPlaying;
+        if (isPlaying) requestRender();
+    }, [isPlaying, requestRender]);
+
     const applySize = useCallback(() => {
         const canvas = canvasRef.current;
         const wrap = wrapRef.current;
@@ -404,10 +420,12 @@ export default function InteractiveInstrumentVisual({
         layoutRef.current = layout;
         canvas.width = Math.round(layout.width * dpr);
         canvas.height = Math.round(layout.height * dpr);
-        setCanvasHeight(layout.height);
-        setStacked(layout.mode === 'stack');
-        setNaturalHeight(computeLayout(width).height);
-    }, []);
+        setCanvasHeight(h => (h === layout.height ? h : layout.height));
+        setStacked(s => (s === (layout.mode === 'stack') ? s : layout.mode === 'stack'));
+        const nat = computeLayout(width).height;
+        setNaturalHeight(h => (h === nat ? h : nat));
+        requestRender();
+    }, [requestRender]);
 
     useEffect(() => {
         const wrap = wrapRef.current;
@@ -458,16 +476,32 @@ export default function InteractiveInstrumentVisual({
         return store.subscribe(() => animateStep(store.getSnapshot().step));
     }, [store, isPlaying, animateStep]);
 
-    // Canvas render loop
+    // Canvas render loop (runs on demand; settles and pauses when idle)
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        let animationFrameId: number;
+        const hasActiveMotion = (frameNow: number) => {
+            if (isPlayingRef.current || ripplesRef.current.length > 0 || particlesRef.current.length > 0) return true;
+            for (const key of SCALE_KEYS) {
+                if (reduceMotionRef.current) {
+                    if (isHighlighted(highlightUntilRef.current, key, frameNow)) return true;
+                } else if (Math.abs(scalesRef.current[key] - 1) > 0.002 || Math.abs(velocitiesRef.current[key]) > 0.002) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        const schedule = () => {
+            if (drawScheduledRef.current !== null) return;
+            drawScheduledRef.current = requestAnimationFrame(render);
+        };
 
         const render = () => {
+            drawScheduledRef.current = null;
             // ResizeObserver handles width changes; only a DPR change (zoom, other display) needs a re-measure.
             if ((window.devicePixelRatio || 1) !== lastDprRef.current) applySize();
             const layout = layoutRef.current;
@@ -493,12 +527,12 @@ export default function InteractiveInstrumentVisual({
                 ctx.save();
                 ctx.beginPath();
                 ctx.roundRect(sec.rect.x + 0.5, sec.rect.y + 0.5, sec.rect.w - 1, sec.rect.h - 1, 14);
-                ctx.fillStyle = 'rgba(255, 232, 196, 0.03)';
+                ctx.fillStyle = 'rgba(241, 245, 249, 0.03)';
                 ctx.fill();
-                ctx.strokeStyle = 'rgba(229, 169, 95, 0.14)';
+                ctx.strokeStyle = 'rgba(148, 163, 184, 0.16)';
                 ctx.lineWidth = 1;
                 ctx.stroke();
-                ctx.fillStyle = '#e5a95f';
+                ctx.fillStyle = '#f5b851';
                 ctx.globalAlpha = 0.85;
                 ctx.font = `700 ${LABEL_FONT}px Outfit, sans-serif`;
                 ctx.letterSpacing = '1.2px';
@@ -515,7 +549,7 @@ export default function InteractiveInstrumentVisual({
             ctx.save();
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
-            ctx.fillStyle = 'rgba(240, 222, 196, 0.82)';
+            ctx.fillStyle = 'rgba(226, 232, 240, 0.85)';
             // Name font sizes depend only on the layout (and loaded fonts): measure once, not every frame.
             if (nameFontsRef.current.layout !== layout) nameFontsRef.current = { layout, sizes: new Map() };
             const nameFonts = nameFontsRef.current.sizes;
@@ -559,11 +593,18 @@ export default function InteractiveInstrumentVisual({
                 ctx.restore();
             });
 
-            animationFrameId = requestAnimationFrame(render);
+            if (hasActiveMotion(frameNow)) schedule();
         };
 
-        animationFrameId = requestAnimationFrame(render);
-        return () => cancelAnimationFrame(animationFrameId);
+        requestRenderRef.current = schedule;
+        schedule();
+        return () => {
+            requestRenderRef.current = null;
+            if (drawScheduledRef.current !== null) {
+                cancelAnimationFrame(drawScheduledRef.current);
+                drawScheduledRef.current = null;
+            }
+        };
     }, [scalesRef, velocitiesRef, applySize]);
 
     const pointerToLayout = (e: { clientX: number; clientY: number }) => {

@@ -79,7 +79,7 @@ const StageContent: React.FC<Omit<StageModeProps, 'open'>> = ({ onClose, pattern
           pt: 'calc(8px + env(safe-area-inset-top, 0px))', pb: 'calc(12px + env(safe-area-inset-bottom, 0px))',
           pl: 'calc(16px + env(safe-area-inset-left, 0px))', pr: 'calc(16px + env(safe-area-inset-right, 0px))',
           // The screen flashes softly on the downbeat; with reduced motion only the circles change.
-          bgcolor: downbeat && !reduceMotion ? '#1d1509' : '#070605',
+          bgcolor: downbeat && !reduceMotion ? '#131b2e' : '#090c12',
           transition: reduceMotion ? 'none' : 'background-color 0.12s ease-out',
         }}
       >
@@ -141,7 +141,7 @@ const StageContent: React.FC<Omit<StageModeProps, 'open'>> = ({ onClose, pattern
             sx={{
               height: 72, flex: 1, minWidth: 0, maxWidth: 320, borderRadius: 3, fontWeight: 900, fontSize: '1.2rem', letterSpacing: '0.08em',
               background: isPlaying ? 'linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%)' : 'linear-gradient(135deg, #ffd54f 0%, #e5a95f 100%)',
-              color: isPlaying ? '#fff' : '#181512',
+              color: isPlaying ? '#fff' : '#0b0e15',
             }}
           >
             {isPlaying ? 'DETENER' : 'INICIAR'}
@@ -159,7 +159,7 @@ export const StageMode: React.FC<StageModeProps> = ({ open, onClose, ...rest }) 
     open={open}
     onClose={() => { void exitFullscreen(); onClose(); }}
     slotProps={{ paper: { 'data-testid': 'stage-mode', 'aria-label': 'Modo escenario' } as never }}
-    sx={{ '& .MuiDialog-paper': { bgcolor: '#070605', backgroundImage: 'none' } }}
+    sx={{ '& .MuiDialog-paper': { bgcolor: '#090c12', backgroundImage: 'none' } }}
   >
     {open && <StageContent onClose={onClose} {...rest} />}
   </Dialog>

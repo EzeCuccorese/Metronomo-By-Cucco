@@ -43,8 +43,8 @@ export const isMetronomePattern = (pattern: RhythmPattern): boolean =>
 const KNOWN_INSTRUMENTS = new Set(Object.keys(INSTRUMENT_CHANNEL));
 
 const GROOVE_TYPES: ReadonlySet<string> = new Set<NonNullable<RhythmPattern['grooveType']>>([
-    'straight', 'swing_triplet', 'samba_carioca', 'chacarera_poliritmica', 'zamba_tradicional',
-    'chamame_saltadito', 'salsa_tumbao', 'cumbia_colombiana',
+    'straight', 'swing_triplet', 'samba_carioca', 'chacarera_poliritmica', 'chacarera_trunca',
+    'zamba_tradicional', 'chamame_saltadito', 'salsa_tumbao', 'cumbia_colombiana',
 ]);
 const COUNTING_MODES: ReadonlySet<string> = new Set<RhythmPattern['countingMode']>([
     'numbers', '1e&a', '1&2&', 'triplet_1la2la', 'mnemonics_chacarera',

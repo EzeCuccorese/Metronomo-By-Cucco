@@ -5,24 +5,21 @@ export const ANDEAN_PATTERNS: RhythmPattern[] = [
     {
         id: 'vidala',
         name: 'Vidala',
-        description: 'Folklore del Noroeste. 3/4 lento con caja coplera real.',
+        description: 'Folklore del Noroeste. 3/4 lento con respiración tradicional de caja coplera.',
         coverImage: '/genres/genre_milonga.webp',
         timeSignature: [3, 4],
         subdivision: 6,
         instruments: ['caja', 'bombo_leguero'],
         grooveType: 'straight',
         countingMode: 'numbers',
-        recommendedTempo: 75,
+        recommendedTempo: 72,
         steps: [
-            // CAJA PARCHE: pulso grave con resonancia profunda
+            // CAJA COPLERA: respiración pausada en tiempos 1, 2 y 3
             { step: 1, instrument: 'caja', velocity: 0.95 },
+            { step: 3, instrument: 'caja', velocity: 0.68, modifier: 'open' },
             { step: 5, instrument: 'caja', velocity: 0.9 },
 
-            // CAJA ARO / APU: agudo de borde
-            { step: 3, instrument: 'caja', velocity: 0.7, modifier: 'open' },
-            { step: 6, instrument: 'caja', velocity: 0.6, modifier: 'open' },
-
-            // BOMBO LEGUERO: acento de tierra de fondo
+            // BOMBO LEGÜERO: apoyo grave de tierra
             { step: 1, instrument: 'bombo_leguero', velocity: 0.6, modifier: 'parche' },
             { step: 5, instrument: 'bombo_leguero', velocity: 0.7, modifier: 'parche' }
         ]
@@ -30,57 +27,56 @@ export const ANDEAN_PATTERNS: RhythmPattern[] = [
     {
         id: 'chaya',
         name: 'Chaya',
-        description: 'La Rioja. Ritmo festivo en 3/4 con el galope característico en bombo y caja.',
+        description: 'La Rioja. Ritmo festivo en 3/4 con galope chayero claro en bombo y caja.',
         coverImage: '/genres/genre_chacarera.webp',
         timeSignature: [3, 4],
         subdivision: 12,
         instruments: ['bombo_leguero', 'caja'],
         grooveType: 'chacarera_poliritmica',
         countingMode: 'numbers',
-        recommendedTempo: 105,
+        recommendedTempo: 108,
         steps: [
-            // BOMBO PARCHE: marcación profunda
+            // BOMBO PARCHE: pulso firme en los 3 tiempos
             { step: 1, instrument: 'bombo_leguero', velocity: 0.9, modifier: 'parche' },
             { step: 5, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'parche' },
             { step: 9, instrument: 'bombo_leguero', velocity: 0.95, modifier: 'parche' },
 
-            // CAJA COPLERA: galope alegre riojano (chayerito) simétrico
+            // CAJA COPLERA: galope chayero definido (tierra + aro en última semicorchea)
             { step: 1, instrument: 'caja', velocity: 0.9, modifier: 'parche' },
-            { step: 3, instrument: 'caja', velocity: 0.65, modifier: 'open' },
-            { step: 4, instrument: 'caja', velocity: 0.75, modifier: 'open' },
+            { step: 4, instrument: 'caja', velocity: 0.72, modifier: 'open' },
             { step: 5, instrument: 'caja', velocity: 0.85, modifier: 'parche' },
-            { step: 7, instrument: 'caja', velocity: 0.65, modifier: 'open' },
-            { step: 8, instrument: 'caja', velocity: 0.75, modifier: 'open' },
-            { step: 9, instrument: 'caja', velocity: 0.9, modifier: 'parche' },
-            { step: 11, instrument: 'caja', velocity: 0.65, modifier: 'open' },
-            { step: 12, instrument: 'caja', velocity: 0.8, modifier: 'open' }
+            { step: 8, instrument: 'caja', velocity: 0.72, modifier: 'open' },
+            { step: 9, instrument: 'caja', velocity: 0.92, modifier: 'parche' },
+            { step: 12, instrument: 'caja', velocity: 0.78, modifier: 'open' }
         ]
     },
     {
         id: 'huayno',
         name: 'Huayno',
-        description: 'Folklore Andino. 2/4 rápido con el galope saltado (salta-salta) tradicional.',
+        description: 'Folklore Andino. 2/4 con el galope característico (corchea y dos semicorcheas).',
         coverImage: '/genres/genre_chacarera.webp',
         timeSignature: [2, 4],
         subdivision: 8,
         instruments: ['bombo_leguero', 'shaker', 'surdo'],
         grooveType: 'straight',
         countingMode: '1&2&',
-        recommendedTempo: 80,
+        recommendedTempo: 96,
         steps: [
-            // BOMBO: marcación en el parche del galope
+            // BOMBO: galope clásico (negra-corchea-semi / ♪ ♬)
             { step: 1, instrument: 'bombo_leguero', velocity: 0.95, modifier: 'parche' },
-            { step: 4, instrument: 'bombo_leguero', velocity: 0.7, modifier: 'parche' },
-            { step: 5, instrument: 'bombo_leguero', velocity: 0.9, modifier: 'parche' },
-            { step: 8, instrument: 'bombo_leguero', velocity: 0.7, modifier: 'parche' },
+            { step: 3, instrument: 'bombo_leguero', velocity: 0.62, modifier: 'parche' },
+            { step: 4, instrument: 'bombo_leguero', velocity: 0.75, modifier: 'parche' },
+            { step: 5, instrument: 'bombo_leguero', velocity: 0.92, modifier: 'parche' },
+            { step: 7, instrument: 'bombo_leguero', velocity: 0.62, modifier: 'parche' },
+            { step: 8, instrument: 'bombo_leguero', velocity: 0.75, modifier: 'parche' },
 
-            // SHAKER / CAXIXIS: el chasquido agudo del galope
-            { step: 3, instrument: 'shaker', velocity: 0.85 },
-            { step: 4, instrument: 'shaker', velocity: 0.65 },
-            { step: 7, instrument: 'shaker', velocity: 0.85 },
-            { step: 8, instrument: 'shaker', velocity: 0.65 },
+            // SHAKER: chasquido del galope
+            { step: 3, instrument: 'shaker', velocity: 0.82 },
+            { step: 4, instrument: 'shaker', velocity: 0.62 },
+            { step: 7, instrument: 'shaker', velocity: 0.82 },
+            { step: 8, instrument: 'shaker', velocity: 0.62 },
 
-            // TAMBOR / SURDO: golpe de apoyo en graves
+            // SURDO: apoyo grave en los tiempos fuertes
             { step: 1, instrument: 'surdo', velocity: 0.8 },
             { step: 5, instrument: 'surdo', velocity: 0.85 }
         ]

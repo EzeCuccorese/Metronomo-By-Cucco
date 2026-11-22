@@ -41,6 +41,8 @@ export interface HeaderToolbarProps {
   tempoLocked?: boolean;
   /** Extra control after the rhythm picker (the "Vista" menu). */
   viewControl?: React.ReactNode;
+  /** Compact Study/Pomodoro pill placed in the top-left header area. */
+  studyControl?: React.ReactNode;
   /** Pattern being played: lets the phone bar show the beat LEDs. */
   pattern?: RhythmPattern;
   /** Relative tempo change (the − / + buttons). Defaults to onBpmChange(bpm + delta). */
@@ -106,6 +108,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
   onSelectPreset,
   tempoLocked = false,
   viewControl,
+  studyControl,
   pattern,
   onNudgeBpm,
   headerRef
@@ -136,8 +139,8 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           md: '"brand tempo play" "lib lib lib"',
           xl: '"brand lib tempo play"',
         },
-        bgcolor: '#13110f',
-        boxShadow: '0 6px 16px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,255,255,0.02)'
+        bgcolor: '#121722',
+        boxShadow: '0 6px 16px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03)'
       }}
     >
       {/* Title & Queue indicator */}
@@ -155,16 +158,17 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
             component="h1"
             sx={{
               fontWeight: "900",
-              background: 'linear-gradient(135deg, #ffd54f 0%, #e5a95f 100%)',
+              background: 'linear-gradient(135deg, #ffd54f 0%, #f5b851 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               letterSpacing: '0.05em',
-              textShadow: '0 2px 10px rgba(229, 169, 95, 0.15)',
+              textShadow: '0 2px 10px rgba(245, 184, 81, 0.15)',
               fontFamily: '"Outfit", sans-serif',
               fontSize: { xs: '1.05rem', sm: '1.2rem' }
             }}>
             METRÓNOMO PRO
           </Typography>
+          {studyControl}
 
           {queuedPatternId && (
             <Box
@@ -262,7 +266,13 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           >
             <MenuItem value={CUSTOM_PATTERN_ID}><em>Patrón Personalizado (Editor)</em></MenuItem>
             {availablePresets.map((p) => (
-              <MenuItem key={p.id} value={p.id}>
+              <MenuItem
+                key={p.id}
+                value={p.id}
+                onClick={() => {
+                  if (p.id === selectedPatternId) onSelectPreset(p.id);
+                }}
+              >
                 {p.name}
               </MenuItem>
             ))}
@@ -378,7 +388,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           background: isPlaying
             ? 'linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%)'
             : 'linear-gradient(135deg, #ffd54f 0%, #e5a95f 100%)',
-          color: isPlaying ? '#ffffff' : '#181512',
+          color: isPlaying ? '#ffffff' : '#0b0e15',
           boxShadow: isPlaying
             ? '0 0 20px rgba(211, 47, 47, 0.5)'
             : '0 0 20px rgba(229, 169, 95, 0.4)',

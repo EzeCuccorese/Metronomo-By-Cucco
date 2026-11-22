@@ -36,7 +36,7 @@ const paletteSx = {
     '& [cmdk-item][data-selected="true"]': { bgcolor: 'rgba(229,169,95,0.18)' },
     '& [cmdk-item][data-disabled="true"]': { opacity: 0.45, cursor: 'default' },
     '& [cmdk-empty]': { p: 2, color: 'text.secondary', fontSize: 14 },
-    '& .palette-hint': { fontFamily: '"Share Tech Mono", monospace', fontSize: 12, color: '#c8bfae', border: '1px solid #4a4034', borderRadius: '4px', px: 0.75, bgcolor: '#26211b', whiteSpace: 'nowrap' },
+    '& .palette-hint': { fontFamily: '"Share Tech Mono", monospace', fontSize: 12, color: '#cbd5e1', border: '1px solid #334155', borderRadius: '4px', px: 0.75, bgcolor: '#1a2130', whiteSpace: 'nowrap' },
 } as const;
 
 /**
