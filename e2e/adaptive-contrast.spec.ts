@@ -44,6 +44,7 @@ test.describe('contrast', () => {
         for (const skin of SKIN_IDS) {
             await page.getByTestId('skin-switcher').click();
             await page.getByTestId(`skin-option-${skin}`).click();
+            await expect(page.locator('html')).toHaveAttribute('data-skin', skin);
             const rows = await page.evaluate(() => {
                 const luminance = (rgb: number[]) => {
                     const [r, g, b] = rgb.map(v => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
