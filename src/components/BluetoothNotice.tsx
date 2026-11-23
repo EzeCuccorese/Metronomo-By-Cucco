@@ -51,7 +51,7 @@ export function BluetoothNotice({ isPlaying }: BluetoothNoticeProps) {
         '@media (max-height: 500px)': { display: 'none' },
       }}
     >
-      <BluetoothAudioIcon sx={{ fontSize: 18, color: '#f5b851', flexShrink: 0 }} aria-hidden />
+      <BluetoothAudioIcon sx={{ fontSize: 18, color: 'primary.main', flexShrink: 0 }} aria-hidden />
       <Typography variant="caption" sx={{ flex: 1, minWidth: 0, lineHeight: 1.4 }}>
         Los auriculares Bluetooth suman un retraso fijo al sonido. Para practicar con precisión, usá auriculares con cable o el parlante del teléfono.
         {latency > HIGH_LATENCY_S && (

@@ -39,7 +39,7 @@ export const GenreSelectorModal: React.FC<GenreSelectorModalProps> = ({
       aria-labelledby="genre-library-title"
       slotProps={{ paper: {
         sx: {
-          bgcolor: '#121722',
+          bgcolor: 'var(--skin-surface)',
           borderRadius: 4,
           border: '1px solid rgba(148, 163, 184, 0.22)'
         }
@@ -99,7 +99,7 @@ export const GenreSelectorModal: React.FC<GenreSelectorModalProps> = ({
                   borderRadius: 3,
                   overflow: 'hidden',
                   cursor: 'pointer',
-                  border: isSelected ? '2px solid #e5a95f' : '1px solid rgba(215,204,200,0.1)',
+                  border: isSelected ? '2px solid var(--skin-accent)' : '1px solid rgba(215,204,200,0.1)',
                   boxShadow: isSelected ? '0 0 15px rgba(229,169,95,0.3)' : '0 4px 12px rgba(0,0,0,0.4)',
                   transition: 'all 0.2s ease-in-out',
                   '&:hover': {
@@ -154,7 +154,7 @@ export const GenreSelectorModal: React.FC<GenreSelectorModalProps> = ({
                     <Chip 
                       label={p.timeSignature ? `${p.timeSignature[0]}/${p.timeSignature[1]}` : '4/4'} 
                       size="small" 
-                      sx={{ bgcolor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', color: '#e5a95f', fontWeight: 'bold' }}
+                      sx={{ bgcolor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', color: 'var(--skin-accent)', fontWeight: 'bold' }}
                     />
                     {isQueued && (
                       <Chip label="EN COLA" size="small" color="secondary" sx={{ fontWeight: 'bold' }} />

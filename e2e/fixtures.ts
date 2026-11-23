@@ -2,32 +2,42 @@ import { test as base, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 /**
- * Audio probe injected before the app loads.
- * Every connection to the real AudioContext destination is re-routed through a
- * tap (gain -> analyser -> destination), and a sampler records the output peak
- * against the audio clock. Tests can then assert what was actually *heard*.
+ * Audio probe & speaker silencer injected before the app loads.
+ * Every connection to AudioDestinationNode is routed through a unity-gain tap (`ctx.__tap`)
+ * and then a zero-gain silencer (`ctx.__silencer`) before reaching the physical speakers,
+ * so Web Audio renders at full amplitude into AnalyserNode while local tests stay 100% silent
+ * on both Chromium and WebKit.
  */
 function installAudioProbe() {
     type Sample = { t: number; peak: number };
-    const probe = {
-        samples: [] as Sample[],
-        ctx: null as AudioContext | null,
-        starts: [] as { when: number; at: number; kind: string }[],
+    type GlobalWithAudioHook = typeof window & {
+        __probe?: { samples: Sample[]; ctx: AudioContext | null; starts: { when: number; at: number; kind: string }[] };
+        __audioSilencerInstalled?: boolean;
     };
-    (window as unknown as { __probe: typeof probe }).__probe = probe;
+    const w = window as GlobalWithAudioHook;
+    if (!w.__probe) {
+        w.__probe = { samples: [], ctx: null, starts: [] };
+    }
+    const probe = w.__probe;
+    if (w.__audioSilencerInstalled) return;
+    w.__audioSilencerInstalled = true;
 
     const originalConnect = AudioNode.prototype.connect as (this: AudioNode, ...args: unknown[]) => unknown;
     AudioNode.prototype.connect = function (this: AudioNode, ...args: unknown[]) {
         const target = args[0];
-        if (target instanceof AudioDestinationNode && target.context instanceof AudioContext) {
-            const ctx = target.context as AudioContext & { __tap?: GainNode };
+        if (target instanceof AudioDestinationNode) {
+            const ctx = target.context as AudioContext & { __tap?: GainNode; __silencer?: GainNode };
             if (!ctx.__tap) {
                 const tap = ctx.createGain();
+                const silencer = ctx.createGain();
+                silencer.gain.value = 0;
                 const analyser = ctx.createAnalyser();
                 analyser.fftSize = 512;
                 originalConnect.call(tap, analyser);
-                originalConnect.call(tap, target);
+                originalConnect.call(tap, silencer);
+                originalConnect.call(silencer, target);
                 ctx.__tap = tap;
+                ctx.__silencer = silencer;
                 probe.ctx = ctx;
                 const buffer = new Float32Array(analyser.fftSize);
                 setInterval(() => {
@@ -46,7 +56,7 @@ function installAudioProbe() {
 
     const originalStart = AudioScheduledSourceNode.prototype.start;
     AudioScheduledSourceNode.prototype.start = function (this: AudioScheduledSourceNode, when?: number, ...rest: number[]) {
-        if (this.context instanceof AudioContext) {
+        if (this.context) {
             probe.starts.push({ when: when ?? 0, at: this.context.currentTime, kind: this.constructor.name });
         }
         return (originalStart as (...a: unknown[]) => void).call(this, when, ...rest);
@@ -55,7 +65,7 @@ function installAudioProbe() {
     // AudioBufferSourceNode overrides start(), so the hook above never sees sampled voices.
     const originalBufferStart = AudioBufferSourceNode.prototype.start;
     AudioBufferSourceNode.prototype.start = function (this: AudioBufferSourceNode, when?: number, ...rest: number[]) {
-        if (this.context instanceof AudioContext) {
+        if (this.context) {
             probe.starts.push({ when: when ?? 0, at: this.context.currentTime, kind: this.constructor.name });
         }
         return (originalBufferStart as (...a: unknown[]) => void).call(this, when, ...rest);
@@ -118,6 +128,11 @@ export const AUDIBLE = 0.02;
 export const SILENT = 0.003;
 
 export const test = base.extend<{ probe: AudioProbe; consoleErrors: string[] }>({
+    // Always silence speaker output for every E2E test (even specs that don't use `probe`, across Chromium & WebKit).
+    page: async ({ page }, use) => {
+        await page.addInitScript(installAudioProbe);
+        await use(page);
+    },
     consoleErrors: async ({ page }, use) => {
         const errors: string[] = [];
         page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
@@ -156,6 +171,13 @@ export async function openApp(page: Page, { keepStorage = false, newUser = false
     await expect(page.getByTestId('play-toggle')).toBeVisible();
 }
 
+export async function openTab(page: Page, name: string) {
+    const tab = page.getByRole('tab', { name });
+    await tab.scrollIntoViewIfNeeded();
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+}
+
 export async function selectPreset(page: Page, name: string) {
     await page.getByRole('combobox', { name: 'Ritmo Predefinido' }).click();
     await page.getByRole('option', { name, exact: true }).click();
@@ -182,7 +204,12 @@ export async function setBpm(page: Page, bpm: number) {
 
 /** Mixer mute buttons are toggles: bring a channel to the wanted state. */
 export async function setMuted(page: Page, channel: string, muted: boolean) {
+    const previousTab = await page.locator('[role="tab"][aria-selected="true"]').textContent();
     const button = page.getByTestId(`mute-${channel}`);
+    if ((await button.count()) === 0) await openTab(page, 'Mezclador');
     if ((await button.getAttribute('aria-pressed')) !== String(muted)) await button.click();
     await expect(button).toHaveAttribute('aria-pressed', String(muted));
+    if (previousTab && previousTab.trim() !== 'Mezclador') {
+        await openTab(page, previousTab.trim());
+    }
 }

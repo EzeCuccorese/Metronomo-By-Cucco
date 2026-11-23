@@ -79,7 +79,7 @@ const StageContent: React.FC<Omit<StageModeProps, 'open'>> = ({ onClose, pattern
           pt: 'calc(8px + env(safe-area-inset-top, 0px))', pb: 'calc(12px + env(safe-area-inset-bottom, 0px))',
           pl: 'calc(16px + env(safe-area-inset-left, 0px))', pr: 'calc(16px + env(safe-area-inset-right, 0px))',
           // The screen flashes softly on the downbeat; with reduced motion only the circles change.
-          bgcolor: downbeat && !reduceMotion ? '#131b2e' : '#090c12',
+          bgcolor: downbeat && !reduceMotion ? 'var(--skin-elevated)' : 'var(--skin-bg)',
           transition: reduceMotion ? 'none' : 'background-color 0.12s ease-out',
         }}
       >
@@ -106,8 +106,8 @@ const StageContent: React.FC<Omit<StageModeProps, 'open'>> = ({ onClose, pattern
                   data-active={lit}
                   sx={{
                     width: size, height: size, borderRadius: '50%',
-                    bgcolor: lit ? (i === 0 ? '#ffd54f' : '#e5a95f') : 'rgba(255,255,255,0.14)',
-                    boxShadow: lit && !reduceMotion ? '0 0 40px rgba(229, 169, 95, 0.7)' : 'none',
+                    bgcolor: lit ? (i === 0 ? 'var(--skin-accent-strong)' : 'var(--skin-accent)') : 'rgba(255,255,255,0.14)',
+                    boxShadow: lit && !reduceMotion ? '0 0 40px rgba(var(--skin-accent-rgb), 0.7)' : 'none',
                     transform: lit ? 'scale(1.12)' : 'none',
                     transition: reduceMotion ? 'none' : 'background-color 0.06s, transform 0.06s',
                   }}
@@ -116,14 +116,14 @@ const StageContent: React.FC<Omit<StageModeProps, 'open'>> = ({ onClose, pattern
             })}
           </Box>
 
-          <Typography data-testid="stage-bpm" aria-label={`${bpm} BPM`} sx={{ fontFamily: '"Share Tech Mono", monospace', fontWeight: 900, color: '#e5a95f', lineHeight: 1, fontSize: 'clamp(80px, 30vmin, 340px)' }}>
+          <Typography data-testid="stage-bpm" aria-label={`${bpm} BPM`} sx={{ fontFamily: '"Share Tech Mono", monospace', fontWeight: 900, color: 'var(--skin-accent)', lineHeight: 1, fontSize: 'clamp(80px, 30vmin, 340px)' }}>
             {bpm}
           </Typography>
           <Typography sx={{ color: 'text.primary', fontWeight: 700, fontSize: 'clamp(18px, 4.5vmin, 44px)' }}>
             {pattern.name}
           </Typography>
           {chordLabel && (
-            <Typography data-testid="stage-chord" sx={{ color: '#ffd54f', fontWeight: 800, fontSize: 'clamp(28px, 8vmin, 84px)', lineHeight: 1.1 }}>
+            <Typography data-testid="stage-chord" sx={{ color: 'var(--skin-accent-strong)', fontWeight: 800, fontSize: 'clamp(28px, 8vmin, 84px)', lineHeight: 1.1 }}>
               {chordLabel}
             </Typography>
           )}
@@ -140,8 +140,8 @@ const StageContent: React.FC<Omit<StageModeProps, 'open'>> = ({ onClose, pattern
             startIcon={isPlaying ? <StopIcon sx={{ fontSize: 32 }} /> : <PlayArrowIcon sx={{ fontSize: 32 }} />}
             sx={{
               height: 72, flex: 1, minWidth: 0, maxWidth: 320, borderRadius: 3, fontWeight: 900, fontSize: '1.2rem', letterSpacing: '0.08em',
-              background: isPlaying ? 'linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%)' : 'linear-gradient(135deg, #ffd54f 0%, #e5a95f 100%)',
-              color: isPlaying ? '#fff' : '#0b0e15',
+              background: isPlaying ? 'linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%)' : 'linear-gradient(135deg, var(--skin-accent-strong) 0%, var(--skin-accent) 100%)',
+              color: isPlaying ? '#fff' : 'var(--skin-accent-text)',
             }}
           >
             {isPlaying ? 'DETENER' : 'INICIAR'}
@@ -159,7 +159,7 @@ export const StageMode: React.FC<StageModeProps> = ({ open, onClose, ...rest }) 
     open={open}
     onClose={() => { void exitFullscreen(); onClose(); }}
     slotProps={{ paper: { 'data-testid': 'stage-mode', 'aria-label': 'Modo escenario' } as never }}
-    sx={{ '& .MuiDialog-paper': { bgcolor: '#090c12', backgroundImage: 'none' } }}
+    sx={{ '& .MuiDialog-paper': { bgcolor: 'var(--skin-bg)', backgroundImage: 'none' } }}
   >
     {open && <StageContent onClose={onClose} {...rest} />}
   </Dialog>

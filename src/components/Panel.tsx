@@ -67,7 +67,7 @@ export const Panel: React.FC<PanelProps> = ({ id, title, summary, actions, colla
             {
               display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, maxWidth: '100%', py: 0.25, pr: 1, borderRadius: 1,
               font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: 'inherit', textAlign: 'left',
-              '&:focus-visible': { outline: '2px solid #e5a95f', outlineOffset: 2 },
+              '&:focus-visible': { outline: '2px solid var(--skin-accent)', outlineOffset: 2 },
             },
             TOUCH_TARGET,
           ]}
@@ -107,7 +107,7 @@ export const Panel: React.FC<PanelProps> = ({ id, title, summary, actions, colla
           minWidth: 0,
           p: { xs: 1.5, md: 2 },
           borderRadius: 4,
-          bgcolor: '#121722',
+          bgcolor: 'var(--skin-surface)',
           display: 'flex',
           flexDirection: 'column',
           gap: 0,

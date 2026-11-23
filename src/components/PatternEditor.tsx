@@ -145,7 +145,7 @@ const PatternRow = React.memo<PatternRowProps>(({
                     <Avatar
                         src={INSTRUMENT_IMAGES[inst.type]}
                         alt=""
-                        sx={{ width: 18, height: 18, border: '1px solid rgba(245, 184, 81, 0.4)', boxShadow: '0 0 4px rgba(245, 184, 81, 0.2)' }}
+                        sx={{ width: 18, height: 18, border: '1px solid rgba(var(--skin-accent-rgb), 0.4)', boxShadow: '0 0 4px rgba(var(--skin-accent-rgb), 0.2)' }}
                     />
                 ) : (
                     Icon && <Icon sx={{ fontSize: 16, color: '#94a3b8' }} />
@@ -192,7 +192,7 @@ const PatternRow = React.memo<PatternRowProps>(({
                             touchAction: 'none',
                             color: note ? getIntensityColor(note.velocity) : 'transparent',
                             '&:hover': { bgcolor: 'rgba(255,255,255,0.06)' },
-                            '&:focus-visible': { outline: '2px solid #f5b851', outlineOffset: '-2px' },
+                            '&:focus-visible': { outline: '2px solid var(--skin-accent)', outlineOffset: '-2px' },
                             userSelect: 'none',
                         }}
                     >

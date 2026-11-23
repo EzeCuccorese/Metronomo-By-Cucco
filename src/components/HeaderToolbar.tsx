@@ -88,7 +88,7 @@ const BpmInput: React.FC<{ bpm: number; disabled?: boolean; onCommit: (bpm: numb
         }
       }}
       sx={{
-        '& input': { fontWeight: 900, fontFamily: '"Share Tech Mono", monospace', color: '#e5a95f', fontSize: '1.5rem', lineHeight: 1, p: 0 },
+        '& input': { fontWeight: 900, fontFamily: '"Share Tech Mono", monospace', color: 'var(--skin-accent)', fontSize: '1.5rem', lineHeight: 1, p: 0 },
         '& .MuiInput-underline:before': { borderBottomColor: 'transparent' },
       }}
     />
@@ -139,7 +139,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           md: '"brand tempo play" "lib lib lib"',
           xl: '"brand lib tempo play"',
         },
-        bgcolor: '#121722',
+        bgcolor: 'var(--skin-surface)',
         boxShadow: '0 6px 16px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03)'
       }}
     >
@@ -158,11 +158,11 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
             component="h1"
             sx={{
               fontWeight: "900",
-              background: 'linear-gradient(135deg, #ffd54f 0%, #f5b851 100%)',
+              background: 'linear-gradient(135deg, var(--skin-accent-strong) 0%, var(--skin-accent) 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               letterSpacing: '0.05em',
-              textShadow: '0 2px 10px rgba(245, 184, 81, 0.15)',
+              textShadow: '0 2px 10px rgba(var(--skin-accent-rgb), 0.15)',
               fontFamily: '"Outfit", sans-serif',
               fontSize: { xs: '1.05rem', sm: '1.2rem' }
             }}>
@@ -230,8 +230,8 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           onClick={onOpenLibrary}
           sx={{
             borderRadius: 2,
-            borderColor: 'rgba(229,169,95,0.4)',
-            color: '#e5a95f',
+            borderColor: 'rgba(var(--skin-accent-rgb), 0.4)',
+            color: 'var(--skin-accent)',
             textTransform: 'none',
             fontWeight: 'bold',
             px: 2,
@@ -239,8 +239,8 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
             width: { xs: '100%', sm: 'auto' },
             whiteSpace: 'nowrap',
             '&:hover': {
-              borderColor: '#e5a95f',
-              bgcolor: 'rgba(229,169,95,0.1)'
+              borderColor: 'var(--skin-accent)',
+              bgcolor: 'rgba(var(--skin-accent-rgb), 0.1)'
             }
           }}
         >
@@ -261,7 +261,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
               fontSize: '0.85rem',
               fontWeight: 700,
               color: 'primary.main',
-              '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(229,169,95,0.2)' }
+              '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(var(--skin-accent-rgb), 0.25)' }
             }}
           >
             <MenuItem value={CUSTOM_PATTERN_ID}><em>Patrón Personalizado (Editor)</em></MenuItem>
@@ -327,11 +327,11 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
             minWidth: 80,
             width: { lg: 150 },
             flex: { xs: 1, lg: 'none' },
-            color: '#e5a95f',
+            color: 'var(--skin-accent)',
             '& .MuiSlider-thumb': {
               width: 14,
               height: 14,
-              boxShadow: '0 0 8px rgba(229,169,95,0.6)'
+              boxShadow: '0 0 8px rgba(var(--skin-accent-rgb), 0.6)'
             }
           }}
         />
@@ -346,17 +346,17 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
               startIcon={<SpeedIcon />}
               aria-label={tapLabel}
               sx={{
-                bgcolor: 'rgba(229, 169, 95, 0.15)',
-                color: '#e5a95f',
-                border: '1px solid rgba(229, 169, 95, 0.3)',
+                bgcolor: 'rgba(var(--skin-accent-rgb), 0.15)',
+                color: 'var(--skin-accent)',
+                border: '1px solid rgba(var(--skin-accent-rgb), 0.3)',
                 fontWeight: 800,
                 fontSize: '0.75rem',
                 px: 1.5,
                 minWidth: { xs: 64, sm: 75 },
                 boxShadow: 'none',
                 '&:hover': {
-                  bgcolor: 'rgba(229, 169, 95, 0.3)',
-                  boxShadow: '0 0 10px rgba(229, 169, 95, 0.3)'
+                  bgcolor: 'rgba(var(--skin-accent-rgb), 0.3)',
+                  boxShadow: '0 0 10px rgba(var(--skin-accent-rgb), 0.3)'
                 }
               }}
             >
@@ -387,17 +387,17 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           letterSpacing: '0.08em',
           background: isPlaying
             ? 'linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%)'
-            : 'linear-gradient(135deg, #ffd54f 0%, #e5a95f 100%)',
-          color: isPlaying ? '#ffffff' : '#0b0e15',
+            : 'linear-gradient(135deg, var(--skin-accent-strong) 0%, var(--skin-accent) 100%)',
+          color: isPlaying ? '#ffffff' : 'var(--skin-accent-text)',
           boxShadow: isPlaying
             ? '0 0 20px rgba(211, 47, 47, 0.5)'
-            : '0 0 20px rgba(229, 169, 95, 0.4)',
+            : '0 0 20px rgba(var(--skin-accent-rgb), 0.4)',
           transition: 'all 0.15s ease-in-out',
           '&:hover': {
             transform: 'scale(1.03)',
             background: isPlaying
               ? 'linear-gradient(135deg, #f44336 0%, #c62828 100%)'
-              : 'linear-gradient(135deg, #ffe082 0%, #ffb74d 100%)',
+              : 'linear-gradient(135deg, var(--skin-accent-strong) 0%, var(--skin-accent) 100%)',
           }
         }}
       >

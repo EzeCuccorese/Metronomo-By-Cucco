@@ -65,5 +65,27 @@ export function useLayout(): LayoutApi {
         });
     }, [setLayout]);
 
-    return useMemo(() => ({ preset: layout.preset, panels: layout.panels, setPanelState, setPreset }), [layout.preset, layout.panels, setPanelState, setPreset]);
+    const openPanels = useCallback((ids: readonly PanelId[], animate = true) => {
+        const apply = () => {
+            setLayout(prev => {
+                let changed = false;
+                const panels = { ...prev.panels };
+                for (const id of ids) {
+                    if (panels[id] !== 'open') {
+                        panels[id] = 'open';
+                        changed = true;
+                    }
+                }
+                if (!changed) return prev;
+                return { ...prev, panels };
+            });
+        };
+        if (animate) runViewTransition(apply);
+        else apply();
+    }, [setLayout]);
+
+    return useMemo(
+        () => ({ preset: layout.preset, panels: layout.panels, setPanelState, setPreset, openPanels }),
+        [layout.preset, layout.panels, setPanelState, setPreset, openPanels],
+    );
 }

@@ -6,6 +6,7 @@ import { usePlaybackStore } from '../state/PlaybackContext';
 import { isHighlighted, markHighlight } from './visuals/highlight';
 import type { HighlightMap } from './visuals/highlight';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
+import { DEFAULT_SKIN, SKINS, type SkinId } from '../theme/skins';
 import {
     CLICK_BOOST,
     advanceAndPrune,
@@ -36,6 +37,7 @@ interface InteractiveInstrumentVisualProps {
     pattern: RhythmPattern;
     isPlaying: boolean;
     onPreviewInstrument: (instrument: string, modifier?: string) => void;
+    skin?: SkinId;
 }
 
 /** Keyboard / screen-reader alternative to the clickable canvas. */
@@ -321,6 +323,7 @@ export default function InteractiveInstrumentVisual({
     pattern,
     isPlaying,
     onPreviewInstrument,
+    skin = DEFAULT_SKIN,
 }: InteractiveInstrumentVisualProps) {
     const store = usePlaybackStore();
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -335,10 +338,16 @@ export default function InteractiveInstrumentVisual({
     const lastStepRef = useRef<number>(-1);
     const imagesRef = useRef<Record<string, HTMLImageElement>>({});
     const requestRenderRef = useRef<(() => void) | null>(null);
+    const canvasPaletteRef = useRef(SKINS[skin].canvas);
 
     const requestRender = useCallback(() => {
         requestRenderRef.current?.();
     }, []);
+
+    useEffect(() => {
+        canvasPaletteRef.current = SKINS[skin].canvas;
+        requestRender();
+    }, [skin, requestRender]);
 
     // Precargar imágenes reales de instrumentos
     useEffect(() => {
@@ -529,10 +538,10 @@ export default function InteractiveInstrumentVisual({
                 ctx.roundRect(sec.rect.x + 0.5, sec.rect.y + 0.5, sec.rect.w - 1, sec.rect.h - 1, 14);
                 ctx.fillStyle = 'rgba(241, 245, 249, 0.03)';
                 ctx.fill();
-                ctx.strokeStyle = 'rgba(148, 163, 184, 0.16)';
+                ctx.strokeStyle = canvasPaletteRef.current.gridBorder;
                 ctx.lineWidth = 1;
                 ctx.stroke();
-                ctx.fillStyle = '#f5b851';
+                ctx.fillStyle = canvasPaletteRef.current.accent;
                 ctx.globalAlpha = 0.85;
                 ctx.font = `700 ${LABEL_FONT}px Outfit, sans-serif`;
                 ctx.letterSpacing = '1.2px';

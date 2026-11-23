@@ -7,6 +7,7 @@ export interface LayoutApi {
     panels: Record<PanelId, PanelState>;
     setPanelState: (id: PanelId, state: PanelState) => void;
     setPreset: (preset: LayoutPreset) => void;
+    openPanels: (ids: readonly PanelId[], animate?: boolean) => void;
 }
 
 /** Without a provider (a panel rendered on its own) every panel is simply open. */
@@ -15,6 +16,7 @@ const FALLBACK: LayoutApi = {
     panels: Object.fromEntries(Object.keys(DEFAULT_PANELS).map(id => [id, 'open'])) as Record<PanelId, PanelState>,
     setPanelState: () => {},
     setPreset: () => {},
+    openPanels: () => {},
 };
 
 export const LayoutContext = createContext<LayoutApi>(FALLBACK);

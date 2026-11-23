@@ -28,12 +28,12 @@ export const BpmStepButton: React.FC<{
       data-testid={testId}
       sx={{
         width: size, height: size, flexShrink: 0, borderRadius: 2,
-        bgcolor: 'rgba(229, 169, 95, 0.15)', color: '#e5a95f', border: '1px solid rgba(229, 169, 95, 0.3)',
+        bgcolor: 'rgba(var(--skin-accent-rgb), 0.15)', color: 'var(--skin-accent)', border: '1px solid rgba(var(--skin-accent-rgb), 0.3)',
         touchAction: 'manipulation',
-        '&:hover': { bgcolor: 'rgba(229, 169, 95, 0.3)' },
-        '&:active': { bgcolor: 'rgba(229, 169, 95, 0.45)' },
+        '&:hover': { bgcolor: 'rgba(var(--skin-accent-rgb), 0.3)' },
+        '&:active': { bgcolor: 'rgba(var(--skin-accent-rgb), 0.45)' },
         '&.Mui-disabled': { opacity: 0.4 },
-        '&:focus-visible': { outline: '2px solid #e5a95f', outlineOffset: 2 },
+        '&:focus-visible': { outline: '2px solid var(--skin-accent)', outlineOffset: 2 },
       }}
     >
       {direction < 0 ? <RemoveIcon /> : <AddIcon />}
@@ -56,8 +56,8 @@ export const BeatLeds: React.FC<{ pattern: RhythmPattern; isPlaying: boolean; cl
           data-active={i === current}
           sx={{
             width: 10, height: 10, borderRadius: '50%',
-            bgcolor: i === current ? (i === 0 ? '#ffd54f' : '#e5a95f') : 'rgba(255,255,255,0.22)',
-            boxShadow: i === current ? '0 0 8px rgba(229, 169, 95, 0.8)' : 'none',
+            bgcolor: i === current ? (i === 0 ? 'var(--skin-accent-strong)' : 'var(--skin-accent)') : 'rgba(255,255,255,0.22)',
+            boxShadow: i === current ? '0 0 8px rgba(var(--skin-accent-rgb), 0.8)' : 'none',
           }}
         />
       ))}

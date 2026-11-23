@@ -76,6 +76,7 @@ const choose = async (comboboxName: string | RegExp, option: string | RegExp) =>
     fireEvent.mouseDown(screen.getByRole('combobox', { name: comboboxName }));
     fireEvent.click(within(await screen.findByRole('listbox')).getByText(option));
 };
+const openTab = (name: string | RegExp) => fireEvent.click(screen.getByRole('tab', { name }));
 
 describe('App (integration with a scripted engine)', () => {
     beforeEach(() => {
@@ -120,6 +121,7 @@ describe('App (integration with a scripted engine)', () => {
         act(() => scheduler().emit({ pattern: samba, bpm: 115, totalBars: 3 }));
         expect(bpmInput().value).toBe('115');
         expect(screen.queryByTestId('queued-pattern')).toBeNull();
+        openTab('Práctica y Estudio');
         expect(screen.getByTestId('bars-practiced')).toHaveTextContent('3');
     });
 
@@ -185,7 +187,7 @@ describe('App (integration with a scripted engine)', () => {
         const input = await screen.findByPlaceholderText(/Buscá un comando/);
         fireEvent.change(input, { target: { value: 'solo metr' } });
         fireEvent.click(await screen.findByText('Vista: Solo metrónomo'));
-        expect(document.querySelectorAll('[data-panel]')).toHaveLength(2);
+        expect(document.querySelectorAll('[data-panel]')).toHaveLength(1);
         fireEvent.keyDown(document.body, { code: 'KeyK', ctrlKey: true });
         fireEvent.change(await screen.findByPlaceholderText(/Buscá un comando/), { target: { value: 'panel: piano' } });
         fireEvent.click(await screen.findByText('Mostrar panel: Piano'));
@@ -216,7 +218,7 @@ describe('App (integration with a scripted engine)', () => {
 
     it('enables the speed trainer and locks the tempo controls while it runs', async () => {
         render(<App />);
-        fireEvent.click(screen.getByText('Modos de práctica'));
+        openTab('Práctica y Estudio');
         fireEvent.click(screen.getByLabelText('Entrenador de velocidad'));
         const last = scheduler().calls.configureTrainer.at(-1)![0] as { active: boolean; startBpm: number };
         expect(last.active).toBe(true);
@@ -236,7 +238,7 @@ describe('App (integration with a scripted engine)', () => {
 
     it('configures silence mode and folk forms, and shows the form progress', async () => {
         render(<App />);
-        fireEvent.click(screen.getByText('Modos de práctica'));
+        openTab('Práctica y Estudio');
         fireEvent.click(screen.getByLabelText('Compases en silencio'));
         expect(scheduler().calls.setSilenceMode.at(-1)).toEqual([true, 0.3]);
 
@@ -255,6 +257,7 @@ describe('App (integration with a scripted engine)', () => {
 
     it('builds a harmony progression and highlights the sounding chord', async () => {
         render(<App />);
+        openTab('Armonía y Piano');
         fireEvent.click(screen.getByText('IV'));
         fireEvent.click(screen.getByText('V'));
         expect(scheduler().calls.setHarmonyProgression.at(-1)![0]).toHaveLength(4);
@@ -289,6 +292,7 @@ describe('App (integration with a scripted engine)', () => {
 
     it('adds and completes a study task', async () => {
         render(<App />);
+        openTab('Práctica y Estudio');
         fireEvent.click(screen.getByRole('button', { name: 'Agregar tarea' }));
         fireEvent.change(await screen.findByLabelText('Título de la tarea'), { target: { value: 'Escalas' } });
         fireEvent.click(screen.getByRole('button', { name: 'Agregar' }));
@@ -333,13 +337,16 @@ describe('App (integration with a scripted engine)', () => {
 
         it('keeps the progression and the mutes when the panels are hidden and folded at run time', () => {
             render(<App />);
+            openTab('Armonía y Piano');
             fireEvent.click(screen.getByText('IV'));
+            openTab('Mezclador');
             fireEvent.click(screen.getByTestId('mute-kick'));
             const progression = scheduler().calls.setHarmonyProgression.at(-1)![0];
             expect(progression).toHaveLength(2);
 
             // Fold the mixer, hide the harmony card.
             fireEvent.click(screen.getByTestId('panel-toggle-mixer'));
+            openTab('Armonía y Piano');
             fireEvent.click(screen.getByRole('button', { name: 'Opciones de Armonía' }));
             fireEvent.click(screen.getByRole('menuitem', { name: 'Ocultar panel' }));
             expect(screen.queryByTestId('harmony-step')).toBeNull();
@@ -347,6 +354,7 @@ describe('App (integration with a scripted engine)', () => {
             expect(scheduler().calls.setChannelMute.at(-1)).toEqual(['kick', true]);
 
             // Hide the mixer too, then change rhythm: the click rule still applies to the engine.
+            openTab('Mezclador');
             fireEvent.click(screen.getByRole('button', { name: 'Opciones de Mezclador' }));
             fireEvent.click(screen.getByRole('menuitem', { name: 'Ocultar panel' }));
             expect(screen.queryByTestId('mute-click')).toBeNull();
@@ -382,8 +390,8 @@ describe('App (integration with a scripted engine)', () => {
         it('gives a new user "Ritmos"', () => {
             localStorage.clear();
             render(<App />);
-            expect(panels()).toEqual(['Pulso', 'Instrumentos', 'Secuenciador', 'Mezclador', 'Modos de práctica']);
-            expect(screen.getByRole('button', { name: /^Mezclador/ })).toHaveAttribute('aria-expanded', 'false');
+            expect(panels()).toEqual(['Pulso', 'Instrumentos', 'Secuenciador']);
+            expect(screen.getByTestId('tab-ritmos')).toHaveAttribute('aria-selected', 'true');
             expect(JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}ui.layout.v1`)!).preset).toBe('ritmos');
         });
 
@@ -391,7 +399,7 @@ describe('App (integration with a scripted engine)', () => {
             localStorage.clear();
             localStorage.setItem(`${STORAGE_PREFIX}bpm`, '90');
             render(<App />);
-            expect(panels()).toHaveLength(8);
+            expect(panels()).toEqual(['Pulso', 'Instrumentos', 'Secuenciador']);
             openView();
             expect(screen.getByRole('menuitemradio', { name: 'Todo' })).toHaveAttribute('aria-checked', 'true');
         });
@@ -400,17 +408,18 @@ describe('App (integration with a scripted engine)', () => {
             render(<App />);
             openView();
             fireEvent.click(screen.getByRole('menuitemradio', { name: 'Solo metrónomo' }));
-            expect(panels()).toEqual(['Pulso', 'Modos de práctica']);
+            expect(panels()).toEqual(['Pulso']);
             openView();
             fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Piano' }));
-            expect(panels()).toEqual(['Pulso', 'Piano', 'Modos de práctica']);
+            expect(panels()).toEqual(['Piano']);
             openView();
             expect(screen.getByRole('menuitemradio', { name: 'Personalizado' })).toHaveAttribute('aria-checked', 'true');
             // Trying another preset does not lose the custom arrangement.
             fireEvent.click(screen.getByRole('menuitemradio', { name: 'Estudio' }));
             openView();
             fireEvent.click(screen.getByRole('menuitemradio', { name: 'Personalizado' }));
-            expect(panels()).toEqual(['Pulso', 'Piano', 'Modos de práctica']);
+            openTab('Armonía y Piano');
+            expect(panels()).toEqual(['Piano']);
         });
 
         it('restores the factory preset when re-selecting an edited preset from the header dropdown', async () => {
@@ -426,21 +435,37 @@ describe('App (integration with a scripted engine)', () => {
             expect(screen.getByTestId('cell-kick-2')).toHaveAttribute('aria-pressed', 'false');
         });
 
-        it('unpins and re-pins Study via the top-left trigger pop-up without losing timer state', async () => {
+        it('pins and unpins Study via the top-left trigger pop-up without losing timer state', async () => {
             render(<App />);
-            expect(document.querySelector('[data-panel="study"]')).not.toBeNull();
-            fireEvent.click(screen.getByTestId('study-pin-toggle'));
             expect(document.querySelector('[data-panel="study"]')).toBeNull();
-
             fireEvent.click(screen.getByTestId('study-trigger'));
             const dialog = await screen.findByRole('dialog', { name: 'Estudio y Pomodoro' });
             expect(dialog).toBeVisible();
             fireEvent.click(within(dialog).getByTestId('study-pin-toggle'));
             expect(document.querySelector('[data-panel="study"]')).not.toBeNull();
+
+            const dock = document.querySelector('.area-study') as HTMLElement;
+            fireEvent.click(within(dock).getByTestId('study-pin-toggle'));
+            expect(document.querySelector('[data-panel="study"]')).toBeNull();
+        });
+
+        it('switches workspace tabs and skins with persistence', async () => {
+            const { unmount } = render(<App />);
+            openTab('Mezclador');
+            expect(screen.getByRole('region', { name: 'Mezclador' })).toBeVisible();
+            fireEvent.click(screen.getByTestId('skin-switcher'));
+            fireEvent.click(await screen.findByTestId('skin-option-cosmos'));
+            expect(document.documentElement.dataset.skin).toBe('cosmos');
+            unmount();
+
+            render(<App />);
+            expect(screen.getByTestId('tab-mezcla')).toHaveAttribute('aria-selected', 'true');
+            expect(document.documentElement.dataset.skin).toBe('cosmos');
         });
 
         it('keeps the sound of a hidden mixer and harmony when a preset hides them', () => {
             render(<App />);
+            openTab('Armonía y Piano');
             fireEvent.click(screen.getByText('IV'));
             const progression = scheduler().calls.setHarmonyProgression.at(-1)![0];
             openView();
@@ -481,7 +506,7 @@ describe('App (integration with a scripted engine)', () => {
             fireEvent.pointerDown(screen.getByTestId('bpm-down'), { button: 0 });
             expect(bpmInput().value).toBe('119');
 
-            fireEvent.click(screen.getByText('Modos de práctica'));
+            openTab('Práctica y Estudio');
             fireEvent.click(screen.getByLabelText('Entrenador de velocidad'));
             await act(async () => { fireEvent.click(screen.getByTestId('play-toggle')); });
             expect(screen.getByTestId('bpm-up')).toBeDisabled();

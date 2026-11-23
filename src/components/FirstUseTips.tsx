@@ -95,7 +95,7 @@ export const FirstUseTips: React.FC = () => {
       anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       message={current ? TIPS[current] : ''}
       data-testid="first-use-tip"
-      slotProps={{ content: { sx: { bgcolor: '#1a2130', color: 'text.primary', border: '1px solid rgba(245, 184, 81, 0.4)', boxShadow: '0 8px 24px rgba(0,0,0,0.6)' } } }}
+      slotProps={{ content: { sx: { bgcolor: 'var(--skin-elevated)', color: 'text.primary', border: '1px solid rgba(var(--skin-accent-rgb), 0.4)', boxShadow: '0 8px 24px rgba(0,0,0,0.6)' } } }}
       // Above the phone transport bar.
       sx={{ bottom: { xs: 'calc(var(--transport-reserve, 0px) + 8px) !important', sm: '24px' } }}
       action={<Button size="small" color="primary" onClick={() => close()} sx={{ minHeight: 44 }}>Entendido</Button>}

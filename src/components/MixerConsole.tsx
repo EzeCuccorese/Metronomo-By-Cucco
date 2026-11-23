@@ -241,7 +241,7 @@ export const MixerConsole: React.FC<MixerConsoleProps> = ({
                     onChange={(_, v) => onVolume(ch.id, v)}
                     aria-label={`Volumen ${label}`}
                     getAriaValueText={formatDb}
-                    sx={{ flex: 2, color: '#e5a95f' }}
+                    sx={{ flex: 2, color: 'var(--skin-accent)' }}
                   />
                   <Slider
                     size="small"

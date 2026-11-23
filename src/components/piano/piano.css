@@ -9,7 +9,7 @@
   /* The strip under the keys stays swipeable to scroll on touch screens. */
   padding-bottom: 12px;
   touch-action: pan-x;
-  scrollbar-color: #e5a95f33 transparent;
+  scrollbar-color: rgba(var(--skin-accent-rgb), 0.35) transparent;
   overscroll-behavior-x: contain;
 }
 
@@ -151,7 +151,7 @@
 .piano-key--white.is-outside { background: linear-gradient(#cbd5e1, #94a3b8); }
 .piano-key--black.is-scale { background: linear-gradient(#1e3a5f, #13233b); }
 
-/* Chord tones of the sounding chord: amber bar at the bottom, the root stronger. */
+/* Chord tones of the sounding chord: accent bar at the bottom, the root stronger. */
 .piano-key.is-chord::after {
   content: "";
   position: absolute;
@@ -160,23 +160,23 @@
   bottom: 4px;
   height: 5px;
   border-radius: 3px;
-  background: #f5b851;
+  background: var(--skin-accent);
   pointer-events: none;
 }
 .piano-key.is-root::after {
-  background: #f97316;
+  background: var(--skin-warm);
   height: 7px;
 }
-.piano-key--white.is-chord { box-shadow: inset 0 -6px 0 #cbd5e1, inset 0 0 0 2px #f5b85188; }
+.piano-key--white.is-chord { box-shadow: inset 0 -6px 0 #cbd5e1, inset 0 0 0 2px rgba(var(--skin-accent-rgb), 0.55); }
 
 /* Held keys. */
 .piano-key--white[aria-pressed="true"] {
-  background: linear-gradient(#fde68a, #f5b851);
+  background: linear-gradient(var(--skin-accent-strong), var(--skin-accent));
   transform: translateY(2px);
-  box-shadow: inset 0 -2px 0 #d99b38;
+  box-shadow: inset 0 -2px 0 var(--skin-accent);
 }
 .piano-key--black[aria-pressed="true"] {
-  background: linear-gradient(#d99b38, #9a6718);
+  background: linear-gradient(var(--skin-accent), rgba(var(--skin-accent-rgb), 0.72));
   transform: translateY(1px);
 }
 

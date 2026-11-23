@@ -134,29 +134,29 @@ export default function StudyTools({ onStopRequest, session, pinned, onTogglePin
                     position: 'relative', 
                     p: 3, 
                     borderRadius: 3,
-                    border: '2px solid rgba(229, 169, 95, 0.3) !important',
-                    boxShadow: 'inset 0 0 15px rgba(0,0,0,0.9), 0 0 10px rgba(229, 169, 95, 0.15) !important'
+                    border: '2px solid rgba(var(--skin-accent-rgb), 0.3) !important',
+                    boxShadow: 'inset 0 0 15px rgba(0,0,0,0.9), 0 0 10px rgba(var(--skin-accent-rgb), 0.15) !important'
                 }}
             >
                 <Stack direction="row" spacing={1} sx={{ justifyContent: 'center', mb: 2 }}>
                     <Button size="small" variant={timerType === 'pomodoro' ? "contained" : "text"}
                         onClick={() => setMode('pomodoro')}
                         sx={{ 
-                            color: timerType === 'pomodoro' ? '#0b0e15' : 'rgba(245, 184, 81, 0.72)', 
-                            bgcolor: timerType === 'pomodoro' ? '#f5b851' : 'transparent', 
+                            color: timerType === 'pomodoro' ? 'var(--skin-accent-text)' : 'rgba(var(--skin-accent-rgb), 0.72)', 
+                            bgcolor: timerType === 'pomodoro' ? 'var(--skin-accent)' : 'transparent', 
                             fontWeight: 'bold',
                             fontFamily: '"Outfit", sans-serif',
-                            '&:hover': { bgcolor: timerType === 'pomodoro' ? '#ffd54f' : 'rgba(245, 184, 81, 0.1)' } 
+                            '&:hover': { bgcolor: timerType === 'pomodoro' ? 'var(--skin-accent-strong)' : 'rgba(var(--skin-accent-rgb), 0.1)' } 
                         }}
                     > Foco </Button>
                     <Button size="small" variant={timerType === 'break' ? "contained" : "text"}
                         onClick={() => setMode('break')}
                         sx={{ 
-                            color: timerType === 'break' ? '#0b0e15' : 'rgba(245, 184, 81, 0.72)', 
+                            color: timerType === 'break' ? 'var(--skin-accent-text)' : 'rgba(var(--skin-accent-rgb), 0.72)', 
                             bgcolor: timerType === 'break' ? '#f97316' : 'transparent', 
                             fontWeight: 'bold',
                             fontFamily: '"Outfit", sans-serif',
-                            '&:hover': { bgcolor: timerType === 'break' ? '#fb923c' : 'rgba(245, 184, 81, 0.1)' } 
+                            '&:hover': { bgcolor: timerType === 'break' ? '#fb923c' : 'rgba(var(--skin-accent-rgb), 0.1)' } 
                         }}
                     > Descanso </Button>
                 </Stack>
@@ -171,18 +171,18 @@ export default function StudyTools({ onStopRequest, session, pinned, onTogglePin
                         size={140}
                         thickness={4.5}
                         sx={{
-                            color: timerType === 'pomodoro' ? '#e5a95f' : '#ff6d00',
-                            filter: `drop-shadow(0 0 8px ${timerType === 'pomodoro' ? 'rgba(229, 169, 95, 0.5)' : 'rgba(255, 109, 0, 0.5)'})`,
+                            color: timerType === 'pomodoro' ? 'var(--skin-accent)' : '#ff6d00',
+                            filter: `drop-shadow(0 0 8px ${timerType === 'pomodoro' ? 'rgba(var(--skin-accent-rgb), 0.5)' : 'rgba(255, 109, 0, 0.5)'})`,
                             transition: 'all 1s linear',
                             strokeLinecap: 'round'
                         }}
                     />
                     <Box sx={{ top: 0, left: 0, bottom: 0, right: 0, position: 'absolute', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
                         <TomatoIcon filled={true} size={28} />
-                        <Typography variant="h4" sx={{ fontWeight: 'bold', fontFamily: '"Share Tech Mono", monospace', mt: 1, color: '#e5a95f', textShadow: '0 0 6px rgba(229, 169, 95, 0.6)' }}>
+                        <Typography variant="h4" sx={{ fontWeight: 'bold', fontFamily: '"Share Tech Mono", monospace', mt: 1, color: 'var(--skin-accent)', textShadow: '0 0 6px rgba(var(--skin-accent-rgb), 0.6)' }}>
                             {formatTime(timeLeft)}
                         </Typography>
-                        <Typography variant="caption" sx={{ color: 'rgba(229, 169, 95, 0.5)', fontWeight: 'bold', letterSpacing: '0.08em', fontSize: '0.65rem' }}>
+                        <Typography variant="caption" sx={{ color: 'rgba(var(--skin-accent-rgb), 0.5)', fontWeight: 'bold', letterSpacing: '0.08em', fontSize: '0.65rem' }}>
                             {isActive ? 'CORRIENDO' : 'PAUSADO'}
                         </Typography>
                     </Box>
@@ -208,7 +208,7 @@ export default function StudyTools({ onStopRequest, session, pinned, onTogglePin
                 <Chip
                     size="small"
                     variant="outlined"
-                    sx={{ mt: 2, color: 'primary.main', borderColor: 'rgba(229, 169, 95, 0.4)' }}
+                    sx={{ mt: 2, color: 'primary.main', borderColor: 'rgba(var(--skin-accent-rgb), 0.4)' }}
                     label={<><span data-testid="bars-practiced">{totalBarsPracticed}</span> {totalBarsPracticed === 1 ? 'compás practicado' : 'compases practicados'}</>}
                 />
             </Box>

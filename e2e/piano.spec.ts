@@ -1,8 +1,9 @@
 import type { Page } from '@playwright/test';
-import { test, expect, openApp, play, selectPreset, setBpm, setMuted, AUDIBLE, SILENT } from './fixtures';
+import { test, expect, openApp, openTab, play, selectPreset, setBpm, setMuted, AUDIBLE, SILENT } from './fixtures';
 
 /** Hovering the panel downloads the samples; waits until the real piano is decoded. */
 async function waitForPianoSamples(page: Page) {
+    await openTab(page, 'Armonía y Piano');
     const panel = page.getByTestId('piano-panel');
     await panel.scrollIntoViewIfNeeded();
     await panel.hover();
@@ -17,6 +18,7 @@ async function choose(page: Page, combobox: string, option: string) {
 test.describe('piano', () => {
     test('the tracker layout plays two rows from the computer keyboard', async ({ page }) => {
         await openApp(page);
+        await openTab(page, 'Armonía y Piano');
         await page.getByTestId('piano-panel').scrollIntoViewIfNeeded();
         await page.getByRole('combobox', { name: /Distribución/ }).click();
         await page.getByRole('option', { name: 'Tracker (2 filas)' }).click();
@@ -40,6 +42,7 @@ test.describe('piano', () => {
             (navigator as unknown as Record<string, unknown>).requestMIDIAccess = async () => access;
         });
         await openApp(page);
+        await openTab(page, 'Armonía y Piano');
         await page.getByTestId('piano-panel').scrollIntoViewIfNeeded();
         await page.getByTestId('midi-connect').click();
         await expect(page.getByTestId('midi-status')).toContainText('Test Keys');
@@ -100,6 +103,7 @@ test.describe('piano', () => {
     test('the "Piano" accompaniment plays the progression on the PIANO mixer channel', async ({ page, probe }) => {
         await openApp(page);
         await selectPreset(page, 'Metronome (4/4)'); // no drums: only the piano is heard
+        await openTab(page, 'Armonía y Piano');
         await page.getByText('I', { exact: true }).click();
         await page.getByText('V', { exact: true }).click();
         await choose(page, 'Estilo', 'Piano (bajo + acordes)');

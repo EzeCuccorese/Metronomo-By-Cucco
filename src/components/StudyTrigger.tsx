@@ -14,8 +14,8 @@ interface StudyTriggerProps {
 
 const POPOVER_PAPER_SX = {
   mt: 1,
-  bgcolor: '#171e2c',
-  border: '1px solid rgba(148, 163, 184, 0.26)',
+  bgcolor: 'var(--skin-elevated)',
+  border: '1px solid var(--skin-border-strong)',
   borderRadius: 3,
   boxShadow: '0 16px 40px rgba(0, 0, 0, 0.7)',
 } as const;
@@ -24,9 +24,9 @@ const triggerSx = (isActive: boolean) => ({
   fontFamily: '"Share Tech Mono", monospace',
   fontWeight: 700,
   fontSize: '0.75rem',
-  borderColor: isActive ? 'rgba(245, 184, 81, 0.55)' : 'rgba(148, 163, 184, 0.28)',
-  bgcolor: isActive ? 'rgba(245, 184, 81, 0.12)' : 'rgba(15, 23, 42, 0.55)',
-  color: isActive ? '#f5b851' : '#cbd5e1',
+  borderColor: isActive ? 'rgba(var(--skin-accent-rgb), 0.55)' : 'var(--skin-border-strong)',
+  bgcolor: isActive ? 'rgba(var(--skin-accent-rgb), 0.12)' : 'var(--skin-recessed)',
+  color: isActive ? 'var(--skin-accent)' : 'text.primary',
   '& .MuiChip-icon': { ml: 0.75, mr: -0.25 },
   '& .MuiChip-deleteIcon': { color: 'primary.main', mr: 0.5 },
   '@media (pointer: coarse)': { minHeight: 44 },
