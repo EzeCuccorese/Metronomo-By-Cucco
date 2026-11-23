@@ -11,20 +11,26 @@ export const TIME_SIGNATURES: { label: string; value: TimeSignature }[] = [
 
 export const sameSignature = (a: TimeSignature, b: TimeSignature) => a[0] === b[0] && a[1] === b[1];
 
-/** Moves every step to the closest position of a new grid, keeping one hit per instrument and cell. */
+export interface PatternSource {
+    timeSignature: TimeSignature;
+    subdivision: number;
+    steps: RhythmStep[];
+}
+
+/** Moves every step to the closest position of a new grid, keeping the strongest hit per instrument and cell. */
 export function remapSteps(steps: RhythmStep[], oldSub: number, newSub: number): RhythmStep[] {
-    const seen = new Set<string>();
-    const result: RhythmStep[] = [];
+    const byCell = new Map<string, RhythmStep>();
     steps.forEach(s => {
         const position = (s.step - 1) / oldSub;
         const step = Math.round(position * newSub) + 1;
         if (step > newSub) return;
         const key = `${step}:${s.instrument}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-        result.push({ ...s, step });
+        const existing = byCell.get(key);
+        if (!existing || s.velocity > existing.velocity) {
+            byCell.set(key, { ...s, step });
+        }
     });
-    return result;
+    return [...byCell.values()];
 }
 
 /** Steps per pulse (denominator note) offered by the editor for each pulse unit. */

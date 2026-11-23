@@ -67,7 +67,7 @@ export const Panel: React.FC<PanelProps> = ({ id, title, summary, actions, colla
             {
               display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, maxWidth: '100%', py: 0.25, pr: 1, borderRadius: 1,
               font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit', color: 'inherit', textAlign: 'left',
-              '&:focus-visible': { outline: '2px solid #e5a95f', outlineOffset: 2 },
+              '&:focus-visible': { outline: '2px solid var(--skin-accent)', outlineOffset: 2 },
             },
             TOUCH_TARGET,
           ]}
@@ -96,20 +96,21 @@ export const Panel: React.FC<PanelProps> = ({ id, title, summary, actions, colla
   return (
     <Paper
       component="section"
-      className="brass-trim"
+      className="brass-trim studio-panel"
       aria-label={title}
       data-panel={id}
       data-state={id ? state : undefined}
+      style={id ? { viewTransitionName: `panel-${id}` } : undefined}
       sx={[
         {
           height: collapsed ? 'auto' : '100%',
           minWidth: 0,
           p: { xs: 1.5, md: 2 },
           borderRadius: 4,
-          bgcolor: '#141210',
+          bgcolor: 'var(--skin-surface)',
           display: 'flex',
           flexDirection: 'column',
-          gap: collapsed ? 0 : 1.5,
+          gap: 0,
         },
         ...asArray(sx),
         // A folded card is just its title bar, whatever stretching the layout asks for.
@@ -143,10 +144,30 @@ export const Panel: React.FC<PanelProps> = ({ id, title, summary, actions, colla
       )}
       {/* Folded bodies stay mounted (the effects of the card keep running); Collapse only hides them. */}
       {canFold ? (
-        <Collapse in={!collapsed} id={bodyId} sx={{ '& > .MuiCollapse-wrapper > .MuiCollapse-wrapperInner': { display: 'flex', flexDirection: 'column', gap: 1.5, flex: 1 }, flex: collapsed ? 'none' : 1, minHeight: 0 }}>
+        <Collapse
+          in={!collapsed}
+          id={bodyId}
+          timeout={220}
+          easing="cubic-bezier(0.2, 0.8, 0.2, 1)"
+          sx={{
+            '& > .MuiCollapse-wrapper > .MuiCollapse-wrapperInner': {
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1.5,
+              flex: 1,
+              pt: title ? 1.5 : 0,
+            },
+            flex: collapsed ? 'none' : 1,
+            minHeight: 0,
+          }}
+        >
           {children}
         </Collapse>
-      ) : children}
+      ) : (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, flex: 1, minHeight: 0, pt: title ? 1.5 : 0 }}>
+          {children}
+        </Box>
+      )}
     </Paper>
   );
 };

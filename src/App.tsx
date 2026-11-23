@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Box, Grid } from '@mui/material';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Box } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import './App.css';
@@ -19,18 +19,13 @@ import {
   withUsedInstruments,
 } from './rhythms/patternLibrary';
 import { clampBpm } from './rhythms/meter';
-import PatternEditor from './components/PatternEditor';
-import ConductorVisual from './components/ConductorVisual';
 import StudyTools from './components/StudyTools';
-import HarmonyBuilder from './components/HarmonyBuilder';
-import InteractiveInstrumentVisual from './components/InteractiveInstrumentVisual';
-import { MixerConsole } from './components/MixerConsole';
-import { PracticeModes } from './components/PracticeModes';
-import PianoPanel from './components/PianoPanel';
+import { useStudySession } from './hooks/useStudySession';
+import { StudyTrigger } from './components/StudyTrigger';
 import type { FormasSettings, SilenceSettings } from './components/PracticeModes';
-import { darkTheme } from './theme/darkTheme';
+import { SKIN_IDS, SKINS } from './theme/skins';
+import { useSkin } from './hooks/useSkin';
 import { HeaderToolbar } from './components/HeaderToolbar';
-import { Panel } from './components/Panel';
 import { PwaUpdater } from './pwa/PwaUpdater';
 import { GenreSelectorModal } from './components/GenreSelectorModal';
 import { useMetronomeEngine } from './hooks/useMetronomeEngine';
@@ -42,14 +37,27 @@ import CommandPalette from './components/CommandPalette';
 import type { PaletteCommand } from './components/CommandPalette';
 import { useWakeLock } from './hooks/useWakeLock';
 import { useLayout } from './hooks/useLayout';
-import { CHANNEL_LABELS, useMixer } from './hooks/useMixer';
+import { useMixer } from './hooks/useMixer';
 import { useHarmonySync, useMelodySync } from './hooks/useEngineSync';
 import { LayoutContext } from './state/LayoutContext';
 import { PANEL_IDS, PANEL_LABELS, PANEL_PRESET_ORDER, PRESET_LABELS } from './state/layout';
-import type { PanelId } from './state/layout';
+import type { LayoutPreset, PanelId, PanelState } from './state/layout';
+import {
+  DEFAULT_WORKSPACE_TAB,
+  TAB_FOR_PANEL,
+  TAB_FOR_PRESET,
+  WORKSPACE_TABS,
+  WORKSPACE_TAB_PANELS,
+  WORKSPACE_TAB_STORAGE_KEY,
+  isWorkspaceTab,
+  type WorkspaceTabId,
+} from './state/workspaceTabs';
+import { runViewTransition } from './state/viewTransition';
+import { WorkspaceTabs } from './components/WorkspaceTabs';
+import { WorkspaceContent } from './components/WorkspaceContent';
 import { ViewMenu } from './components/ViewMenu';
 import { FirstUseTips } from './components/FirstUseTips';
-import { enterFullscreen } from './hooks/useFullscreen';
+import { enterFullscreen, exitFullscreen } from './hooks/useFullscreen';
 import { StageMode } from './components/StageMode';
 import { CompactTransport } from './components/CompactTransport';
 import { useElementOutOfView } from './hooks/useElementOutOfView';
@@ -74,23 +82,26 @@ const isFormas = (v: unknown): v is FormasSettings =>
   isNumber(v.introBars) && v.introBars >= 1;
 
 function App() {
+  const skinState = useSkin();
   const [bpm, setBpmRaw] = usePersistentState('bpm', 120, isBpm);
   const [selectedPatternId, setSelectedPatternId] = usePersistentState('pattern', DEFAULT_PATTERN_ID, isPatternId);
   const [overrides, setOverrides] = usePersistentState<Record<string, RhythmPattern>>('patternOverrides', {}, { sanitize: sanitizeOverrides });
   const [trainer, setTrainer] = usePersistentState('trainer', DEFAULT_TRAINER, isTrainer);
   const [silence, setSilence] = usePersistentState('silence', DEFAULT_SILENCE, isSilence);
   const [formas, setFormas] = usePersistentState('formas', DEFAULT_FORMAS, isFormas);
+  const [activeTab, setActiveTab] = usePersistentState<WorkspaceTabId>(WORKSPACE_TAB_STORAGE_KEY, DEFAULT_WORKSPACE_TAB, isWorkspaceTab);
+  const [studyPinned, setStudyPinned] = usePersistentState<boolean>('ui.studyPinned.v1', false, isBoolean);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [stageOpen, setStageOpen] = useState(false);
-  // Fullscreen must be asked for inside the click / key press that opens the stage (see enterFullscreen).
   const openStage = useCallback(() => { void enterFullscreen(); setStageOpen(true); }, []);
+  const closeStage = useCallback(() => { void exitFullscreen(); setStageOpen(false); }, []);
 
   const setBpm = useCallback((value: number) => setBpmRaw(clampBpm(value)), [setBpmRaw]);
 
   const overrideForSelected = overrides[normalizePatternId(selectedPatternId)];
   const currentPattern = useMemo(
     () => resolvePattern(selectedPatternId, overrideForSelected ? { [overrideForSelected.id]: overrideForSelected } : {}),
-    [selectedPatternId, overrideForSelected]
+    [selectedPatternId, overrideForSelected],
   );
 
   const engine = useMetronomeEngine({
@@ -101,28 +112,39 @@ function App() {
   });
   const { isPlaying, toggle, queuePattern, configureTrainer, setSilenceMode, configureFormas } = engine;
 
-  // Keep the screen on while the metronome sounds (the system would otherwise lock the phone mid-practice).
   useWakeLock(isPlaying);
-
   useEffect(() => { configureTrainer(trainer); }, [trainer, configureTrainer]);
   useEffect(() => { setSilenceMode(silence.active, silence.chance); }, [silence, setSilenceMode]);
   useEffect(() => { configureFormas(formas.enabled, formas.genre, formas.introBars); }, [formas, configureFormas]);
-
-  // While the trainer drives the tempo, the visible BPM starts from its start value.
   useEffect(() => {
     if (trainer.active && !isPlaying) setBpm(trainer.startBpm);
   }, [trainer.active, trainer.startBpm, isPlaying, setBpm]);
 
   const loadPreset = useCallback((patternId: string) => {
     const id = normalizePatternId(patternId);
-    const next = resolvePattern(id, overrides);
+    const isCustom = id === CUSTOM_PATTERN_ID;
+    const wasOverridden = !isCustom && id in overrides;
+    if (wasOverridden) {
+      setOverrides(prev => {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
+    const next = isCustom ? resolvePattern(id, overrides) : (getBasePattern(id) ?? PRESET_PATTERNS[0]);
     if (isPlaying) {
+      if (id === currentPattern.id && !wasOverridden) {
+        queuePattern(currentPattern);
+        setSelectedPatternId(id);
+        return;
+      }
       queuePattern(next);
       return;
     }
     setSelectedPatternId(id);
     if (next.recommendedTempo && !trainer.active) setBpm(next.recommendedTempo);
-  }, [isPlaying, overrides, queuePattern, setSelectedPatternId, setBpm, trainer.active]);
+  }, [isPlaying, overrides, currentPattern, queuePattern, setOverrides, setSelectedPatternId, setBpm, trainer.active]);
 
   const handlePatternUpdate = useCallback((pattern: RhythmPattern) => {
     const normalized = withUsedInstruments(pattern);
@@ -138,34 +160,54 @@ function App() {
   }, [setOverrides, currentPattern.id]);
 
   const handleTap = useTapTempo(setBpm);
-
-  // While the speed trainer runs it owns the tempo: every manual path (controls,
-  // Tap button, keyboard) is locked the same way.
   const tempoLocked = trainer.active && isPlaying;
   const guardedTap = useCallback(() => { if (!tempoLocked) handleTap(); }, [tempoLocked, handleTap]);
-
   const nudgeBpm = useCallback((delta: number) => {
     if (!tempoLocked) setBpmRaw(prev => clampBpm(prev + delta));
   }, [tempoLocked, setBpmRaw]);
 
+  const rawLayout = useLayout();
+  const selectTab = useCallback((nextTab: WorkspaceTabId) => {
+    const tabPanels = WORKSPACE_TAB_PANELS[nextTab];
+    const needsAutoOpen = rawLayout.preset === 'personalizado'
+      ? tabPanels.every(id => rawLayout.panels[id] === 'hidden')
+      : tabPanels.every(id => rawLayout.panels[id] !== 'open');
+    runViewTransition(() => {
+      setActiveTab(nextTab);
+      if (needsAutoOpen) rawLayout.openPanels(tabPanels, false);
+    });
+  }, [rawLayout, setActiveTab]);
+
+  const setPanelAndFocus = useCallback((id: PanelId, state: PanelState) => {
+    rawLayout.setPanelState(id, state);
+    if (state === 'open') setActiveTab(TAB_FOR_PANEL[id]);
+  }, [rawLayout, setActiveTab]);
+
+  const setPresetAndTab = useCallback((preset: LayoutPreset) => {
+    rawLayout.setPreset(preset);
+    const targetTab = TAB_FOR_PRESET[preset];
+    if (targetTab) setActiveTab(targetTab);
+  }, [rawLayout, setActiveTab]);
+
+  const layout = useMemo(
+    () => ({ ...rawLayout, setPanelState: setPanelAndFocus, setPreset: setPresetAndTab }),
+    [rawLayout, setPanelAndFocus, setPresetAndTab],
+  );
+
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const rhythmCommands = useMemo<PaletteCommand[]>(() => PRESET_PATTERNS.map(p => ({
-    id: `rhythm.${p.id}`,
-    label: `Ritmo: ${p.name}`,
-    group: 'Ritmos',
-    keywords: ['ritmo', 'rhythm'],
-    run: () => loadPreset(p.id),
+    id: `rhythm.${p.id}`, label: `Ritmo: ${p.name}`, group: 'Ritmos', keywords: ['ritmo', 'rhythm'], run: () => loadPreset(p.id),
   })), [loadPreset]);
-  const layout = useLayout();
-  // The view presets and panel switches are also palette commands (⌘K), next to the "Vista" menu.
   const viewCommands = useMemo<PaletteCommand[]>(() => [
+    ...WORKSPACE_TABS.map(t => ({
+      id: `tab.${t.id}`, label: `Pestaña: ${t.label}`, group: 'Secciones', keywords: ['pestaña', 'tab', 'seccion'], run: () => selectTab(t.id),
+    })),
+    ...SKIN_IDS.map(id => ({
+      id: `skin.${id}`, label: `Skin: ${SKINS[id].name} (${SKINS[id].subtitle})`, group: 'Apariencia', keywords: ['skin', 'tema', 'theme', 'color'], run: () => skinState.setSkin(id),
+    })),
     ...PANEL_PRESET_ORDER.map(preset => ({
-      id: `view.preset.${preset}`,
-      label: `Vista: ${PRESET_LABELS[preset]}`,
-      group: 'Vista',
-      keywords: ['vista', 'preset', 'paneles', 'layout'],
-      run: () => layout.setPreset(preset),
+      id: `view.preset.${preset}`, label: `Vista: ${PRESET_LABELS[preset]}`, group: 'Vista', keywords: ['vista', 'preset', 'paneles', 'layout'], run: () => layout.setPreset(preset),
     })),
     ...PANEL_IDS.map(id => ({
       id: `view.panel.${id}`,
@@ -174,7 +216,7 @@ function App() {
       keywords: ['vista', 'panel', 'paneles'],
       run: () => layout.setPanelState(id, layout.panels[id] === 'hidden' ? 'open' : 'hidden'),
     })),
-  ], [layout]);
+  ], [layout, selectTab, skinState]);
   const paletteCommands = useMemo(() => [...rhythmCommands, ...viewCommands], [rhythmCommands, viewCommands]);
   const setBpmFromPalette = useCallback((value: number) => { if (!tempoLocked) setBpmRaw(clampBpm(value)); }, [tempoLocked, setBpmRaw]);
 
@@ -193,16 +235,13 @@ function App() {
     'transport.bpm-down': e => { if (!tempoLocked) setBpmRaw(prev => clampBpm(prev - (e.shiftKey ? 5 : 1))); },
     'transport.prev-rhythm': () => stepPreset(-1),
     'transport.next-rhythm': () => stepPreset(1),
-    'view.stage': e => { if (!e.repeat) { if (stageOpen) setStageOpen(false); else openStage(); } },
+    'view.stage': e => { if (!e.repeat) { if (stageOpen) closeStage(); else openStage(); } },
     'help.shortcuts': () => setShortcutsOpen(true),
     'palette.open': () => setPaletteOpen(prev => !prev),
   });
 
-  // The slim bar appears once the full header has scrolled away (not on portrait phones: their bar is always there).
   const [headerEl, setHeaderEl] = useState<HTMLElement | null>(null);
   const headerOutOfView = useElementOutOfView(headerEl);
-
-  // Settings edited inside a card reach the engine from here, so a hidden or folded card keeps its sound.
   const mixer = useMixer(currentPattern, {
     onVolumeChange: engine.setChannelVolume,
     onPanChange: engine.setChannelPan,
@@ -212,25 +251,21 @@ function App() {
   useMelodySync(engine);
 
   const shown = (id: PanelId) => layout.panels[id] !== 'hidden';
-  const mutedChannels = mixer.visibleChannels.filter(ch => ch.isMuted);
-  const soloNames = mixer.visibleChannels.filter(ch => mixer.solo.has(ch.id)).map(ch => CHANNEL_LABELS[ch.id]);
-  const mixerSummary = [
-    `${mixer.visibleChannels.length} canales`,
-    mutedChannels.length === 0 ? 'sin mutes' : mutedChannels.length === 1 ? `${CHANNEL_LABELS[mutedChannels[0].id]} en mute` : `${mutedChannels.length} en mute`,
-    ...(soloNames.length > 0 ? [`Solo ${soloNames.join(', ')}`] : []),
-  ].join(' · ');
-
   const canRestore = currentPattern.id !== CUSTOM_PATTERN_ID && !!overrides[currentPattern.id];
+  const studySession = useStudySession(engine.stop);
+  const studyDockRef = useRef<HTMLDivElement | null>(null);
+  const toggleStudyPin = useCallback(() => setStudyPinned(prev => !prev), [setStudyPinned]);
+  const focusPinnedStudy = useCallback(() => {
+    studyDockRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, []);
 
   return (
-    <ThemeProvider theme={darkTheme}>
+    <ThemeProvider theme={skinState.theme}>
       <CssBaseline />
       <LayoutContext.Provider value={layout}>
       <PlaybackContext.Provider value={engine.store}>
-        <Box component="main" className="app-shell" sx={{ minHeight: '100dvh', width: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#070605', overflowX: 'hidden', alignItems: 'center', boxSizing: 'border-box' }}>
-
+        <Box component="main" className="app-shell" sx={{ minHeight: '100dvh', width: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'var(--skin-bg)', overflowX: 'hidden', alignItems: 'center', boxSizing: 'border-box' }}>
           <Box className="studio-chassis console-wood-edge" sx={{ width: '100%', maxWidth: '1440px', display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 2 }, p: { xs: 1, md: 2 }, boxSizing: 'border-box' }}>
-
             <HeaderToolbar
               isPlaying={isPlaying}
               bpm={bpm}
@@ -243,7 +278,8 @@ function App() {
               availablePresets={PRESET_PATTERNS}
               onSelectPreset={loadPreset}
               tempoLocked={tempoLocked}
-              viewControl={<ViewMenu onStageMode={openStage} />}
+              viewControl={<ViewMenu onStageMode={openStage} skin={skinState.skin} onSelectSkin={skinState.setSkin} />}
+              studyControl={<StudyTrigger session={studySession} pinned={studyPinned} onTogglePin={toggleStudyPin} onFocusPinned={focusPinnedStudy} />}
               pattern={currentPattern}
               onNudgeBpm={nudgeBpm}
               headerRef={setHeaderEl}
@@ -258,141 +294,53 @@ function App() {
                 onTogglePlay={toggle}
                 onNudgeBpm={nudgeBpm}
                 onTapTempo={guardedTap}
-                viewControl={<ViewMenu compact onStageMode={openStage} />}
+                viewControl={<ViewMenu compact onStageMode={openStage} skin={skinState.skin} onSelectSkin={skinState.setSkin} />}
               />
             )}
 
             <BluetoothNotice isPlaying={isPlaying} />
 
-            {/* Rows of an aligned 12-column grid; cells stretch to the row height. Hidden panels leave no gap. */}
-            <Grid container spacing={{ xs: 1.5, md: 2 }} sx={{ width: '100%' }}>
+            <WorkspaceTabs activeTab={activeTab} onSelectTab={selectTab} skin={skinState.skin} onSelectSkin={skinState.setSkin} />
 
-              {/* Row 1: pulse (primary) + instruments */}
-              {shown('pulse') && (
-                <Grid size={{ xs: 12, md: shown('instruments') ? 5 : 12, lg: shown('instruments') ? 4 : 12 }} className="area-pulse">
-                  <Panel id="pulse" title="Pulso" summary={`${bpm} BPM · ${currentPattern.name}`}>
-                    <ConductorVisual
-                      pattern={currentPattern}
-                      isPlaying={isPlaying}
-                      trainerActive={trainer.active}
-                      totalBarsInterval={trainer.barsPerStep}
-                      bpm={bpm}
-                    />
-                  </Panel>
-                </Grid>
-              )}
-              {shown('instruments') && (
-                <Grid size={{ xs: 12, md: shown('pulse') ? 7 : 12, lg: shown('pulse') ? 8 : 12 }}>
-                  <Panel id="instruments" title="Instrumentos" summary={currentPattern.name} sx={{ height: 'auto' }}>
-                    <InteractiveInstrumentVisual
-                      pattern={currentPattern}
-                      isPlaying={isPlaying}
-                      onPreviewInstrument={(instrument, modifier) => void engine.previewInstrument(instrument, modifier)}
-                    />
-                  </Panel>
-                </Grid>
-              )}
+            {studyPinned && activeTab !== 'practica' && (
+              <Box ref={studyDockRef} className="area-study">
+                <StudyTools onStopRequest={engine.stop} session={studySession} pinned={studyPinned} onTogglePin={toggleStudyPin} />
+              </Box>
+            )}
 
-              {/* Row 2: step sequencer, full width */}
-              {shown('sequencer') && (
-                <Grid size={12}>
-                  <Panel id="sequencer" title="Secuenciador" summary={currentPattern.name} sx={{ '& section': { mt: 0 } }}>
-                    <PatternEditor
-                      pattern={currentPattern}
-                      onPatternUpdate={handlePatternUpdate}
-                      isPlaying={isPlaying}
-                      onPreviewInstrument={(instrument, modifier) => void engine.previewInstrument(instrument, modifier)}
-                      canRestore={canRestore}
-                      onRestore={handleRestorePattern}
-                    />
-                  </Panel>
-                </Grid>
-              )}
-
-              {/* Row 3: mixer + practice modes and harmony */}
-              {shown('mixer') && (
-                <Grid size={{ xs: 12, lg: shown('practice') || shown('harmony') ? 8 : 12 }}>
-                  <Panel id="mixer" title="Mezclador" summary={mixerSummary}>
-                    <MixerConsole
-                      channels={mixer.visibleChannels}
-                      view={mixer.view}
-                      onViewChange={mixer.setView}
-                      showAll={mixer.showAll}
-                      onShowAllChange={mixer.setShowAll}
-                      solo={mixer.solo}
-                      onToggleSolo={mixer.toggleSolo}
-                      onVolume={mixer.setVolume}
-                      onPan={mixer.setPan}
-                      onToggleMute={mixer.toggleMute}
-                      pattern={currentPattern}
-                      isPlaying={isPlaying}
-                      getChannelLevel={engine.getChannelLevel}
-                    />
-                  </Panel>
-                </Grid>
-              )}
-              {(shown('practice') || shown('harmony')) && (
-                <Grid size={{ xs: 12, lg: shown('mixer') ? 4 : 12 }} sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.5, md: 2 } }}>
-                  {shown('practice') && (
-                    <PracticeModes
-                      trainer={trainer}
-                      onTrainerChange={setTrainer}
-                      silence={silence}
-                      onSilenceChange={setSilence}
-                      formas={formas}
-                      onFormasChange={setFormas}
-                      isPlaying={isPlaying}
-                    />
-                  )}
-                  {shown('harmony') && (
-                    <Panel id="harmony" title="Armonía" summary={harmonySummary} sx={{ flex: 1, height: 'auto' }}>
-                      <HarmonyBuilder isPlaying={isPlaying} />
-                    </Panel>
-                  )}
-                </Grid>
-              )}
-
-              {/* Row 4: study tools, full width (laid out horizontally inside) */}
-              {shown('study') && (
-                <Grid size={12}>
-                  <StudyTools onStopRequest={engine.stop} />
-                </Grid>
-              )}
-
-              {/* Row 5: piano (harmony, playable keyboard, melody looper) */}
-              {shown('piano') && (
-                <Grid size={12}>
-                  <Panel id="piano" title="Piano" summary="Teclado y melodías">
-                    <PianoPanel engine={engine} isPlaying={isPlaying} />
-                  </Panel>
-                </Grid>
-              )}
-
-            </Grid>
+            <WorkspaceContent
+              activeTab={activeTab}
+              shown={shown}
+              onRestoreTabPanels={(tab) => rawLayout.openPanels(WORKSPACE_TAB_PANELS[tab])}
+              skin={skinState.skin}
+              bpm={bpm}
+              isPlaying={isPlaying}
+              currentPattern={currentPattern}
+              canRestorePattern={canRestore}
+              onPatternUpdate={handlePatternUpdate}
+              onRestorePattern={handleRestorePattern}
+              engine={engine}
+              mixer={mixer}
+              harmonySummary={harmonySummary}
+              trainer={trainer}
+              onTrainerChange={setTrainer}
+              silence={silence}
+              onSilenceChange={setSilence}
+              formas={formas}
+              onFormasChange={setFormas}
+              studySession={studySession}
+              studyPinned={studyPinned}
+              onToggleStudyPin={toggleStudyPin}
+            />
           </Box>
         </Box>
 
-        <StageMode
-          open={stageOpen}
-          onClose={() => setStageOpen(false)}
-          pattern={currentPattern}
-          bpm={bpm}
-          isPlaying={isPlaying}
-          tempoLocked={tempoLocked}
-          onTogglePlay={toggle}
-          onNudgeBpm={nudgeBpm}
-        />
+        <StageMode open={stageOpen} onClose={closeStage} pattern={currentPattern} bpm={bpm} isPlaying={isPlaying} tempoLocked={tempoLocked} onTogglePlay={toggle} onNudgeBpm={nudgeBpm} />
         <FirstUseTips />
         <PwaUpdater isPlaying={isPlaying} />
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={paletteCommands} onSetBpm={setBpmFromPalette} tempoLocked={tempoLocked} />
         <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-        <GenreSelectorModal
-          open={libraryOpen}
-          onClose={() => setLibraryOpen(false)}
-          selectedPatternId={currentPattern.id}
-          isPlaying={isPlaying}
-          onSelectPattern={loadPreset}
-        />
+        <GenreSelectorModal open={libraryOpen} onClose={() => setLibraryOpen(false)} selectedPatternId={currentPattern.id} isPlaying={isPlaying} onSelectPattern={loadPreset} />
       </PlaybackContext.Provider>
       </LayoutContext.Provider>
     </ThemeProvider>

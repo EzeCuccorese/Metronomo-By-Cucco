@@ -1,11 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
-import { test, expect, openApp } from './fixtures';
+import { test, expect, openApp, openTab } from './fixtures';
 
-/** Contrast and legibility with every panel open (the default layout hides most of them), on every viewport. */
 const openEverything = JSON.stringify({
     preset: 'todo',
     panels: { pulse: 'open', instruments: 'open', sequencer: 'open', mixer: 'open', practice: 'open', harmony: 'open', study: 'open', piano: 'open' },
 });
+
+const TAB_NAMES = ['Ritmos', 'Armonía y Piano', 'Mezclador', 'Práctica y Estudio'] as const;
+const SKIN_IDS = ['obsidian', 'cosmos', 'esmeralda'] as const;
 
 test.describe('contrast', () => {
     test.beforeEach(async ({ page }) => {
@@ -17,39 +19,56 @@ test.describe('contrast', () => {
             }
         }, openEverything);
         await openApp(page, { keepStorage: true });
-        await page.getByRole('switch', { name: 'Mostrar todos' }).click();
     });
 
-    test('axe: no color-contrast violations with every panel open', async ({ page }) => {
-        const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
-        const bad = results.violations.filter(v => v.impact === 'serious' || v.impact === 'critical');
-        expect(bad.map(v => `${v.id}: ${v.nodes.slice(0, 4).map(n => `${n.target.join(' ')} ${n.any[0]?.data?.fgColor}/${n.any[0]?.data?.bgColor}`).join(' | ')}`)).toEqual([]);
+    test('axe: no color-contrast violations across all tabs and skins', async ({ page }) => {
+        for (const skin of SKIN_IDS) {
+            await page.getByTestId('skin-switcher').click();
+            await page.getByTestId(`skin-option-${skin}`).click();
+            await expect(page.locator('html')).toHaveAttribute('data-skin', skin);
+            for (const tab of TAB_NAMES) {
+                await openTab(page, tab);
+                const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+                const bad = results.violations.filter(v => v.impact === 'serious' || v.impact === 'critical');
+                expect(
+                    bad.map(v => `${skin}/${tab} ${v.id}: ${v.nodes.slice(0, 4).map(n => `${n.target.join(' ')} ${n.any[0]?.data?.fgColor}/${n.any[0]?.data?.bgColor}`).join(' | ')}`),
+                ).toEqual([]);
+            }
+        }
     });
 
     // axe cannot judge text over gradients, so the mixer's small print is checked directly against its dark strip.
-    test('mixer labels, scales and readouts are at least 11 px and 4.5:1', async ({ page }) => {
-        const rows = await page.evaluate(() => {
-            const luminance = (rgb: number[]) => {
-                const [r, g, b] = rgb.map(v => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
-                return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-            };
-            const parse = (color: string) => (color.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
-            const BG = [11, 9, 8]; // the strip background (#0b0908)
-            const selectors = ['.channel-param-label', '.pan-value-display', '.fader-scale > span', '.mixer-row__db', '.mixer-row__name', '.channel-label-screen .vfd-text'];
-            const out: string[] = [];
-            for (const selector of selectors) {
-                for (const el of document.querySelectorAll<HTMLElement>(selector)) {
-                    if (!el.offsetParent) continue;
-                    const style = getComputedStyle(el);
-                    const fg = parse(style.color);
-                    const l1 = luminance(fg), l2 = luminance(BG);
-                    const ratio = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
-                    const size = parseFloat(style.fontSize);
-                    if (size < 10.99 || ratio < 4.5) out.push(`${selector} ${size}px ${ratio.toFixed(2)}:1`);
+    test('mixer labels, scales and readouts are at least 11 px and 4.5:1 across all skins', async ({ page }) => {
+        await openTab(page, 'Mezclador');
+        await page.getByRole('switch', { name: 'Mostrar todos' }).click();
+        for (const skin of SKIN_IDS) {
+            await page.getByTestId('skin-switcher').click();
+            await page.getByTestId(`skin-option-${skin}`).click();
+            await expect(page.locator('html')).toHaveAttribute('data-skin', skin);
+            const rows = await page.evaluate(() => {
+                const luminance = (rgb: number[]) => {
+                    const [r, g, b] = rgb.map(v => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
+                    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                };
+                const parse = (color: string) => (color.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
+                const container = document.querySelector<HTMLElement>('.mixer-channels-container') ?? document.querySelector<HTMLElement>('.mixer-row');
+                const bg = container ? parse(getComputedStyle(container).backgroundColor) : [11, 14, 21];
+                const selectors = ['.channel-param-label', '.pan-value-display', '.fader-scale > span', '.mixer-row__db', '.mixer-row__name', '.channel-label-screen .vfd-text'];
+                const out: string[] = [];
+                for (const selector of selectors) {
+                    for (const el of document.querySelectorAll<HTMLElement>(selector)) {
+                        if (!el.offsetParent) continue;
+                        const style = getComputedStyle(el);
+                        const fg = parse(style.color);
+                        const l1 = luminance(fg), l2 = luminance(bg);
+                        const ratio = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+                        const size = parseFloat(style.fontSize);
+                        if (size < 10.99 || ratio < 4.5) out.push(`${selector} ${size}px ${ratio.toFixed(2)}:1`);
+                    }
                 }
-            }
-            return [...new Set(out)];
-        });
-        expect(rows).toEqual([]);
+                return [...new Set(out)];
+            });
+            expect(rows, `Skin ${skin}`).toEqual([]);
+        }
     });
 });

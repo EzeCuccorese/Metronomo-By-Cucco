@@ -52,7 +52,7 @@ export default function MidiControls({ support, status, devices, selected, onSel
                         Conectar teclado MIDI
                     </Button>
                     {status === 'denied' && (
-                        <Typography variant="caption" role="alert" sx={{ color: '#e5a95f' }}>
+                        <Typography variant="caption" role="alert" sx={{ color: 'var(--skin-accent)' }}>
                             No se pudo acceder a MIDI: habilitá el permiso del sitio en el navegador y probá de nuevo.
                         </Typography>
                     )}

@@ -174,10 +174,10 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
     // --- Samples are downloaded on first interest, not on page load ---
     const preloaded = useRef(false);
     const preload = useCallback(() => {
-        if (preloaded.current) return;
+        if (preloaded.current && engine.pianoStatus !== 'failed') return;
         preloaded.current = true;
         preloadPiano();
-    }, [preloadPiano]);
+    }, [engine.pianoStatus, preloadPiano]);
 
     // --- Sounding chord and scale ---
     const chordIndex = usePlayback(s => s.chordIndex);
@@ -236,7 +236,7 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
                     variant="outlined"
                 />}
                 {chord && (
-                    <Typography variant="caption" sx={{ color: '#e5a95f' }} data-testid="piano-chord">
+                    <Typography variant="caption" sx={{ color: 'var(--skin-accent)' }} data-testid="piano-chord">
                         Acorde: {chordSymbol(chord)} ({chord.map(n => { const m = noteToMidi(n); return m === null ? n : spanishNoteName(m); }).join(' · ')})
                     </Typography>
                 )}
@@ -283,7 +283,7 @@ export default function PianoPanel({ engine, isPlaying }: PianoPanelProps) {
                     <Box role="img" aria-label={`Velocidad del teclado PC: nivel ${velocityLevel + 1} de ${VELOCITY_LEVELS.length}`} data-testid="piano-velocity" data-level={velocityLevel}
                         sx={{ display: 'inline-flex', alignItems: 'flex-end', gap: '2px', height: 20, px: 0.5 }}>
                         {VELOCITY_LEVELS.map((_, i) => (
-                            <Box key={i} sx={{ width: 4, height: 6 + i * 3, borderRadius: '1px', bgcolor: i <= velocityLevel ? '#e5a95f' : '#4a4034' }} />
+                            <Box key={i} sx={{ width: 4, height: 6 + i * 3, borderRadius: '1px', bgcolor: i <= velocityLevel ? 'var(--skin-accent)' : '#334155' }} />
                         ))}
                     </Box>
                 </Tooltip>

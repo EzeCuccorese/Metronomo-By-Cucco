@@ -44,21 +44,21 @@ export function BluetoothNotice({ isPlaying }: BluetoothNoticeProps) {
         px: 1.5,
         py: 0.5,
         borderRadius: '10px',
-        border: '1px solid rgba(229, 169, 95, 0.14)',
-        bgcolor: 'rgba(20, 18, 16, 0.6)',
-        color: '#c9bba8',
+        border: '1px solid rgba(148, 163, 184, 0.2)',
+        bgcolor: 'rgba(18, 23, 34, 0.78)',
+        color: '#cbd5e1',
         // Phone landscape: vertical space is scarce, keep transport + pulse visible without scrolling.
         '@media (max-height: 500px)': { display: 'none' },
       }}
     >
-      <BluetoothAudioIcon sx={{ fontSize: 18, color: '#e5a95f', flexShrink: 0 }} aria-hidden />
+      <BluetoothAudioIcon sx={{ fontSize: 18, color: 'primary.main', flexShrink: 0 }} aria-hidden />
       <Typography variant="caption" sx={{ flex: 1, minWidth: 0, lineHeight: 1.4 }}>
         Los auriculares Bluetooth suman un retraso fijo al sonido. Para practicar con precisión, usá auriculares con cable o el parlante del teléfono.
         {latency > HIGH_LATENCY_S && (
           <> <strong>Latencia de salida actual: {Math.round(latency * 1000)} ms.</strong></>
         )}
       </Typography>
-      <IconButton size="small" aria-label="Cerrar aviso de Bluetooth" onClick={() => setDismissed(true)} sx={{ color: '#c9bba8' }}>
+      <IconButton size="small" aria-label="Cerrar aviso de Bluetooth" onClick={() => setDismissed(true)} sx={{ color: '#cbd5e1' }}>
         <CloseIcon fontSize="small" />
       </IconButton>
     </Box>

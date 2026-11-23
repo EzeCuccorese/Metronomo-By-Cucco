@@ -1,4 +1,4 @@
-import { test, expect, openApp } from './fixtures';
+import { test, expect, openApp, openTab } from './fixtures';
 
 /** Foldable and hideable panels, on every viewport (phone portrait/landscape, tablet, desktop). */
 test.describe('panels', () => {
@@ -30,6 +30,7 @@ test.describe('panels', () => {
     });
 
     test('with the mixer folded the mute set earlier is still applied (state lives outside the card)', async ({ page }) => {
+        await openTab(page, 'Mezclador');
         await page.getByTestId('mute-kick').click();
         await page.getByTestId('panel-toggle-mixer').click();
         await page.getByTestId('panel-toggle-mixer').click();
@@ -37,19 +38,31 @@ test.describe('panels', () => {
     });
 });
 
-test.describe('view presets', () => {
-    test('a new user starts on "Ritmos" and can switch to "Todo" and back', async ({ page }) => {
+test.describe('view presets and skins', () => {
+    test('a new user starts on "Ritmos" and can switch to "Todo", other tabs, and skins', async ({ page }) => {
         await openApp(page, { newUser: true });
+        await expect(page.getByRole('tab', { name: 'Ritmos' })).toHaveAttribute('aria-selected', 'true');
         await expect(page.getByRole('region', { name: 'Piano' })).toHaveCount(0);
         await expect(page.getByRole('region', { name: 'Secuenciador' })).toBeVisible();
-        await page.getByTestId('view-menu-button').click();
-        await expect(page.getByRole('menuitemradio', { name: 'Ritmos' })).toHaveAttribute('aria-checked', 'true');
-        await page.getByRole('menuitemradio', { name: 'Todo' }).click();
-        await page.keyboard.press('Escape');
+
+        await openTab(page, 'Armonía y Piano');
         await expect(page.getByRole('region', { name: 'Piano' })).toBeVisible();
+
+        await page.getByTestId('skin-switcher').click();
+        await page.getByTestId('skin-option-cosmos').click();
+        await expect(page.locator('html')).toHaveAttribute('data-skin', 'cosmos');
         expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+
         await page.reload();
+        await expect(page.locator('html')).toHaveAttribute('data-skin', 'cosmos');
         await expect(page.getByRole('region', { name: 'Piano' })).toBeVisible();
+
+        await page.getByTestId('skin-switcher').click();
+        await page.getByTestId('skin-option-esmeralda').click();
+        await expect(page.locator('html')).toHaveAttribute('data-skin', 'esmeralda');
+        await page.getByTestId('skin-switcher').click();
+        await page.getByTestId('skin-option-obsidian').click();
+        await expect(page.locator('html')).toHaveAttribute('data-skin', 'obsidian');
     });
 
     test('the Vista control is reachable and 44 px tall on touch screens', async ({ page, isMobile }) => {

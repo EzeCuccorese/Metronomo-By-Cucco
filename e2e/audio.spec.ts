@@ -1,4 +1,4 @@
-import { test, expect, openApp, play, stop, selectPreset, setBpm, setMuted, AUDIBLE, SILENT } from './fixtures';
+import { test, expect, openApp, openTab, play, stop, selectPreset, setBpm, setMuted, AUDIBLE, SILENT } from './fixtures';
 
 /**
  * These tests listen to the real Web Audio output of the production bundle.
@@ -9,6 +9,7 @@ test.describe('audio output', () => {
         await openApp(page);
         await selectPreset(page, 'Metronome (4/4)');
         await setBpm(page, 120);
+        await openTab(page, 'Mezclador');
         await expect(page.getByTestId('mute-click')).toHaveAttribute('aria-pressed', 'false');
 
         await play(page);
@@ -56,6 +57,7 @@ test.describe('audio output', () => {
 
     test('A1 · stop cuts drums and sustained harmony immediately', async ({ page, probe }) => {
         await openApp(page);
+        await openTab(page, 'Armonía y Piano');
         await page.getByText('I', { exact: true }).click(); // pad chord: 1 bar long
         await page.getByText('IV', { exact: true }).click();
         await play(page);
@@ -83,6 +85,7 @@ test.describe('audio output', () => {
         await setBpm(page, 240); // 1 s per 4/4 bar
         await play(page);
         await probe.listen(3.3);
+        await openTab(page, 'Práctica y Estudio');
         const bars = Number(await page.getByTestId('bars-practiced').textContent());
         expect(bars).toBeGreaterThanOrEqual(2);
     });

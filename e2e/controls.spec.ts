@@ -1,4 +1,4 @@
-import { test, expect, openApp, play, stop, selectPreset, setBpm } from './fixtures';
+import { test, expect, openApp, openTab, play, stop, selectPreset, setBpm } from './fixtures';
 
 test.describe('controls', () => {
     test('loads cleanly: Spanish document, title, no console errors or CSP violations', async ({ page, consoleErrors }) => {
@@ -85,18 +85,22 @@ test.describe('controls', () => {
         await openApp(page);
         await selectPreset(page, 'Zamba');
         await setBpm(page, 97);
+        await openTab(page, 'Mezclador');
         await page.getByRole('switch', { name: 'Mostrar todos' }).click();
         await page.getByTestId('mute-shaker').click();
-        await page.getByTestId('cell-palmas-2').dispatchEvent('pointerdown', { button: 0 });
+        await openTab(page, 'Ritmos');
+        await page.getByTestId('cell-bombo_leguero-2').dispatchEvent('pointerdown', { button: 0 });
 
         await page.reload();
         await expect(page.getByTestId('bpm-input')).toHaveValue('97');
         await expect(page.getByRole('combobox', { name: 'Ritmo Predefinido' })).toContainText('Zamba');
+        await expect(page.getByTestId('cell-bombo_leguero-2')).toHaveAttribute('aria-pressed', 'true');
+        await openTab(page, 'Mezclador');
         await expect(page.getByTestId('mute-shaker')).toHaveAttribute('aria-pressed', 'true');
-        await expect(page.getByTestId('cell-palmas-2')).toHaveAttribute('aria-pressed', 'true');
 
+        await openTab(page, 'Ritmos');
         await page.getByRole('button', { name: 'Restaurar ritmo original' }).click();
-        await expect(page.getByTestId('cell-palmas-2')).toHaveAttribute('aria-pressed', 'false');
+        await expect(page.getByTestId('cell-bombo_leguero-2')).toHaveAttribute('aria-pressed', 'false');
     });
 
     test('compound meters show the dotted-quarter tempo', async ({ page }) => {
@@ -121,7 +125,8 @@ test.describe('practice modes', () => {
     test('speed trainer raises the tempo by itself', async ({ page }) => {
         await openApp(page);
         await selectPreset(page, 'Metronome (4/4)');
-        await page.getByText('Modos de práctica').click();
+        await openTab(page, 'Práctica y Estudio');
+        await page.getByTestId('panel-toggle-practice').click();
         await page.getByLabel('BPM inicial').fill('240');
         await page.getByLabel('BPM objetivo').fill('250');
         await page.getByLabel('Cada (compases)').fill('1');
@@ -139,7 +144,8 @@ test.describe('practice modes', () => {
         await openApp(page);
         await selectPreset(page, 'Zamba');
         await setBpm(page, 300);
-        await page.getByText('Modos de práctica').click();
+        await openTab(page, 'Práctica y Estudio');
+        await page.getByTestId('panel-toggle-practice').click();
         await page.getByLabel('Formas folclóricas').check();
         await page.getByRole('combobox', { name: 'Forma' }).click();
         await page.getByRole('option', { name: 'Zamba' }).click();

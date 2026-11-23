@@ -10,7 +10,7 @@ interface ShortcutsDialogProps {
     onClose: () => void;
 }
 
-const keycapSx = { fontFamily: '"Share Tech Mono", monospace', fontSize: 13, height: 24, borderRadius: '4px', bgcolor: '#26211b', border: '1px solid #4a4034', color: '#f0e6d8' } as const;
+const keycapSx = { fontFamily: '"Share Tech Mono", monospace', fontSize: 13, height: 24, borderRadius: '4px', bgcolor: '#1a2130', border: '1px solid #334155', color: '#cbd5e1' } as const;
 
 function conflictNote(def: ShortcutDef, labelOf: (code: string) => string): string | null {
     const note = shadowNote(def);
@@ -35,7 +35,7 @@ export default function ShortcutsDialog({ open, onClose }: ShortcutsDialogProps)
             <DialogContent dividers>
                 {groupedShortcuts().map(({ group, items }) => (
                     <Box key={group} component="section" sx={{ mb: 2, '&:last-child': { mb: 0 } }}>
-                        <Typography variant="overline" component="h3" sx={{ color: '#e5a95f' }}>{group}</Typography>
+                        <Typography variant="overline" component="h3" sx={{ color: 'var(--skin-accent)' }}>{group}</Typography>
                         <Box component="dl" sx={{ m: 0 }}>
                             {items.map(def => {
                                 const note = conflictNote(def, labelOf);
@@ -43,7 +43,7 @@ export default function ShortcutsDialog({ open, onClose }: ShortcutsDialogProps)
                                     <Box key={def.id} sx={{ display: 'flex', alignItems: 'baseline', gap: 2, py: 0.5 }} data-testid={`shortcut-${def.id}`}>
                                         <Box component="dt" sx={{ flex: 1, minWidth: 0 }}>
                                             <Typography variant="body2">{def.label}</Typography>
-                                            {note && <Typography variant="caption" sx={{ color: '#e5a95f' }}>{note}</Typography>}
+                                            {note && <Typography variant="caption" sx={{ color: 'var(--skin-accent)' }}>{note}</Typography>}
                                             {def.scope === 'piano' && <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>Con Teclado PC activo o con el foco en el piano</Typography>}
                                         </Box>
                                         <Box component="dd" sx={{ m: 0, display: 'flex', flexWrap: 'wrap', gap: 0.5, justifyContent: 'flex-end', maxWidth: '55%' }}>

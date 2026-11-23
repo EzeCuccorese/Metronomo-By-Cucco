@@ -102,13 +102,13 @@ export class PolyphonicSynth {
     }
 
     private playPad(notes: string[], duration: number, time: number) {
-        notes.forEach(note => this.playVoice(note, duration, time, 'long'));
+        notes.forEach(note => this.playVoice(note, { duration, time, type: 'long' }));
     }
 
     private playRhythmic(notes: string[], totalDuration: number, startTime: number, offsets: number[], noteLen: number) {
         offsets.forEach(offset => {
             if (offset < totalDuration) {
-                notes.forEach(note => this.playVoice(note, noteLen, startTime + offset, 'short'));
+                notes.forEach(note => this.playVoice(note, { duration: noteLen, time: startTime + offset, type: 'short' }));
             }
         });
     }
@@ -117,7 +117,7 @@ export class PolyphonicSynth {
         const stepTime = duration / steps;
         for (let i = 0; i < steps; i++) {
             const note = notes[i % notes.length];
-            this.playVoice(note, stepTime, time + (i * stepTime), 'pluck');
+            this.playVoice(note, { duration: stepTime, time: time + (i * stepTime), type: 'pluck' });
         }
     }
 
@@ -125,122 +125,106 @@ export class PolyphonicSynth {
     private playZambaBase(notes: string[], time: number, onBeats: number[], beat: number) {
         const [root, ...upper] = notes;
         const bass = root.replace(/(\d)$/, d => String(Math.max(1, Number(d) - 1)));
-        this.playVoice(bass, beat * 0.9, time, 'short');
+        this.playVoice(bass, { duration: beat * 0.9, time, type: 'short' });
         const chordTimes = onBeats.length > 1 ? onBeats.slice(1) : [beat / 2];
-        chordTimes.forEach(t => upper.forEach(n => this.playVoice(n, beat * 0.8, time + t, 'short')));
+        chordTimes.forEach(t => upper.forEach(n => this.playVoice(n, { duration: beat * 0.8, time: time + t, type: 'short' })));
     }
 
     /**
      * One plucked note (used as the piano's fallback voice while its samples are missing).
      * Short notes get the pluck envelope, longer ones the sustained one.
      */
-    public playNote(note: string, duration: number, time: number) {
-        this.playVoice(note, Math.max(0.25, duration), time, duration < 0.35 ? 'pluck' : 'long');
+    public playNote(note: string, duration: number, time: number, velocity: number = 1.0) {
+        this.playVoice(note, { duration: Math.max(0.25, duration), time, type: duration < 0.35 ? 'pluck' : 'long', velocity });
     }
 
-    private playVoice(note: string, duration: number, time: number, type: 'long' | 'short' | 'pluck' = 'long') {
+    private createHarmonicOscillators(freq: number, target: AudioNode): OscillatorNode[] {
+        const specs: [number, number][] = [[1.0, 0.65], [2.0, 0.22], [3.0, 0.08]];
+        return specs.map(([mult, gainVal]) => {
+            const osc = this.context.createOscillator();
+            const g = this.context.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq * mult;
+            g.gain.value = gainVal;
+            osc.connect(g);
+            g.connect(target);
+            return osc;
+        });
+    }
+
+    private applyVoiceEnvelope(
+        filter: BiquadFilterNode,
+        env: GainNode,
+        params: { t: number; duration: number; type: 'long' | 'short' | 'pluck'; vel: number }
+    ) {
+        const { t, duration, type, vel } = params;
+        if (type === 'long') {
+            const attackEnd = t + Math.min(0.08, duration * 0.3);
+            const releaseStart = Math.max(attackEnd, t + duration - 0.2);
+            const peak = 0.28 * vel;
+            filter.frequency.setValueAtTime(450, t);
+            filter.frequency.exponentialRampToValueAtTime(750, t + duration * 0.4);
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(peak, attackEnd);
+            env.gain.setValueAtTime(peak, releaseStart);
+            env.gain.linearRampToValueAtTime(0, t + duration);
+        } else if (type === 'short') {
+            filter.frequency.value = 950;
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(0.35 * vel, t + 0.01);
+            env.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+        } else {
+            filter.frequency.setValueAtTime(2500, t);
+            filter.frequency.exponentialRampToValueAtTime(150, t + 0.18);
+            env.gain.setValueAtTime(0.35 * vel, t);
+            env.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+        }
+    }
+
+    private playVoice(note: string, opts: { duration: number; time: number; type?: 'long' | 'short' | 'pluck'; velocity?: number }) {
+        const t = Math.max(opts.time, this.context.currentTime);
+        const safeDuration = Math.max(0.05, opts.duration);
+        const type = opts.type ?? 'long';
+        const vel = Math.max(0.05, Math.min(1, opts.velocity ?? 1.0));
         const freq = getFrequency(note);
 
-        const fundamental = this.context.createOscillator();
-        const secondHarmonic = this.context.createOscillator();
-        const thirdHarmonic = this.context.createOscillator();
-        const tine = this.context.createOscillator();
-        
-        const harmonicGain1 = this.context.createGain();
-        const harmonicGain2 = this.context.createGain();
-        const harmonicGain3 = this.context.createGain();
-        const tineGain = this.context.createGain();
-        const tremoloGain = this.context.createGain();
         const filter = this.context.createBiquadFilter();
-        const env = this.context.createGain();
-
-        // 1. Fundamental tone (Sine)
-        fundamental.type = 'sine';
-        fundamental.frequency.value = freq;
-        harmonicGain1.gain.value = 0.65;
-
-        // 2. Second Harmonic (Sine at double freq)
-        secondHarmonic.type = 'sine';
-        secondHarmonic.frequency.value = freq * 2.0;
-        harmonicGain2.gain.value = 0.22;
-
-        // 3. Third Harmonic (Sine at triple freq)
-        thirdHarmonic.type = 'sine';
-        thirdHarmonic.frequency.value = freq * 3.0;
-        harmonicGain3.gain.value = 0.08;
-
-        // 4. Metallic Tine (High pitch triangle transient)
-        tine.type = 'triangle';
-        tine.frequency.value = Math.max(3000, freq * 8);
-        tineGain.gain.setValueAtTime(0.18, time);
-        tineGain.gain.exponentialRampToValueAtTime(0.001, time + 0.03);
-
-        // Connections
-        fundamental.connect(harmonicGain1);
-        secondHarmonic.connect(harmonicGain2);
-        thirdHarmonic.connect(harmonicGain3);
-
-        harmonicGain1.connect(filter);
-        harmonicGain2.connect(filter);
-        harmonicGain3.connect(filter);
-
-        tine.connect(tineGain);
-        tineGain.connect(env); // bypass filter to preserve sharp click transience
-
         filter.type = 'lowpass';
+        const tremoloGain = this.context.createGain();
+        tremoloGain.gain.value = 1.0;
+        const env = this.context.createGain();
         filter.connect(tremoloGain);
         tremoloGain.connect(env);
         env.connect(this.output);
 
-        // 5. LFO Tremolo Modulation (modulates tremoloGain)
+        const harmonics = this.createHarmonicOscillators(freq, filter);
+        const tine = this.context.createOscillator();
+        const tineGain = this.context.createGain();
+        tine.type = 'triangle';
+        tine.frequency.value = Math.max(3000, freq * 8);
+        tineGain.gain.setValueAtTime(0.18 * vel, t);
+        tineGain.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+        tine.connect(tineGain);
+        tineGain.connect(env);
+
         const lfo = this.context.createOscillator();
         const lfoGain = this.context.createGain();
         lfo.type = 'sine';
-        lfo.frequency.value = 5.0; // 5Hz sweep
-        lfoGain.gain.value = 0.15; // 15% depth
-
-        tremoloGain.gain.value = 1.0;
+        lfo.frequency.value = 5.0;
+        lfoGain.gain.value = 0.15;
         lfo.connect(lfoGain);
         lfoGain.connect(tremoloGain.gain);
 
-        if (type === 'long') {
-            filter.frequency.setValueAtTime(450, time);
-            filter.frequency.exponentialRampToValueAtTime(750, time + duration * 0.4);
+        this.applyVoiceEnvelope(filter, env, { t, duration: safeDuration, type, vel });
 
-            env.gain.setValueAtTime(0, time);
-            env.gain.linearRampToValueAtTime(0.28, time + 0.08); // smooth attack
-            env.gain.setValueAtTime(0.28, time + duration - 0.2);
-            env.gain.linearRampToValueAtTime(0, time + duration);
-        } else if (type === 'short') {
-            filter.frequency.value = 950;
-            env.gain.setValueAtTime(0, time);
-            env.gain.linearRampToValueAtTime(0.35, time + 0.01);
-            env.gain.exponentialRampToValueAtTime(0.01, time + 0.15);
-        } else {
-            // Pluck
-            filter.frequency.setValueAtTime(2500, time);
-            filter.frequency.exponentialRampToValueAtTime(150, time + 0.18);
-            env.gain.setValueAtTime(0.35, time);
-            env.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
+        for (const osc of [...harmonics, lfo]) {
+            osc.start(t);
+            this.voices.add(osc);
+            osc.stop(t + safeDuration + 0.1);
         }
-
-        // Start/Stop oscillators
-        fundamental.start(time);
-        this.voices.add(fundamental);
-        secondHarmonic.start(time);
-        this.voices.add(secondHarmonic);
-        thirdHarmonic.start(time);
-        this.voices.add(thirdHarmonic);
-        tine.start(time);
+        tine.start(t);
         this.voices.add(tine);
-        lfo.start(time);
-        this.voices.add(lfo);
-
-        fundamental.stop(time + duration + 0.1);
-        secondHarmonic.stop(time + duration + 0.1);
-        thirdHarmonic.stop(time + duration + 0.1);
-        tine.stop(time + 0.05);
-        lfo.stop(time + duration + 0.1);
+        tine.stop(t + 0.05);
     }
 
     public setVolume(vol: number) {

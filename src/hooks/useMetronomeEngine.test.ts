@@ -117,6 +117,11 @@ describe('useMetronomeEngine', () => {
         expect(result.current.store.getSnapshot().queuedPatternId).toBe('b');
         act(() => scheduler().onUpdate!(event(b)));
         expect(onPatternChange).toHaveBeenCalledWith(b);
+
+        const freshA = pattern('a');
+        act(() => result.current.queuePattern(freshA));
+        act(() => scheduler().onUpdate!(event(freshA)));
+        expect(onPatternChange).toHaveBeenCalledWith(freshA);
     });
 
     it('reports tempo changes made by the engine', async () => {

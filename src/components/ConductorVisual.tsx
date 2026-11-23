@@ -6,6 +6,7 @@ import type { RhythmPattern } from '../rhythms/RhythmPatterns';
 import { usePlayback } from '../state/PlaybackContext';
 import { LANDSCAPE_COMPACT_QUERY } from '../theme/breakpoints';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
+import { DEFAULT_SKIN, SKINS, type SkinId } from '../theme/skins';
 import {
     conductorPath,
     getCountingText,
@@ -33,6 +34,7 @@ interface ConductorVisualProps {
     trainerActive: boolean;
     totalBarsInterval: number;
     bpm?: number;
+    skin?: SkinId;
 }
 
 type VisualMode = 'pendulum' | 'orchestra';
@@ -42,8 +44,10 @@ export default function ConductorVisual({
     isPlaying,
     trainerActive,
     totalBarsInterval,
-    bpm = 120
+    bpm = 120,
+    skin = DEFAULT_SKIN,
 }: ConductorVisualProps) {
+    const palette = SKINS[skin].canvas;
     const playbackStep = usePlayback(s => s.step);
     const currentBarProgress = usePlayback(s => s.trainerBar);
     const currentStepIndex = isPlaying ? playbackStep : 0;
@@ -62,9 +66,9 @@ export default function ConductorVisual({
     }, [reduceMotion]);
 
     // Latest values for the long-lived canvas loop (avoids restarting it on every step).
-    const liveRef = useRef({ currentStepIndex, bpm, pattern, beats, stepsPerBeat });
+    const liveRef = useRef({ currentStepIndex, bpm, pattern, beats, stepsPerBeat, palette });
     useEffect(() => {
-        liveRef.current = { currentStepIndex, bpm, pattern, beats, stepsPerBeat };
+        liveRef.current = { currentStepIndex, bpm, pattern, beats, stepsPerBeat, palette };
     });
 
     // Animation values
@@ -79,6 +83,15 @@ export default function ConductorVisual({
 
     const lastStepTimeRef = useRef<number>(0);
     const prevStepIndexRef = useRef<number>(-1);
+    const isPlayingRef = useRef(isPlaying);
+    const scheduleRenderRef = useRef<() => void>(() => {});
+    const canvasBoxRef = useRef<HTMLDivElement | null>(null);
+    const sizeRef = useRef({ width: 0, height: 0, dpr: 1 });
+
+    useEffect(() => {
+        isPlayingRef.current = isPlaying;
+        scheduleRenderRef.current();
+    }, [isPlaying, pattern, bpm, skin]);
 
     useEffect(() => {
         if (lastStepTimeRef.current === 0) {
@@ -99,28 +112,39 @@ export default function ConductorVisual({
         if (isBeatStart(currentStepIndex, stepsPerBeat)) {
             pulseIntensityRef.current = 1.0;
         }
+        scheduleRenderRef.current();
     }, [currentStepIndex, subdivision, stepsPerBeat]);
 
-    // Canvas animation loop
+    // Canvas animation loop (resizes via ResizeObserver and pauses rAF when settled & stopped)
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        let animationFrameId: number;
+        let animationFrameId: number | null = null;
 
-        const render = () => {
-            if (!ctx || !canvas) return;
-
-            // Handle High DPI displays: backing store in device pixels, drawing in CSS pixels.
+        const syncSize = () => {
             const dpr = window.devicePixelRatio || 1;
             const width = canvas.clientWidth;
             const height = canvas.clientHeight;
-            if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
-                canvas.width = Math.round(width * dpr);
-                canvas.height = Math.round(height * dpr);
+            if (!width || !height) return;
+            const targetW = Math.round(width * dpr);
+            const targetH = Math.round(height * dpr);
+            if (canvas.width !== targetW || canvas.height !== targetH) {
+                canvas.width = targetW;
+                canvas.height = targetH;
             }
+            sizeRef.current = { width, height, dpr };
+        };
+
+        const render = () => {
+            animationFrameId = null;
+            if (!ctx || !canvas) return;
+
+            syncSize();
+            const { width, height, dpr } = sizeRef.current;
+            if (!width || !height) return;
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
             ctx.clearRect(0, 0, width, height);
@@ -134,8 +158,8 @@ export default function ConductorVisual({
                     width / 2, height / 2, 10,
                     width / 2, height / 2, Math.max(width, height) / 1.5
                 );
-                // Warm Amber glow
-                gradient.addColorStop(0, `rgba(229, 169, 95, ${pulseIntensityRef.current * 0.15})`);
+                // Glow tinted by active skin
+                gradient.addColorStop(0, `rgba(${liveRef.current.palette.glowRgb}, ${pulseIntensityRef.current * 0.15})`);
                 gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
                 ctx.fillStyle = gradient;
                 ctx.fillRect(0, 0, width, height);
@@ -151,6 +175,14 @@ export default function ConductorVisual({
                 drawOrchestraConductor(ctx, width, height);
             }
 
+            const settling = Math.abs(targetAngleRef.current - angleRef.current) > 0.001 || pulseIntensityRef.current > 0.005;
+            if (isPlayingRef.current || settling) {
+                animationFrameId = requestAnimationFrame(render);
+            }
+        };
+
+        const scheduleRender = () => {
+            if (animationFrameId !== null) return;
             animationFrameId = requestAnimationFrame(render);
         };
 
@@ -158,19 +190,18 @@ export default function ConductorVisual({
             const layout = pendulumLayout(w, h);
             const { centerX, centerY, baseWidth, topWidth, apexY } = layout;
 
-            // --- A. Draw Metronome Wooden Body ---
-            // Outer Shadow / Ambient shadow
+            // --- A. Draw Metronome Brushed Gunmetal Body ---
             ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
             ctx.shadowBlur = 15;
             ctx.shadowOffsetY = 5;
 
-            // Gradient for warm mahogany/cedar wood
-            const woodGrad = ctx.createLinearGradient(centerX - baseWidth/2, centerY, centerX + baseWidth/2, centerY);
-            woodGrad.addColorStop(0, '#2d1a10'); // Dark left
-            woodGrad.addColorStop(0.3, '#4e2f1d'); // Rich wood warm
-            woodGrad.addColorStop(0.5, '#5c3924'); // Lighter center
-            woodGrad.addColorStop(0.7, '#4e2f1d'); // Rich wood warm
-            woodGrad.addColorStop(1, '#25150d'); // Very dark right
+            const pal = liveRef.current.palette;
+            const bodyGrad = ctx.createLinearGradient(centerX - baseWidth/2, centerY, centerX + baseWidth/2, centerY);
+            bodyGrad.addColorStop(0, pal.bodyStops[0]);
+            bodyGrad.addColorStop(0.3, pal.bodyStops[1]);
+            bodyGrad.addColorStop(0.5, pal.bodyStops[2]);
+            bodyGrad.addColorStop(0.7, pal.bodyStops[1]);
+            bodyGrad.addColorStop(1, pal.bodyStops[0]);
 
             ctx.beginPath();
             ctx.moveTo(centerX - baseWidth / 2, centerY);
@@ -178,23 +209,23 @@ export default function ConductorVisual({
             ctx.lineTo(centerX + topWidth / 2, apexY);
             ctx.lineTo(centerX + baseWidth / 2, centerY);
             ctx.closePath();
-            ctx.fillStyle = woodGrad;
+            ctx.fillStyle = bodyGrad;
             ctx.fill();
 
-            // Sutil wood outline
-            ctx.shadowBlur = 0; // Reset shadow
+            // Subtle metallic outline
+            ctx.shadowBlur = 0;
             ctx.shadowOffsetY = 0;
             ctx.lineWidth = 1.5;
-            ctx.strokeStyle = 'rgba(229, 169, 95, 0.12)';
+            ctx.strokeStyle = pal.gridBorder;
             ctx.stroke();
 
             // --- B. Draw Inside Metal Plate Face (Scale Ticks) ---
             const { faceWidthBase, faceWidthTop, faceHeight, faceY } = layout;
 
             const faceGrad = ctx.createLinearGradient(centerX - faceWidthBase/2, centerY, centerX + faceWidthBase/2, centerY);
-            faceGrad.addColorStop(0, '#110f0e');
-            faceGrad.addColorStop(0.5, '#201c18');
-            faceGrad.addColorStop(1, '#110f0e');
+            faceGrad.addColorStop(0, pal.faceStops[0]);
+            faceGrad.addColorStop(0.5, pal.faceStops[1]);
+            faceGrad.addColorStop(1, pal.faceStops[0]);
 
             ctx.beginPath();
             ctx.moveTo(centerX - faceWidthBase / 2, centerY - 5);
@@ -207,14 +238,14 @@ export default function ConductorVisual({
 
             // Draw center alignment line and graduation scale ticks
             ctx.lineWidth = 1;
-            ctx.strokeStyle = 'rgba(229, 169, 95, 0.2)';
+            ctx.strokeStyle = `rgba(${pal.glowRgb}, 0.24)`;
             ctx.beginPath();
             ctx.moveTo(centerX, faceY + 10);
             ctx.lineTo(centerX, centerY - 15);
             ctx.stroke();
 
             // Scale tick arcs
-            ctx.strokeStyle = 'rgba(229, 169, 95, 0.12)';
+            ctx.strokeStyle = `rgba(${pal.glowRgb}, 0.14)`;
             for (let offset = 20; offset < faceHeight - 20; offset += 20) {
                 const tickY = faceY + offset;
                 const tickLen = 6;
@@ -258,9 +289,9 @@ export default function ConductorVisual({
             const wHeight = 16;
 
             const brassGrad = ctx.createLinearGradient(-wWidth/2, -wHeight/2, wWidth/2, wHeight/2);
-            brassGrad.addColorStop(0, '#ffe082'); // Shiny gold
-            brassGrad.addColorStop(0.5, '#e5a95f'); // Amber gold
-            brassGrad.addColorStop(1, '#ffb300'); // Brass
+            brassGrad.addColorStop(0, pal.accentBright);
+            brassGrad.addColorStop(0.5, pal.accent);
+            brassGrad.addColorStop(1, pal.accent);
 
             ctx.fillStyle = brassGrad;
             ctx.beginPath();
@@ -273,11 +304,11 @@ export default function ConductorVisual({
 
             // Outline for weight
             ctx.lineWidth = 1;
-            ctx.strokeStyle = '#b5832e';
+            ctx.strokeStyle = pal.accent;
             ctx.stroke();
 
             // Center slot/screw details
-            ctx.fillStyle = '#263238';
+            ctx.fillStyle = pal.faceStops[0];
             ctx.fillRect(-1.5, -4, 3, 8);
 
             ctx.restore();
@@ -286,7 +317,7 @@ export default function ConductorVisual({
             // --- D. Front Pivot Caps ---
             ctx.beginPath();
             ctx.arc(pivotX, pivotY, 6, 0, Math.PI * 2);
-            ctx.fillStyle = '#ffb300';
+            ctx.fillStyle = pal.accent;
             ctx.fill();
             ctx.stroke();
         };
@@ -298,15 +329,16 @@ export default function ConductorVisual({
             const smoothStep = smoothStepPosition(live.currentStepIndex, elapsedMs, durationMs, reduceMotionRef.current);
             const sub = live.pattern.subdivision;
 
-            if (live.pattern.grooveType === 'chacarera_poliritmica') {
+            if (live.pattern.grooveType === 'chacarera_poliritmica' || live.pattern.grooveType === 'chacarera_trunca') {
                 // --- CHACARERA POLIRITMICA DOUBLE-SPARK VISUALIZER (HEMIOLA) ---
 
+                const pal = liveRef.current.palette;
                 // 1. 3/4 feel triangle path
                 const hemiola = hemiolaLayout(w, h);
                 const { centerX, centerY, radiusX, radiusY, bottomY } = hemiola;
                 const points3 = hemiola.triangle;
 
-                ctx.strokeStyle = 'rgba(229, 169, 95, 0.14)';
+                ctx.strokeStyle = `rgba(${pal.glowRgb}, 0.16)`;
                 ctx.lineWidth = 2.0;
                 ctx.setLineDash([4, 6]);
                 ctx.beginPath();
@@ -318,19 +350,21 @@ export default function ConductorVisual({
                 ctx.stroke();
 
                 // 2. 6/8 feel ellipse path
-                ctx.strokeStyle = 'rgba(255, 109, 0, 0.16)';
+                ctx.strokeStyle = pal.accentSecondary;
+                ctx.globalAlpha = 0.25;
                 ctx.setLineDash([3, 5]);
                 ctx.beginPath();
                 ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
                 ctx.stroke();
                 ctx.setLineDash([]); // Reset
+                ctx.globalAlpha = 1;
 
                 // Label paths
-                ctx.fillStyle = 'rgba(229, 169, 95, 0.4)';
+                ctx.fillStyle = `rgba(${pal.glowRgb}, 0.45)`;
                 ctx.font = 'bold 9px Outfit';
                 ctx.fillText('3/4', centerX - 12, bottomY - 12);
 
-                ctx.fillStyle = 'rgba(255, 109, 0, 0.4)';
+                ctx.fillStyle = pal.accentSecondary;
                 ctx.fillText('6/8', centerX + radiusX - 25, centerY - 8);
 
                 // Compute Particle 3/4 Position (3 liveRef.current.beats per bar, 4 steps per beat)
@@ -348,7 +382,7 @@ export default function ConductorVisual({
                     t.alpha = trailAlpha(idx, trail3Ref.current.length);
                     ctx.beginPath();
                     ctx.arc(t.x, t.y, 1.5 + t.alpha * 5.0, 0, Math.PI * 2);
-                    ctx.fillStyle = `rgba(229, 169, 95, ${t.alpha * 0.45})`;
+                    ctx.fillStyle = `rgba(${pal.glowRgb}, ${t.alpha * 0.45})`;
                     ctx.fill();
                 });
 
@@ -356,16 +390,18 @@ export default function ConductorVisual({
                     t.alpha = trailAlpha(idx, trail2Ref.current.length);
                     ctx.beginPath();
                     ctx.arc(t.x, t.y, 1.5 + t.alpha * 5.0, 0, Math.PI * 2);
-                    ctx.fillStyle = `rgba(255, 109, 0, ${t.alpha * 0.45})`;
+                    ctx.fillStyle = pal.accentSecondary;
+                    ctx.globalAlpha = t.alpha * 0.45;
                     ctx.fill();
                 });
+                ctx.globalAlpha = 1;
 
-                // Draw Particle 3/4 (Gold Spark)
-                ctx.shadowColor = '#e5a95f';
+                // Draw Particle 3/4 (Primary Spark)
+                ctx.shadowColor = pal.accent;
                 ctx.shadowBlur = 12;
                 ctx.beginPath();
                 ctx.arc(p3X, p3Y, 7, 0, Math.PI * 2);
-                ctx.fillStyle = '#f4f1ed';
+                ctx.fillStyle = pal.text;
                 ctx.fill();
                 ctx.shadowBlur = 0;
                 ctx.beginPath();
@@ -373,12 +409,12 @@ export default function ConductorVisual({
                 ctx.fillStyle = '#ffffff';
                 ctx.fill();
 
-                // Draw Particle 6/8 (Amber Spark)
-                ctx.shadowColor = '#ff6d00';
+                // Draw Particle 6/8 (Secondary Spark)
+                ctx.shadowColor = pal.accentSecondary;
                 ctx.shadowBlur = 12;
                 ctx.beginPath();
                 ctx.arc(p2X, p2Y, 7, 0, Math.PI * 2);
-                ctx.fillStyle = '#f4f1ed';
+                ctx.fillStyle = pal.text;
                 ctx.fill();
                 ctx.shadowBlur = 0;
                 ctx.beginPath();
@@ -387,11 +423,12 @@ export default function ConductorVisual({
                 ctx.fill();
 
             } else {
+                const pal = liveRef.current.palette;
                 // --- STANDARD SINGLE-SPARK GEOMETRIC CONDUCTOR PATH ---
                 const points = conductorPath(live.beats, w, h);
 
                 // Draw full background geometric path (faint guide lines)
-                ctx.strokeStyle = 'rgba(229, 169, 95, 0.08)';
+                ctx.strokeStyle = `rgba(${pal.glowRgb}, 0.10)`;
                 ctx.lineWidth = 2.5;
                 ctx.setLineDash([4, 6]);
                 ctx.beginPath();
@@ -417,16 +454,16 @@ export default function ConductorVisual({
 
                     ctx.beginPath();
                     ctx.arc(t.x, t.y, size, 0, Math.PI * 2);
-                    ctx.fillStyle = `rgba(229, 169, 95, ${t.alpha * 0.4})`;
+                    ctx.fillStyle = `rgba(${pal.glowRgb}, ${t.alpha * 0.4})`;
                     ctx.fill();
                 });
 
                 // Draw Active Spark Orb
-                ctx.shadowColor = '#e5a95f';
+                ctx.shadowColor = pal.accent;
                 ctx.shadowBlur = 12;
                 ctx.beginPath();
                 ctx.arc(particleX, particleY, 7, 0, Math.PI * 2);
-                ctx.fillStyle = '#f4f1ed';
+                ctx.fillStyle = pal.text;
                 ctx.fill();
 
                 // Inner core glow
@@ -438,11 +475,19 @@ export default function ConductorVisual({
             }
         };
 
-        // Start animation frame loop
-        animationFrameId = requestAnimationFrame(render);
+        scheduleRenderRef.current = scheduleRender;
+        const box = canvasBoxRef.current;
+        const observer = box && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => {
+            syncSize();
+            scheduleRender();
+        }) : null;
+        if (observer && box) observer.observe(box);
+        render();
 
         return () => {
-            cancelAnimationFrame(animationFrameId);
+            scheduleRenderRef.current = () => {};
+            observer?.disconnect();
+            if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
         };
     }, [visualMode]);
 
@@ -471,7 +516,7 @@ export default function ConductorVisual({
                     transform: isActiveBeat ? (isAccent ? 'scale(1.7)' : 'scale(1.35)') : 'scale(1)',
                     transition: 'transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
                     '@media (prefers-reduced-motion: reduce)': { transition: 'none', transform: 'none' },
-                    filter: isActiveBeat ? (isAccent ? 'drop-shadow(0 0 10px #ff6d00)' : 'drop-shadow(0 0 8px #e5a95f)') : 'none'
+                    filter: isActiveBeat ? (isAccent ? `drop-shadow(0 0 10px ${palette.accentSecondary})` : `drop-shadow(0 0 8px ${palette.accent})`) : 'none'
                 }} />
 
                 <Typography variant="body2" sx={{
@@ -479,7 +524,7 @@ export default function ConductorVisual({
                     fontWeight: 'bold',
                     mt: 0.5,
                     fontSize: '0.9rem',
-                    textShadow: isActiveBeat ? '0 0 8px rgba(229,169,95,0.4)' : 'none',
+                    textShadow: isActiveBeat ? `0 0 8px rgba(${palette.glowRgb}, 0.45)` : 'none',
                     fontFamily: '"Outfit", sans-serif'
                 }}>
                     {isActiveBeat && countText ? countText : (idx + 1)}
@@ -579,13 +624,13 @@ export default function ConductorVisual({
             </ToggleButtonGroup>
 
             {/* Canvas Main Screen */}
-            <Box sx={{
+            <Box ref={canvasBoxRef} sx={{
                 width: '100%',
                 height: 180,
                 [`@media ${LANDSCAPE_COMPACT_QUERY}`]: { height: 'clamp(96px, 34svh, 140px)', mb: 0.5 },
                 borderRadius: 4,
-                bgcolor: 'rgba(0,0,0,0.3)',
-                border: '1px solid rgba(215, 204, 200, 0.04)',
+                bgcolor: 'rgba(11, 14, 21, 0.72)',
+                border: '1px solid rgba(148, 163, 184, 0.12)',
                 position: 'relative',
                 overflow: 'hidden',
                 mb: 1.5

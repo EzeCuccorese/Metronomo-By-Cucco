@@ -66,6 +66,7 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
     const lastEngineBpmRef = useRef(bpm);
     const pendingPatternRef = useRef<RhythmPattern | null>(null);
     const stopRequestedRef = useRef(false);
+    const recordCancelRef = useRef(false);
     /** Bumped when the AudioContext is recreated: the scheduler (and its whole graph) is rebuilt. */
     const [contextGeneration, setContextGeneration] = useState(0);
     /** The transport was running (or starting) when the context was replaced: restart on the new one. */
@@ -124,9 +125,10 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
                 melodyState: event.melodyState,
                 recordingBar: event.recordingBar,
             });
-            // Compare by id: queued events may still carry the pre-edit object of the same pattern.
-            if (event.pattern.id !== patternRef.current.id) {
-                if (event.pattern === pendingPatternRef.current) pendingPatternRef.current = null;
+            const wasPending = event.pattern === pendingPatternRef.current;
+            if (wasPending) pendingPatternRef.current = null;
+            // Ignore stale pre-edit snapshots of the active rhythm unless this queued switch just landed.
+            if (event.pattern.id !== patternRef.current.id || wasPending) {
                 callbacksRef.current.onPatternChange(event.pattern);
             }
             if (event.bpm !== lastEngineBpmRef.current) {
@@ -222,11 +224,17 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
         pendingPatternRef.current = null;
         if (pending && pending !== patternRef.current) {
             callbacksRef.current.onPatternChange(pending);
-            if (pending.recommendedTempo) callbacksRef.current.onBpmChange(pending.recommendedTempo);
+            if (pending.recommendedTempo && !settingsRef.current.trainer?.active) {
+                callbacksRef.current.onBpmChange(pending.recommendedTempo);
+            }
         }
     }, [store, setPlaying]);
 
     const toggle = useCallback(() => {
+        if (startingRef.current && stopRequestedRef.current) {
+            stopRequestedRef.current = false;
+            return;
+        }
         if (isPlayingRef.current || startingRef.current) stop();
         else void start();
     }, [start, stop]);
@@ -339,18 +347,20 @@ export function useMetronomeEngine({ pattern, bpm, onBpmChange, onPatternChange 
      * Playing: recording starts at the next bar line.
      */
     const recordMelody = useCallback(async (bars: number) => {
+        recordCancelRef.current = false;
         if (isPlayingRef.current) {
             schedulerRef.current?.armMelodyRecording(bars, 0);
             store.update({ melodyState: 'armed' });
             return;
         }
         await start();
-        if (!isPlayingRef.current) return;
+        if (recordCancelRef.current || !isPlayingRef.current) return;
         schedulerRef.current?.armMelodyRecording(bars, 1);
         store.update({ melodyState: 'armed' });
     }, [start, store]);
 
     const cancelMelodyRecording = useCallback(() => {
+        recordCancelRef.current = true;
         schedulerRef.current?.cancelMelodyRecording();
         store.update({ melodyState: 'idle' });
     }, [store]);

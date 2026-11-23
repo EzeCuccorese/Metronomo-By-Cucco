@@ -1,4 +1,4 @@
-import { test, expect, openApp } from './fixtures';
+import { test, expect, openApp, openTab } from './fixtures';
 
 test.describe('first-use tips', () => {
     test('Space tip after the first Play with the mouse (mouse devices only), shown once', async ({ page, isMobile }) => {
@@ -18,6 +18,7 @@ test.describe('first-use tips', () => {
     test('piano tip on hover (mouse devices only)', async ({ page, isMobile }) => {
         test.skip(isMobile, 'Touch screens have no hover');
         await openApp(page, { tips: true });
+        await openTab(page, 'Armonía y Piano');
         await page.locator('[data-panel="piano"]').scrollIntoViewIfNeeded();
         await page.locator('[data-panel="piano"]').hover();
         await expect(page.getByTestId('first-use-tip')).toContainText('teclado de la computadora');
@@ -25,6 +26,7 @@ test.describe('first-use tips', () => {
 
     test('Vista tip after three long scrolls, above the phone bottom bar', async ({ page }) => {
         await openApp(page, { tips: true });
+        await page.getByRole('button', { name: /^todos$/i }).click();
         const height = page.viewportSize()?.height ?? (await page.evaluate(() => window.innerHeight));
         const tip = page.getByTestId('first-use-tip');
         // Long scrolls back and forth until the tip shows. Scroll events are dispatched in the page's rendering update, and

@@ -18,14 +18,16 @@ describe('patternEditing', () => {
         expect(remapSteps(steps, 4, 2).map(s => s.step)).toEqual([1, 2]);
     });
 
-    it('drops collisions and steps that fall outside the grid', () => {
+    it('drops collisions keeping the strongest hit and drops steps outside the grid', () => {
         const steps = [
-            { step: 1, instrument: 'kick' as const, velocity: 1 },
-            { step: 2, instrument: 'kick' as const, velocity: 0.5 },
+            { step: 1, instrument: 'kick' as const, velocity: 0.4 },
+            { step: 2, instrument: 'kick' as const, velocity: 0.9 },
             { step: 16, instrument: 'hihat' as const, velocity: 1 },
         ];
         const result = remapSteps(steps, 16, 4);
-        expect(result.filter(s => s.instrument === 'kick')).toHaveLength(1);
+        const kicks = result.filter(s => s.instrument === 'kick');
+        expect(kicks).toHaveLength(1);
+        expect(kicks[0].velocity).toBe(0.9);
         expect(result.every(s => s.step <= 4)).toBe(true);
     });
 

@@ -193,9 +193,9 @@ export default function HarmonyBuilder({ isPlaying = false }: HarmonyBuilderProp
                 {sequence.map((step, idx) => (
                     <Box key={step.id} data-testid="harmony-step" data-active={idx === activeSequenceIdx} sx={{
                         p: 1, borderRadius: 1,
-                        bgcolor: idx === activeSequenceIdx ? 'rgba(229, 169, 95, 0.15)' : 'background.paper',
-                        border: idx === activeSequenceIdx ? '1px solid #e5a95f' : '1px solid transparent',
-                        boxShadow: idx === activeSequenceIdx ? '0 0 10px rgba(229, 169, 95, 0.2)' : 'none',
+                        bgcolor: idx === activeSequenceIdx ? 'rgba(var(--skin-accent-rgb), 0.15)' : 'background.paper',
+                        border: idx === activeSequenceIdx ? '1px solid var(--skin-accent)' : '1px solid transparent',
+                        boxShadow: idx === activeSequenceIdx ? '0 0 10px rgba(var(--skin-accent-rgb), 0.2)' : 'none',
                         transition: 'all 0.2s ease-in-out',
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                     }}>
@@ -213,7 +213,7 @@ export default function HarmonyBuilder({ isPlaying = false }: HarmonyBuilderProp
                             <Typography variant="body1" sx={{
                                 fontWeight: "bold"
                             }}>{step.degree}</Typography>
-                            <Typography variant="body2" data-testid="harmony-symbol" sx={{ color: '#e5a95f' }}>
+                            <Typography variant="body2" data-testid="harmony-symbol" sx={{ color: 'var(--skin-accent)' }}>
                                 {chordSymbol(step.notes)}
                             </Typography>
                             <Typography variant="caption" sx={{

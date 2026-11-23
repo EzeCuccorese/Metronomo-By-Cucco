@@ -32,7 +32,7 @@ export interface RhythmPattern {
 
     // --- NEW FIELDS ---
     swingBase?: number; // 0.0 to 1.0
-    grooveType?: 'straight' | 'swing_triplet' | 'samba_carioca' | 'chacarera_poliritmica' | 'zamba_tradicional' | 'chamame_saltadito' | 'salsa_tumbao' | 'cumbia_colombiana';
+    grooveType?: 'straight' | 'swing_triplet' | 'samba_carioca' | 'chacarera_poliritmica' | 'chacarera_trunca' | 'zamba_tradicional' | 'chamame_saltadito' | 'salsa_tumbao' | 'cumbia_colombiana';
     countingMode: 'numbers' | '1e&a' | '1&2&' | 'triplet_1la2la' | 'mnemonics_chacarera';
     recommendedTempo?: number;
     coverImage?: string;

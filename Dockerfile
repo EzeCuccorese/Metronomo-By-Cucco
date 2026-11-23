@@ -1,7 +1,7 @@
 # Multi-stage build for Metrónomo by Cucco
 
 # Stage 1: Build the React/Vite application
-FROM node:26.12.0-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5 AS builder
+FROM node:26.13.1-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS builder
 WORKDIR /app
 
 # Node 26 no trae corepack: pnpm va en su propia capa (no se invalida con cada cambio de dependencias)
@@ -18,7 +18,7 @@ COPY . .
 RUN pnpm build
 
 # Stage 2: Serve the application using Nginx
-FROM nginx:1.31.0-alpine@sha256:2f07d83bf561b506400dc183b1b2003803e39efbd22451f848adaba14d28c7c7
+FROM nginx:1.31.7-alpine@sha256:892bb2152464f0c5d8972593a5f5afaf8054552580b699d95f8ff4af08c2d33d
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Custom Nginx configuration and shared security headers

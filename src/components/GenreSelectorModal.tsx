@@ -39,9 +39,9 @@ export const GenreSelectorModal: React.FC<GenreSelectorModalProps> = ({
       aria-labelledby="genre-library-title"
       slotProps={{ paper: {
         sx: {
-          bgcolor: '#12100e',
+          bgcolor: 'var(--skin-surface)',
           borderRadius: 4,
-          border: '1px solid rgba(229,169,95,0.2)'
+          border: '1px solid rgba(148, 163, 184, 0.22)'
         }
       } }}
     >
@@ -68,7 +68,7 @@ export const GenreSelectorModal: React.FC<GenreSelectorModalProps> = ({
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-      <DialogContent dividers sx={{ borderColor: 'rgba(215,204,200,0.08)' }}>
+      <DialogContent dividers sx={{ borderColor: 'rgba(148,163,184,0.14)' }}>
         <Box sx={{
           display: 'grid',
           gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
@@ -99,7 +99,7 @@ export const GenreSelectorModal: React.FC<GenreSelectorModalProps> = ({
                   borderRadius: 3,
                   overflow: 'hidden',
                   cursor: 'pointer',
-                  border: isSelected ? '2px solid #e5a95f' : '1px solid rgba(215,204,200,0.1)',
+                  border: isSelected ? '2px solid var(--skin-accent)' : '1px solid rgba(215,204,200,0.1)',
                   boxShadow: isSelected ? '0 0 15px rgba(229,169,95,0.3)' : '0 4px 12px rgba(0,0,0,0.4)',
                   transition: 'all 0.2s ease-in-out',
                   '&:hover': {
@@ -133,7 +133,7 @@ export const GenreSelectorModal: React.FC<GenreSelectorModalProps> = ({
                     left: 0,
                     width: '100%',
                     height: '100%',
-                    background: 'linear-gradient(to top, rgba(12,11,10,0.95) 20%, rgba(12,11,10,0.4) 70%, rgba(12,11,10,0.1) 100%)',
+                    background: 'linear-gradient(to top, rgba(9,12,18,0.95) 20%, rgba(9,12,18,0.4) 70%, rgba(9,12,18,0.1) 100%)',
                     zIndex: 1
                   }}
                 />
@@ -154,7 +154,7 @@ export const GenreSelectorModal: React.FC<GenreSelectorModalProps> = ({
                     <Chip 
                       label={p.timeSignature ? `${p.timeSignature[0]}/${p.timeSignature[1]}` : '4/4'} 
                       size="small" 
-                      sx={{ bgcolor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', color: '#e5a95f', fontWeight: 'bold' }}
+                      sx={{ bgcolor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', color: 'var(--skin-accent)', fontWeight: 'bold' }}
                     />
                     {isQueued && (
                       <Chip label="EN COLA" size="small" color="secondary" sx={{ fontWeight: 'bold' }} />

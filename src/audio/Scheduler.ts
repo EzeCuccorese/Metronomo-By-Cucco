@@ -3,7 +3,7 @@ import DrumSynthesizer from './DrumSynthesizer';
 import type { RhythmPattern, RhythmStep } from '../rhythms/RhythmPatterns';
 import { PolyphonicSynth } from './PolyphonicSynth';
 import type { AccompanimentStyle } from './PolyphonicSynth';
-import { getBarDurationSeconds, getClickVelocity, getGroupCount, isCompoundMeter } from '../rhythms/meter';
+import { clampBpm, getBarDurationSeconds, getClickVelocity, getGroupCount, isCompoundMeter } from '../rhythms/meter';
 import { PianoSampler } from './piano/PianoSampler';
 import type { PianoStatus } from './piano/PianoSampler';
 import { buildPianoSegment, isPianoStyle } from './piano/pianoAccompaniment';
@@ -214,8 +214,8 @@ class Scheduler {
 
         // The piano has its own strip; while its samples load it falls back to the synth voice.
         this.pianoFallback = new PolyphonicSynth();
-        this.piano = new PianoSampler(this.audioContext, (midi, time, _velocity, duration) =>
-            this.pianoFallback.playNote(midiToNoteName(midi), duration, time));
+        this.piano = new PianoSampler(this.audioContext, (midi, time, velocity, duration) =>
+            this.pianoFallback.playNote(midiToNoteName(midi), duration, time, velocity));
         const pianoChannel = this.synthesizer.getChannelNode('piano');
         this.piano.connect(pianoChannel);
         this.pianoFallback.connect(pianoChannel);
@@ -600,6 +600,9 @@ class Scheduler {
             case 'chacarera_poliritmica':
                 // Urgency on beat 3 of the 3/4 feel (step 9)
                 return activeSteps.some(s => s.step === 9) ? -0.003 : 0;
+            case 'chacarera_trunca':
+                // Trunca push lands on the characteristic step-11 resolution
+                return activeSteps.some(s => s.step === 11) ? -0.003 : 0;
             case 'zamba_tradicional':
                 // Drag on the main "Pám" (step 9)
                 return activeSteps.some(s => s.step === 9) ? stepDuration * 0.12 : 0;
@@ -724,7 +727,7 @@ class Scheduler {
         if (silent || !this.melody || recording || !allowed || (this.silenceModeActive && this.isMutedBar)) return;
         const loopBar = this.melodyBar % this.melody.bars;
         melodyNotesForStep(this.melody, loopBar, idx, sub, barDuration).forEach(n =>
-            this.piano.play(n.midi, time + n.offset, n.velocity, n.duration, 'melody'));
+            this.piano.play(n.midi, Math.max(this.audioContext.currentTime, time + n.offset), n.velocity, n.duration, 'melody'));
     }
 
     private advanceRecorder(time: number, sub: number, stepDuration: number, allowed: boolean) {
@@ -815,8 +818,9 @@ class Scheduler {
 
         // Apply queued pattern switch precisely at the bar boundary
         if (this.queuedPattern) {
+            const switchedId = this.queuedPattern.id !== this.currentPattern?.id;
             this.applyPattern(this.queuedPattern);
-            if (this.currentPattern.recommendedTempo && !this.trainer.active) {
+            if (switchedId && this.currentPattern.recommendedTempo && !this.trainer.active) {
                 this.tempo = this.currentPattern.recommendedTempo;
             }
         }
@@ -843,7 +847,7 @@ class Scheduler {
         } else if (this.tempo >= targetBpm) {
             this.trainerHoldBars++;
             if (this.trainerHoldBars > 4) {
-                this.tempo = Math.round(this.tempo * this.trainerCoolDownFactor);
+                this.tempo = clampBpm(Math.round(this.tempo * this.trainerCoolDownFactor));
                 this.trainerHoldBars = 0;
             }
         } else {

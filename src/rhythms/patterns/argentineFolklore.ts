@@ -5,217 +5,173 @@ export const ARGENTINE_FOLKLORE_PATTERNS: RhythmPattern[] = [
     {
         id: 'chacarera',
         name: 'Chacarera',
-        description: 'Folklore Argentino. 6/8 Polirítmico (Hemiola) con Palmas.',
+        description: 'Folklore Argentino. 6/8 Polirítmico (Hemiola) con Bombo Legüero y Palmas.',
         coverImage: '/genres/genre_chacarera.webp',
         timeSignature: [6, 8],
-        subdivision: 12, // 16ths in 6/8 to allow for fills
-        instruments: ['bombo_leguero', 'rim', 'palmas'],
+        subdivision: 12,
+        instruments: ['bombo_leguero', 'palmas'],
         grooveType: 'chacarera_poliritmica',
         countingMode: 'mnemonics_chacarera',
-        recommendedTempo: 140,
+        recommendedTempo: 138,
         steps: [
-            // PARCHE (modifier: 'parche'): Tierra tradicional en 5, 9 (hemiola)
-            { step: 5, instrument: 'bombo_leguero', velocity: 0.95, modifier: 'parche' },
-            { step: 9, instrument: 'bombo_leguero', velocity: 1.0, modifier: 'parche' }, // Acento fuerte
-
-            // ARO (modifier: 'aro'): Comienza estrictamente en Aro en paso 1
-            { step: 1, instrument: 'bombo_leguero', velocity: 0.9, modifier: 'aro' },
-            { step: 3, instrument: 'bombo_leguero', velocity: 0.7, modifier: 'aro' },
-            { step: 4, instrument: 'bombo_leguero', velocity: 0.8, modifier: 'aro' },
+            // BOMBO LEGUERO: base santiagueña clásica en hemiola 6/8 + 3/4
+            { step: 1, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'aro' },
+            { step: 4, instrument: 'bombo_leguero', velocity: 0.72, modifier: 'aro' },
+            { step: 5, instrument: 'bombo_leguero', velocity: 0.92, modifier: 'parche' },
             { step: 7, instrument: 'bombo_leguero', velocity: 0.8, modifier: 'aro' },
-            { step: 11, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'aro' },
-            { step: 12, instrument: 'bombo_leguero', velocity: 0.6, modifier: 'aro' },
+            { step: 9, instrument: 'bombo_leguero', velocity: 1.0, modifier: 'parche' },
+            { step: 11, instrument: 'bombo_leguero', velocity: 0.65, modifier: 'aro' },
 
-            // PALMAS: Handclaps accompanying the groove
-            { step: 1, instrument: 'palmas', velocity: 0.5 },
-            { step: 3, instrument: 'palmas', velocity: 0.4 },
-            { step: 4, instrument: 'palmas', velocity: 0.5 },
-            { step: 7, instrument: 'palmas', velocity: 0.5 },
-            { step: 9, instrument: 'palmas', velocity: 0.6 },
-            { step: 11, instrument: 'palmas', velocity: 0.4 }
+            // PALMAS: acompañamiento liviano en hemiola
+            { step: 1, instrument: 'palmas', velocity: 0.45 },
+            { step: 5, instrument: 'palmas', velocity: 0.45 },
+            { step: 7, instrument: 'palmas', velocity: 0.45 },
+            { step: 9, instrument: 'palmas', velocity: 0.55 },
         ]
     },
     {
         id: 'chacarera_trunca',
         name: 'Chacarera Trunca',
-        description: 'Folklore de Santiago del Estero. Primer tiempo libre, resolviendo con acento en el paso 11.',
+        description: 'Folklore de Santiago del Estero. Síncopa trunca resolviendo con acento en la 6ª corchea (paso 11).',
         coverImage: '/genres/genre_chacarera.webp',
         timeSignature: [6, 8],
         subdivision: 12,
-        instruments: ['bombo_leguero', 'rim', 'palmas'],
-        grooveType: 'chacarera_poliritmica',
+        instruments: ['bombo_leguero', 'palmas'],
+        grooveType: 'chacarera_trunca',
         countingMode: 'mnemonics_chacarera',
-        recommendedTempo: 135,
+        recommendedTempo: 132,
         steps: [
-            // PARCHE (modifier: 'parche'): Primer tiempo libre, síncopa trunca en el 11
-            { step: 5, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'parche' },
-            { step: 11, instrument: 'bombo_leguero', velocity: 1.1, modifier: 'parche' }, // Heavy Trunca Accent!
+            // BOMBO LEGUERO: cierre trunco fuerte en paso 11
+            { step: 1, instrument: 'bombo_leguero', velocity: 0.82, modifier: 'aro' },
+            { step: 4, instrument: 'bombo_leguero', velocity: 0.7, modifier: 'aro' },
+            { step: 5, instrument: 'bombo_leguero', velocity: 0.88, modifier: 'parche' },
+            { step: 7, instrument: 'bombo_leguero', velocity: 0.78, modifier: 'aro' },
+            { step: 9, instrument: 'bombo_leguero', velocity: 0.72, modifier: 'aro' },
+            { step: 11, instrument: 'bombo_leguero', velocity: 1.0, modifier: 'parche' },
 
-            // ARO (modifier: 'aro'): Comienza estrictamente en Aro en paso 1
-            { step: 1, instrument: 'bombo_leguero', velocity: 0.9, modifier: 'aro' },
-            { step: 3, instrument: 'bombo_leguero', velocity: 0.75, modifier: 'aro' },
-            { step: 4, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'aro' },
-            { step: 7, instrument: 'bombo_leguero', velocity: 0.75, modifier: 'aro' },
-            { step: 8, instrument: 'bombo_leguero', velocity: 0.55, modifier: 'aro' },
-            { step: 10, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'aro' },
-            { step: 12, instrument: 'bombo_leguero', velocity: 0.65, modifier: 'aro' },
-
-            // PALMAS: palmeo acompañando la síncopa trunca
-            { step: 1, instrument: 'palmas', velocity: 0.45 },
-            { step: 3, instrument: 'palmas', velocity: 0.35 },
-            { step: 4, instrument: 'palmas', velocity: 0.4 },
-            { step: 7, instrument: 'palmas', velocity: 0.45 },
-            { step: 11, instrument: 'palmas', velocity: 0.6 }
+            // PALMAS: acompañando la resolución trunca
+            { step: 1, instrument: 'palmas', velocity: 0.42 },
+            { step: 5, instrument: 'palmas', velocity: 0.42 },
+            { step: 7, instrument: 'palmas', velocity: 0.42 },
+            { step: 11, instrument: 'palmas', velocity: 0.58 },
         ]
     },
     {
         id: 'zamba',
         name: 'Zamba',
-        description: 'Romántico y pausado. 3/4 con aire de 6/8.',
+        description: 'Folklore Argentino. 3/4 pausado con hemiola de 6/8 en bombo legüero.',
         coverImage: '/genres/genre_zamba.webp',
         timeSignature: [3, 4],
         subdivision: 12,
-        instruments: ['bombo_leguero', 'rim', 'palmas'],
+        instruments: ['bombo_leguero'],
         grooveType: 'zamba_tradicional',
         countingMode: 'numbers',
-        recommendedTempo: 65,
+        recommendedTempo: 90,
         steps: [
-            // PARCHE (modifier: 'parche'): Tierra en beat 2 (5) y la gran cadencia "dum-dum" en 9 y 11
+            // BOMBO LEGUERO: hemiola clásica de zamba (ta - túm - tác - PÁM - dum)
+            { step: 1, instrument: 'bombo_leguero', velocity: 0.72, modifier: 'aro' },
+            { step: 4, instrument: 'bombo_leguero', velocity: 0.65, modifier: 'aro' },
             { step: 5, instrument: 'bombo_leguero', velocity: 0.9, modifier: 'parche' },
-            { step: 9, instrument: 'bombo_leguero', velocity: 1.0, modifier: 'parche' }, // El gran "PÁM"
-            { step: 11, instrument: 'bombo_leguero', velocity: 0.9, modifier: 'parche' },
-
-            // ARO (modifier: 'aro'): Estructura madera suave y repiques
-            { step: 3, instrument: 'bombo_leguero', velocity: 0.7, modifier: 'aro' },
-            { step: 4, instrument: 'bombo_leguero', velocity: 0.8, modifier: 'aro' },
-            { step: 7, instrument: 'bombo_leguero', velocity: 0.7, modifier: 'aro' },
-            { step: 8, instrument: 'bombo_leguero', velocity: 0.65, modifier: 'aro' },
-            { step: 12, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'aro' }, // Resolución correcta en aro agudo
-
-            // PALMAS: Acompañamiento tradicional suave
-            { step: 1, instrument: 'palmas', velocity: 0.4 },
-            { step: 5, instrument: 'palmas', velocity: 0.3 },
-            { step: 7, instrument: 'palmas', velocity: 0.3 },
-            { step: 9, instrument: 'palmas', velocity: 0.4 },
-            { step: 11, instrument: 'palmas', velocity: 0.3 }
+            { step: 7, instrument: 'bombo_leguero', velocity: 0.78, modifier: 'aro' },
+            { step: 9, instrument: 'bombo_leguero', velocity: 1.0, modifier: 'parche' },
+            { step: 11, instrument: 'bombo_leguero', velocity: 0.72, modifier: 'parche' },
         ]
     },
     {
         id: 'gato',
         name: 'Gato Norteño',
-        description: 'Folklore Argentino. Danza alegre y picaresca en 6/8 rápido.',
+        description: 'Folklore Argentino. Danza alegre y ágil en 6/8 con base saltada.',
         coverImage: '/genres/genre_chacarera.webp',
         timeSignature: [6, 8],
         subdivision: 12,
-        instruments: ['bombo_leguero', 'rim', 'palmas'],
+        instruments: ['bombo_leguero', 'palmas'],
         grooveType: 'chacarera_poliritmica',
         countingMode: 'mnemonics_chacarera',
-        recommendedTempo: 145,
+        recommendedTempo: 148,
         steps: [
-            // PARCHE: acentos de tierra
-            { step: 5, instrument: 'bombo_leguero', velocity: 0.9, modifier: 'parche' },
-            { step: 9, instrument: 'bombo_leguero', velocity: 1.0, modifier: 'parche' },
-
-            // ARO: marcación galopada en aro
+            // BOMBO LEGUERO: base viva y ágil
             { step: 1, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'aro' },
-            { step: 3, instrument: 'bombo_leguero', velocity: 0.7, modifier: 'aro' },
-            { step: 4, instrument: 'bombo_leguero', velocity: 0.8, modifier: 'aro' },
+            { step: 3, instrument: 'bombo_leguero', velocity: 0.65, modifier: 'aro' },
+            { step: 5, instrument: 'bombo_leguero', velocity: 0.9, modifier: 'parche' },
             { step: 7, instrument: 'bombo_leguero', velocity: 0.8, modifier: 'aro' },
-            { step: 11, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'aro' },
-            { step: 12, instrument: 'bombo_leguero', velocity: 0.6, modifier: 'aro' },
+            { step: 9, instrument: 'bombo_leguero', velocity: 1.0, modifier: 'parche' },
+            { step: 11, instrument: 'bombo_leguero', velocity: 0.72, modifier: 'aro' },
 
-            // PALMAS: palmeo acompañando el baile
+            // PALMAS: marcación picaresca
             { step: 1, instrument: 'palmas', velocity: 0.45 },
-            { step: 3, instrument: 'palmas', velocity: 0.35 },
-            { step: 4, instrument: 'palmas', velocity: 0.4 },
+            { step: 5, instrument: 'palmas', velocity: 0.42 },
             { step: 7, instrument: 'palmas', velocity: 0.45 },
-            { step: 9, instrument: 'palmas', velocity: 0.5 },
-            { step: 11, instrument: 'palmas', velocity: 0.4 }
+            { step: 9, instrument: 'palmas', velocity: 0.52 },
         ]
     },
     {
         id: 'chamame',
         name: 'Chamamé',
-        description: 'Folklore del Litoral. Cajón y Shaker con acento saltadito corrido.',
+        description: 'Folklore del Litoral. 6/8 con balanceo saltadito y shaker en corcheas.',
         coverImage: '/genres/genre_chamame.webp',
         timeSignature: [6, 8],
         subdivision: 12,
         instruments: ['cajon', 'shaker'],
         grooveType: 'chamame_saltadito',
         countingMode: 'numbers',
-        recommendedTempo: 100,
+        recommendedTempo: 112,
         steps: [
-            // CAJON PARCHE: Graves litoraleños (a contratiempo)
-            { step: 1, instrument: 'cajon', velocity: 0.8, modifier: 'parche' },
+            // CAJÓN: balanceo litoraleño claro
+            { step: 1, instrument: 'cajon', velocity: 0.78, modifier: 'parche' },
+            { step: 3, instrument: 'cajon', velocity: 0.72, modifier: 'aro' },
             { step: 5, instrument: 'cajon', velocity: 0.95, modifier: 'parche' },
-            { step: 7, instrument: 'cajon', velocity: 0.7, modifier: 'parche' },
+            { step: 7, instrument: 'cajon', velocity: 0.75, modifier: 'aro' },
+            { step: 9, instrument: 'cajon', velocity: 0.78, modifier: 'aro' },
             { step: 11, instrument: 'cajon', velocity: 1.0, modifier: 'parche' },
 
-            // CAJON ARO: Agudos repicados (saltadito con el nuevo modificador slap)
-            { step: 3, instrument: 'cajon', velocity: 0.75, modifier: 'aro' },
-            { step: 4, instrument: 'cajon', velocity: 0.5, modifier: 'aro' },
-            { step: 9, instrument: 'cajon', velocity: 0.8, modifier: 'aro' },
-            { step: 10, instrument: 'cajon', velocity: 0.5, modifier: 'aro' },
-
-            // SHAKER: Semicorcheas continuas fluidas
-            { step: 1, instrument: 'shaker', velocity: 0.5 },
-            { step: 2, instrument: 'shaker', velocity: 0.4 },
-            { step: 3, instrument: 'shaker', velocity: 0.5 },
-            { step: 4, instrument: 'shaker', velocity: 0.4 },
-            { step: 5, instrument: 'shaker', velocity: 0.5 },
-            { step: 6, instrument: 'shaker', velocity: 0.4 },
+            // SHAKER: corcheas continuas con pulso compuesto
+            { step: 1, instrument: 'shaker', velocity: 0.52 },
+            { step: 3, instrument: 'shaker', velocity: 0.36 },
+            { step: 5, instrument: 'shaker', velocity: 0.4 },
             { step: 7, instrument: 'shaker', velocity: 0.5 },
-            { step: 8, instrument: 'shaker', velocity: 0.4 },
-            { step: 9, instrument: 'shaker', velocity: 0.5 },
-            { step: 10, instrument: 'shaker', velocity: 0.4 },
-            { step: 11, instrument: 'shaker', velocity: 0.5 },
-            { step: 12, instrument: 'shaker', velocity: 0.4 }
+            { step: 9, instrument: 'shaker', velocity: 0.36 },
+            { step: 11, instrument: 'shaker', velocity: 0.42 },
         ]
     },
     {
         id: 'milonga_pampeana',
         name: 'Milonga Pampeana',
-        description: 'Folklore Rioplatense. Síncopa campera tradicional 3-3-2 en bombo legüero.',
+        description: 'Folklore Rioplatense. Síncopa campera 3-3-2 en 2/4 con bombo legüero.',
         coverImage: '/genres/genre_milonga.webp',
         timeSignature: [2, 4],
         subdivision: 8,
-        instruments: ['bombo_leguero', 'rim'],
+        instruments: ['bombo_leguero'],
         grooveType: 'straight',
         countingMode: '1e&a',
-        recommendedTempo: 90,
+        recommendedTempo: 92,
         steps: [
-            // PARCHE: Golpes a tierra y acento de balanceo
+            // Síncopa 3-3-2 limpia (tierra, aro contratiempo, apoyo suave, aro)
             { step: 1, instrument: 'bombo_leguero', velocity: 0.95, modifier: 'parche' },
-            { step: 5, instrument: 'bombo_leguero', velocity: 0.8, modifier: 'parche' },
-
-            // ARO: Síncopas agudas
             { step: 4, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'aro' },
-            { step: 7, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'aro' }
+            { step: 5, instrument: 'bombo_leguero', velocity: 0.6, modifier: 'parche' },
+            { step: 7, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'aro' },
         ]
     },
     {
         id: 'malambo',
         name: 'Malambo',
-        description: 'Folklore Argentino. Mudanza de zapateo hiper-veloz y virtuosa en 6/8.',
+        description: 'Folklore Argentino. Mudanza de zapateo veloz y articulada en 6/8.',
         coverImage: '/genres/genre_malambo.webp',
         timeSignature: [6, 8],
         subdivision: 12,
-        instruments: ['bombo_leguero', 'rim'],
+        instruments: ['bombo_leguero'],
         grooveType: 'chacarera_poliritmica',
         countingMode: 'numbers',
-        recommendedTempo: 165,
+        recommendedTempo: 162,
         steps: [
-            // PARCHE: golpes del galope y zapateo
-            { step: 1, instrument: 'bombo_leguero', velocity: 1.0, modifier: 'parche' },
-            { step: 4, instrument: 'bombo_leguero', velocity: 0.75, modifier: 'parche' },
-            { step: 5, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'parche' },
+            // Galope de zapateo y repique articulado
+            { step: 1, instrument: 'bombo_leguero', velocity: 0.95, modifier: 'parche' },
+            { step: 3, instrument: 'bombo_leguero', velocity: 0.78, modifier: 'aro' },
+            { step: 4, instrument: 'bombo_leguero', velocity: 0.72, modifier: 'parche' },
+            { step: 5, instrument: 'bombo_leguero', velocity: 0.88, modifier: 'parche' },
+            { step: 7, instrument: 'bombo_leguero', velocity: 0.82, modifier: 'aro' },
             { step: 9, instrument: 'bombo_leguero', velocity: 1.0, modifier: 'parche' },
-            { step: 12, instrument: 'bombo_leguero', velocity: 0.75, modifier: 'parche' },
-
-            // ARO: marcaciones agudas y dinámicas
-            { step: 3, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'aro' },
-            { step: 7, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'aro' },
-            { step: 10, instrument: 'bombo_leguero', velocity: 0.85, modifier: 'aro' }
+            { step: 11, instrument: 'bombo_leguero', velocity: 0.8, modifier: 'aro' },
         ]
     }
 ];

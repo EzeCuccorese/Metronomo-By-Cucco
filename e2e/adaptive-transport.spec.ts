@@ -8,6 +8,7 @@ test.describe('sticky transport', () => {
     test('the slim bar appears once the header scrolls away and stops/starts the metronome', async ({ page }) => {
         test.skip(await phonePortrait(page), 'Portrait phones keep the bottom bar instead');
         await expect(page.getByTestId('compact-transport')).toHaveCount(0);
+        await page.getByRole('button', { name: /^todos$/i }).click();
         await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
         const bar = page.getByTestId('compact-transport');
         await expect(bar).toBeVisible();

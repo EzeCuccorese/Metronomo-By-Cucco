@@ -1,7 +1,11 @@
-import { test, expect, openApp } from './fixtures';
+import { test, expect, openApp, openTab } from './fixtures';
 
 test.describe('mixer', () => {
-    test.beforeEach(async ({ page }) => { await openApp(page); });
+    test.beforeEach(async ({ page }) => {
+        await openApp(page);
+        await openTab(page, 'Mezclador');
+        await expect(page.getByRole('region', { name: 'Mezclador' })).toBeVisible();
+    });
 
     test('shows only the channels in use, "Mostrar todos" reveals the rest', async ({ page }) => {
         const strips = page.locator('[data-testid^="mixer-channel-"]');

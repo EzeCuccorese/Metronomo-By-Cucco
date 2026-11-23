@@ -81,8 +81,8 @@ button, [role='button'], [role='slider'], [role='switch'], [role='tab'], .MuiSli
     bottom: 0;
     box-sizing: border-box;
     padding: 10px calc(12px + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(12px + var(--safe-left));
-    background: linear-gradient(180deg, #1a1612 0%, #100e0c 100%);
-    border-top: 1px solid rgba(229, 169, 95, 0.28);
+    background: linear-gradient(180deg, var(--skin-strip-top) 0%, var(--skin-chassis) 100%);
+    border-top: 1px solid var(--skin-border-strong);
     box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.6);
   }
   .transport-bar .tempo-panel { width: 100%; box-sizing: border-box; justify-content: space-between; gap: 8px; padding-inline: 8px; }
@@ -106,15 +106,18 @@ button, [role='button'], [role='slider'], [role='switch'], [role='tab'], .MuiSli
     border-width: 2px !important;
     align-items: stretch;
   }
-  /* The Grid container disappears so its cells become cells of the chassis grid. */
-  .studio-chassis > .MuiGrid-container { display: contents; }
-  .studio-chassis > .MuiGrid-container > .MuiGrid-root {
+  /* The active tabpanel and its Grid disappear so its cells become cells of the chassis grid. */
+  .studio-chassis > .workspace-nav-bar { grid-column: 1 / -1; grid-row: 2; }
+  .studio-chassis > .workspace-tabpanel--active { display: contents; }
+  .studio-chassis > .workspace-tabpanel--active > .MuiGrid-container { display: contents; }
+  .studio-chassis > .workspace-tabpanel--active > .MuiGrid-container > .MuiGrid-root {
     width: auto;
     min-width: 0;
     grid-column: 1 / -1;
   }
   .studio-chassis > .app-header { grid-column: 1; grid-row: 1; }
-  .studio-chassis > .MuiGrid-container > .area-pulse { grid-column: 2; grid-row: 1; }
+  .studio-chassis > .workspace-tabpanel--active > .MuiGrid-container > .area-pulse { grid-column: 2; grid-row: 1; }
+  .studio-chassis > .area-study { grid-column: 1 / -1; grid-row: 3; }
 
   .app-header {
     padding: 8px 10px !important;
