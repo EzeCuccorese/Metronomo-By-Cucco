@@ -239,6 +239,7 @@ describe('App (integration with a scripted engine)', () => {
     it('configures silence mode and folk forms, and shows the form progress', async () => {
         render(<App />);
         openTab('Práctica y Estudio');
+        fireEvent.click(screen.getByTestId('panel-toggle-practice'));
         fireEvent.click(screen.getByLabelText('Compases en silencio'));
         expect(scheduler().calls.setSilenceMode.at(-1)).toEqual([true, 0.3]);
 
@@ -408,6 +409,9 @@ describe('App (integration with a scripted engine)', () => {
             render(<App />);
             openView();
             fireEvent.click(screen.getByRole('menuitemradio', { name: 'Solo metrónomo' }));
+            expect(panels()).toEqual(['Pulso']);
+            openTab('Mezclador');
+            openTab('Ritmos');
             expect(panels()).toEqual(['Pulso']);
             openView();
             fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Piano' }));

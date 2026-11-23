@@ -170,7 +170,8 @@ function App() {
   const selectTab = useCallback((nextTab: WorkspaceTabId) => {
     const tabPanels = WORKSPACE_TAB_PANELS[nextTab];
     const allHidden = tabPanels.every(id => rawLayout.panels[id] === 'hidden');
-    const needsAutoOpen = allHidden || (rawLayout.preset !== 'personalizado' && tabPanels.some(id => rawLayout.panels[id] !== 'open'));
+    const noneOpen = tabPanels.every(id => rawLayout.panels[id] !== 'open');
+    const needsAutoOpen = allHidden || (rawLayout.preset !== 'personalizado' && noneOpen);
     runViewTransition(() => {
       setActiveTab(nextTab);
       if (needsAutoOpen) rawLayout.openPanels(tabPanels, false);

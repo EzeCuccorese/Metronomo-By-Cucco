@@ -126,6 +126,8 @@ test.describe('practice modes', () => {
         await openApp(page);
         await selectPreset(page, 'Metronome (4/4)');
         await openTab(page, 'Práctica y Estudio');
+        const practiceToggle = page.getByTestId('panel-toggle-practice');
+        if ((await practiceToggle.getAttribute('aria-expanded')) === 'false') await practiceToggle.click();
         await page.getByLabel('BPM inicial').fill('240');
         await page.getByLabel('BPM objetivo').fill('250');
         await page.getByLabel('Cada (compases)').fill('1');
@@ -144,6 +146,8 @@ test.describe('practice modes', () => {
         await selectPreset(page, 'Zamba');
         await setBpm(page, 300);
         await openTab(page, 'Práctica y Estudio');
+        const practiceToggle = page.getByTestId('panel-toggle-practice');
+        if ((await practiceToggle.getAttribute('aria-expanded')) === 'false') await practiceToggle.click();
         await page.getByLabel('Formas folclóricas').check();
         await page.getByRole('combobox', { name: 'Forma' }).click();
         await page.getByRole('option', { name: 'Zamba' }).click();
